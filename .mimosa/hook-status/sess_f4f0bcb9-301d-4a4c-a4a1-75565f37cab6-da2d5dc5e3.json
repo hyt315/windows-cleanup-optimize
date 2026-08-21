@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-08-21T12:39:22.930Z",
+  "sessionId": "sess_f4f0bcb9-301d-4a4c-a4a1-75565f37cab6",
+  "event": "PostToolUse",
+  "toolName": "Write",
+  "file": ".github/workflows/ci.yml",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 11,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}
