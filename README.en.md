@@ -1,102 +1,119 @@
-# 🐧 Windows Cleanup & Optimization Agent Skill
-
-> 🌏 **中文版: [README.md](./README.md)**
-
 <div align="center">
 
-**Zero-harm Windows cleanup & optimization Agent Skill: disk, services, bloatware, mklink migration, shell audit**
+# 🧹 Windows 清理与优化助手 / Windows Cleanup & Optimization Assistant
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.1.0-green.svg)](CHANGELOG.md)
-[![Agent Skill](https://img.shields.io/badge/Agent%20Skill-SKILL.md-green)](SKILL.md)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-blue)](SKILL.md)
-[![GitHub Stars](https://img.shields.io/github/stars/hyt315/windows-cleanup-optimize?style=social)](https://github.com/hyt315/windows-cleanup-optimize/stargazers)
+**Zero-harm: all cleanup goes to Recycle Bin (reversible), every optimization item has a 4-level risk tag and a restore command.**
+
+**English · [简体中文](./README.md)**
+
+[![License: MIT](https://img.shields.io/github/license/hyt315/windows-cleanup-optimize)](LICENSE)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-compatible-1f6feb)](SKILL.md)
+[![Platform](https://img.shields.io/badge/Platform-Windows-blue)](SKILL.md)
+[![Tests](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/hyt315/windows-cleanup-optimize/actions)
 
 </div>
 
 ---
 
-## 📖 What is this?
+## What is this?
 
-A Windows cleanup & optimization **Agent Skill** for AI assistants (Claude Code / Codex / Cursor). Built around a **zero-harm guarantee**: every cleanup goes through the Recycle Bin (reversible), every optimization is risk-tiered (LOW/MEDIUM/HIGH/CRITICAL) with a full rollback command. Targets the most common China-market Windows issues: full C:\ drive, WPS auto-update loops, slow boot, bloatware residue (360/2345/DingTalk…), and bloaty AI-client caches.
+C drive full, slow boot, pop-up ads, system lagging — **Windows Cleanup & Optimization Assistant** is an AI Agent Skill that uses a **6-stage workflow** (user profiling → disk cleanup → startup optimization → software management → service optimization → performance tuning) to diagnose and fix your PC. **All cleanup goes to the Recycle Bin (reversible), every optimization item has a 4-level risk tag and a restore command.**
 
-It does **not** push "PC optimizer" tools — it uses official commands plus reversible scripts to genuinely fix a slow, full, or bloated PC.
-
-## ✨ Core Features
+### Core Features
 
 | Feature | Description |
 |---------|-------------|
-| 🧹 **Disk Cleanup** | Temp, electron-updater residue, npm/uv caches, AppData leftovers — all via Recycle Bin |
-| ⚡ **Services/Tasks** | 50+ Windows services risk-tiered (telemetry/Xbox/3rd-party updaters), admin-elevation flow |
-| 🔧 **Residue Detection** | WPS/QQ/2345/DingTalk/360 uninstall leftovers; **multi-path detection** handles non-standard install paths |
-| 📁 **mklink Migration** | Move big C:\ dirs (Trae/VS Code) to D:\ via `mklink /J`, logical path unchanged |
-| 🐕 **WPS Update Killer** | Config(UpdateMode)+task+service 3-layer defense against `ksolaunch` re-registering tasks |
-| 🔍 **Shell Audit** | Right-click menu tamper detection + bloatware whitelist matching (new 2026-08) |
+| 🛡️ **Zero-harm guarantee** | Cleanup via `SendToRecycleBin`, system directories untouched, restore points before key operations, every optimization reversible |
+| 🔍 **Smart user profiling** | 4 profiles (family / developer / gamer / laptop), asked once, never repeated, recommendations auto-adapt |
+| 🧹 **Bloatware identification** | Auto-detect 360 / 2345 / pop-up advertising bundled software, safe uninstall guidance |
+| ⚡ **Deep optimization** | Service tuning (telemetry, Xbox, etc.), memory tuning, power plan, SSD TRIM — all reversible |
+| 🔄 **Data migration** | Move large C-drive directories to D drive via `mklink /J`, no file copy needed |
+| 📋 **14 reference manuals** | Disk cleanup, uninstall, services, pitfalls, case studies, and more |
+
+---
 
 ## 🚀 Quick Start
 
-1. Install the skill into your agent's skills directory (table below)
-2. Say: **"My C: drive is full, clean it up"** or **"WPS keeps self-updating, how do I stop it"**
-3. The skill will: read-only diagnose → risk-tier into 4 levels → confirm with you → execute step by step → verify & give rollback commands
+> ✨ **One-liner install into your AI agent**: paste this to your AI assistant and it will install itself:
+>
+> ```text
+> Please install the windows-cleanup-optimize Skill: clone https://github.com/hyt315/windows-cleanup-optimize into your skills directory (Claude Code: ~/.claude/skills/windows-cleanup-optimize/; Cursor: ~/.cursor/skills/; Codex/ChatGPT: .agent/skills/ in your project), and verify that SKILL.md, references/, and scripts/ are all present. Whenever I report "C drive full / slow boot / pop-up ads / system is lagging", follow the SKILL.md workflow and use the 6-stage diagnosis with reversible operations.
+> ```
 
-## 📥 Installation
+Then pick your platform:
 
-| Platform | Command |
+| Platform | Install |
 |----------|---------|
 | **Claude Code** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.claude/skills/windows-cleanup-optimize` |
-| **Codex** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.codex/skills/windows-cleanup-optimize` |
 | **Cursor** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.cursor/skills/windows-cleanup-optimize` |
+| **Codex / ChatGPT** | `.agent/skills/windows-cleanup-optimize/` in your project (with `agents/openai.yaml`) |
+| **Generic** | Any agent's skills directory |
 
-**Download**
+---
 
-| Method | Command / Link |
-|--------|----------------|
-| HTTPS | `git clone https://github.com/hyt315/windows-cleanup-optimize.git` |
-| SSH | `git clone git@github.com:hyt315/windows-cleanup-optimize.git` |
-| GitHub CLI | `gh repo clone hyt315/windows-cleanup-optimize` |
-| ZIP | https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.zip |
-| Tarball | https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.tar.gz |
-| Releases | https://github.com/hyt315/windows-cleanup-optimize/releases |
+## 📥 Download / Install
+
+```bash
+# HTTPS
+git clone https://github.com/hyt315/windows-cleanup-optimize.git
+
+# SSH
+git clone git@github.com:hyt315/windows-cleanup-optimize.git
+
+# GitHub CLI
+gh repo clone hyt315/windows-cleanup-optimize
+
+# ZIP
+# https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.zip
+
+# Single file (SKILL.md only)
+curl -O https://raw.githubusercontent.com/hyt315/windows-cleanup-optimize/main/SKILL.md
+```
+
+---
 
 ## 📁 File Structure
 
 ```
 windows-cleanup-optimize/
-├── SKILL.md                     # Entry: 6-phase workflow + zero-harm + 4-tier risk
-├── references/                  # 12 topic docs
-│   ├── scan-scripts.md          # 16 PowerShell templates (incl. shell-audit template 16)
-│   ├── pitfalls.md              # 66 lessons-learned
-│   ├── bloatware-catalog.md     # bloatware list + multi-path detection method
-│   ├── software-uninstall.md    # uninstall & residue flows (WPS/DingTalk/360)
-│   ├── services-optimization.md # Windows service tiering
-│   ├── mklink-migration.md      # symlink migration guide
-│   └── ...                      # 6 more topics
-├── scripts/selftest.py          # Self-test (zero deps)
-└── .github/                     # Issue/PR templates
+├── SKILL.md                     # entry point (6-stage workflow + zero-harm safety principles)
+├── references/                  # 14 reference manuals (disk/services/software/memory/performance/pitfalls)
+├── scripts/
+│   └── selftest.py              # regression tests
+├── LICENSE
+├── README.md  /  README.en.md  # bilingual docs (this file is English)
+├── CHANGELOG.md
+├── .github/                     # Issue/PR templates + CI
+└── CONTRIBUTING.md / CODE_OF_CONDUCT.md / SECURITY.md
 ```
 
-## 🛡️ Core Philosophy
+---
 
-- All cleanup via Recycle Bin (reversible) — never `Remove-Item`
-- Never touch system dirs (`C:\Windows`, `C:\Program Files`, `C:\ProgramData`) by default
-- Restore points before critical ops (`Checkpoint-Computer`)
-- Every optimization is risk-tiered with a full rollback command
-- When unsure, ask the user — never batch-execute silently
+## ▶️ Quick Usage
 
-## 📚 Examples
+The skill uses a **6-stage workflow**. On first run, it asks for your user profile (family/developer/gamer/laptop), then you can enter any stage as needed:
 
-> "My WPS keeps auto-updating and pops up ads — how do I turn it off completely?"
+1. **Stage 0 — User Profile**: asked once, recommendations auto-adapt
+2. **Stage 1 — Disk Cleanup**: C-drive space scan, AppData cache cleanup (via Recycle Bin), large directory analysis
+3. **Stage 2 — Startup Optimization**: startup/shutdown item audit, disable on demand
+4. **Stage 3 — Software Management**: bloatware identification, residue cleanup
+5. **Stage 4 — Service Optimization**: safely disable-able Windows services list (4 risk levels)
+6. **Stage 5 — Performance Tuning**: power plan, memory, SSD TRIM, visual effects
 
-The skill follows the WPS section of `software-uninstall.md`:
-1. **Config layer (root fix)**: registry `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo\UpdateMode` `auto` → `manual`
-2. **Task layer**: disable `WpsUpdateTask_*` / `WpsUpdateLogonTask_*` / `WpsWakeWnsLogonTask`
-3. **Service layer**: disable `wpscloudsvr`
-4. Verify the 3 tasks stay `Disabled`, hand back a rollback `.reg`
+> All operations create a `Checkpoint-Computer` restore point first; every optimization item has a restore command; any ambiguous judgment is presented to the user for confirmation.
 
-## 🤝 Contributing
+---
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). When adding: append pitfall #+1 in `pitfalls.md`, template #+1 in `scan-scripts.md`, and run `python scripts/selftest.py`.
+## 🤝 Contribute / Feedback
 
-## 📄 License
+- Report bugs / suggestions: use the repo's Issue templates
+- Contribute: see [CONTRIBUTING.md](CONTRIBUTING.md); run `python scripts/selftest.py` before any PR
+- Security: see [SECURITY.md](SECURITY.md) (private vulnerability reporting, not public issues)
 
-[MIT](LICENSE) © 2026 MiniMax
+---
+
+## 📜 License
+
+[MIT](LICENSE) © 2026 hyt315
+
+> 🌏 **中文版: [README.md](./README.md)**
