@@ -7,9 +7,11 @@
 **简体中文 · [English](./README.en.md)**
 
 [![License: MIT](https://img.shields.io/github/license/hyt315/windows-cleanup-optimize)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/hyt315/windows-cleanup-optimize?sort=semver)](https://github.com/hyt315/windows-cleanup-optimize/releases)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-compatible-1f6feb)](SKILL.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue)](SKILL.md)
 [![Tests](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/hyt315/windows-cleanup-optimize/actions)
+[![Stars](https://img.shields.io/github/stars/hyt315/windows-cleanup-optimize?style=social)](https://github.com/hyt315/windows-cleanup-optimize/stargazers)
 
 </div>
 
@@ -101,6 +103,36 @@ windows-cleanup-optimize/
 6. **阶段 5 — 性能调优**：电源计划、内存、SSD TRIM、视觉效果
 
 > 所有操作前插入 `Checkpoint-Computer` 建还原点；优化项同时给出回退命令；任何模糊判断呈现给用户确认，不擅自处理。
+
+---
+
+## 💬 触发方式
+
+对 AI 说以下任意一类话，即会触发本技能：
+
+- 「C 盘满了」「磁盘空间不足」「帮我清理电脑」
+- 「开机慢」「启动项太多」
+- 「有弹窗广告」「疑似流氓软件/捆绑软件」
+- 「后台有可疑进程」「电脑卡顿」
+- 「做个系统调优 / PC tune-up」
+
+## ⚙️ 前置条件
+
+- **Windows 10 / 11**（PowerShell 5.1+ 系统自带，无需额外安装）
+- 部分操作（服务优化、驱动相关、建还原点）需要**管理员权限**（UAC 弹窗确认）
+- 零第三方依赖：清理走系统回收站 API，不装任何清理类软件
+
+## 📦 输出示例
+
+一次完整流程会产出：
+
+```text
+📋 空间扫描报告   —— C 盘 Top 大目录 / 各类缓存可释放量（只读扫描）
+🧹 清理执行清单   —— 每一项标注"回收站可恢复"，执行前后空间对比
+🚫 流氓软件清单   —— 识别结果 + 安全卸载步骤 + 残留注册表/计划任务清理
+⚡ 服务优化表     —— 每项标 ✅LOW / ⚠️MEDIUM / 🔴HIGH / ❌CRITICAL + 对应回退命令
+🔄 还原点         —— 关键操作前自动 Checkpoint-Computer，随时系统还原
+```
 
 ---
 
