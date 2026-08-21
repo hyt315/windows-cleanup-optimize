@@ -7,9 +7,11 @@
 **English · [简体中文](./README.md)**
 
 [![License: MIT](https://img.shields.io/github/license/hyt315/windows-cleanup-optimize)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/hyt315/windows-cleanup-optimize?sort=semver)](https://github.com/hyt315/windows-cleanup-optimize/releases)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-compatible-1f6feb)](SKILL.md)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue)](SKILL.md)
 [![Tests](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/hyt315/windows-cleanup-optimize/actions)
+[![Stars](https://img.shields.io/github/stars/hyt315/windows-cleanup-optimize?style=social)](https://github.com/hyt315/windows-cleanup-optimize/stargazers)
 
 </div>
 
@@ -101,6 +103,36 @@ The skill uses a **6-stage workflow**. On first run, it asks for your user profi
 6. **Stage 5 — Performance Tuning**: power plan, memory, SSD TRIM, visual effects
 
 > All operations create a `Checkpoint-Computer` restore point first; every optimization item has a restore command; any ambiguous judgment is presented to the user for confirmation.
+
+---
+
+## 💬 When to trigger
+
+Say any of these to your AI agent to trigger this skill:
+
+- "C drive is full" / "low disk space" / "clean up my PC"
+- "Slow boot" / "too many startup items"
+- "Pop-up ads" / "suspected bloatware or bundled software"
+- "Suspicious background processes" / "my PC is laggy"
+- "Do a system tune-up"
+
+## ⚙️ Prerequisites
+
+- **Windows 10 / 11** (PowerShell 5.1+ built in, nothing extra to install)
+- Some operations (service tuning, driver-related, restore points) need **admin rights** (UAC prompt)
+- Zero third-party dependencies: cleanup uses the system Recycle Bin API — no cleaner software installed
+
+## 📦 Sample Output
+
+A full run produces:
+
+```text
+📋 Space scan report   — C-drive top directories / reclaimable cache per category (read-only scan)
+🧹 Cleanup checklist   — every item marked "recoverable via Recycle Bin", before/after space comparison
+🚫 Bloatware list      — identification + safe uninstall steps + registry/scheduled-task residue cleanup
+⚡ Service tuning table— each item tagged ✅LOW / ⚠️MEDIUM / 🔴HIGH / ❌CRITICAL + its restore command
+🔄 Restore point       — Checkpoint-Computer automatically before key operations
+```
 
 ---
 
