@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 临时/日志
+*.log
+*_log_*.txt
+*.tmp
+*.bak
+
+# 技能审计报告（不要提交）
+audit-report.txt
+
+# 用户本地数据
+*本地诊断*.txt
