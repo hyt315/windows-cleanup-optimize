@@ -1,92 +1,159 @@
-# Windows 清理与优化助手 Skill
+# 🐧 Windows 清理与优化助手 Skill
 
-> Windows 调优技能，覆盖磁盘清理、服务/任务优化、软件残留检测、符号链接迁移和 shell 扩展审计。**零伤害原则**——所有操作走回收站可恢复，所有改动可回退，按风险分四档管理。
+<div align="center">
 
-## ✨ 特性
+**零伤害 Windows 调优技能：清理磁盘、优化服务、卸载残留、迁移大目录、审计右键菜单**
 
-- 🧹 **磁盘清理**：Temp、更新器残留、electron-updater 缓存、AppData 卸载残留
-- ⚡ **服务/任务优化**：三类服务按风险分级、含管理员提权方案、20+ 中国软件专项处理
-- 🔧 **软件残留检测**：覆盖 Office、QQ、2345、钉钉、360 等的卸载脏数据
-- 📁 **符号链接迁移**：Trae/VS Code/通用模式/C 盘大目录迁 D 盘
-- 🔍 **右键菜单审计**：跨用户/系统的 shell 扩展篡改检测（2026-08 新增）
-- 🐕 **WPS 自动升级根治**：配置+任务+服务三层防护，永久防止 ksolaunch 重写任务
+**Zero-harm Windows cleanup & optimization Agent Skill: disk, services, bloatware, mklink migration, shell audit**
 
-## 📥 下载 / Download
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.1.0-green.svg)](CHANGELOG.md)
+[![Agent Skill](https://img.shields.io/badge/Agent%20Skill-SKILL.md-green)](SKILL.md)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-blue)](SKILL.md)
+[![GitHub Stars](https://img.shields.io/github/stars/hyt315/windows-cleanup-optimize?style=social)](https://github.com/hyt315/windows-cleanup-optimize/stargazers)
+
+[English](#english) | [中文](#中文)
+
+</div>
+
+---
+
+## 中文
+
+### 📖 这是什么？
+
+一个给 AI Agent（Claude Code / Codex / Cursor 等）用的 Windows 清理与优化技能。遵循 **零伤害原则**——所有清理走回收站可恢复、所有优化项标四级风险并提供回退命令。覆盖中国用户最常遇到的问题：C 盘空间不足、WPS 反复自动升级、开机变慢、流氓软件残留（360/2345/钉钉等）、AI 客户端缓存膨胀。
+
+**核心价值**：不推荐"优化大师"类工具，用官方命令 + 可回退的脚本，真正可逆地解决电脑慢、满、肿。
+
+### ✨ 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| 🧹 **磁盘清理** | Temp、electron-updater 更新包残留、npm/uv 缓存、AppData 卸载残留，全部走回收站 |
+| ⚡ **服务/任务优化** | 50+ Windows 服务按风险分级（遥测/Xbox/第三方更新器），含管理员提权方案 |
+| 🔧 **软件残留检测** | 覆盖 Office、QQ、2345、钉钉、360 等的卸载脏数据；**多路径检测**支持非标准安装路径 |
+| 📁 **符号链接迁移** | Trae/VS Code/C 盘大目录用 `mklink /J` 迁到 D 盘，逻辑路径不变 |
+| 🐕 **WPS 自动升级根治** | 配置(UpdateMode)+任务+服务三层防护，永久防止 ksolaunch 反复重写更新任务 |
+| 🔍 **右键菜单审计** | shell 扩展篡改检测 + 已知流氓软件白名单比对（2026-08 新增） |
+
+### 🚀 快速开始
+
+1. 把本技能安装到你的 AI Agent 的 skills 目录（见下方表格）
+2. 对它说：**"C 盘红了，帮我清理"** 或 **"WPS 老是自己升级，怎么关"**
+3. 技能会自动：只读诊断 → 风险分四档 → 你逐项确认 → 分步执行 → 验证并给出回退命令
+
+### 📥 安装 / Installation
+
+**Skill 项目（AI Agent）——按平台装到对应 skills 目录：**
+
+| 平台 | 安装命令 |
+|------|----------|
+| **Claude Code** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.claude/skills/windows-cleanup-optimize` |
+| **Codex** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.codex/skills/windows-cleanup-optimize` |
+| **Cursor** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.cursor/skills/windows-cleanup-optimize` |
+
+**下载 / Download：**
 
 | 方式 | 命令 / 链接 |
 |------|------------|
-| HTTPS clone | `git clone https://github.com/hyt315/windows-cleanup-optimize.git` |
-| SSH clone | `git clone git@github.com:hyt315/windows-cleanup-optimize.git` |
+| HTTPS | `git clone https://github.com/hyt315/windows-cleanup-optimize.git` |
+| SSH | `git clone git@github.com:hyt315/windows-cleanup-optimize.git` |
 | GitHub CLI | `gh repo clone hyt315/windows-cleanup-optimize` |
-| ZIP 下载 | https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.zip |
-| 单文件（SKILL.md） | https://raw.githubusercontent.com/hyt315/windows-cleanup-optimize/main/SKILL.md |
+| ZIP 源码 | [下载 ZIP](https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.zip) |
+| Tar 源码 | [下载 Tar](https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.tar.gz) |
+| Release 最新版 | [Releases](https://github.com/hyt315/windows-cleanup-optimize/releases) |
 
-**安装到各 AI Agent 平台的 Skills 目录：**
+### 📁 文件结构
 
-```bash
-# Claude Code / Codex / 其他主流平台
-git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.claude/skills/windows-cleanup-optimize
-
-# Cursor (项目级)
-git clone https://github.com/hyt315/windows-cleanup-optimize.git .cursor/skills/windows-cleanup-optimize
-
-# GitHub CLI
-gh repo clone hyt315/windows-cleanup-optimize
+```
+windows-cleanup-optimize/
+├── SKILL.md                     # 入口：六阶段工作流 + 零伤害原则 + 四档风险
+├── references/                  # 12 个专题文档
+│   ├── scan-scripts.md          # 16 个 PowerShell 模板（含 shell 审计模板 16）
+│   ├── pitfalls.md              # 66 条实战踩坑
+│   ├── bloatware-catalog.md     # 流氓软件清单 + 多路径检测方法
+│   ├── software-uninstall.md    # 卸载与残留专项（WPS/钉钉/360）
+│   ├── services-optimization.md # Windows 服务分级优化
+│   ├── mklink-migration.md      # 符号链接迁移通用指南
+│   └── ...                      # 其余 6 个专题
+├── scripts/selftest.py          # 技能自检（零依赖）
+└── .github/                     # Issue/PR 模板
 ```
 
-## 🛠️ 使用示例
+### 🛡️ 核心理念 / Core Philosophy
 
-在 AI Agent 中加载本技能后，让它处理：
+- **所有清理走回收站**（可恢复）——不用 `Remove-Item`
+- **不动系统目录**：`C:\Windows`、`C:\Program Files`、`C:\ProgramData` 默认只读
+- **关键操作前可建还原点**（`Checkpoint-Computer`）
+- **每个优化项标风险等级 + 完整回退命令**
+- **不确定就问用户**，绝不擅自批量执行
 
-- "C 盘红了，帮我清理" → 触发磁盘清理 + 服务优化
-- "WPS 自动升级关不掉，怎么办" → 触发 WPS 专项根治
-- "我的右键菜单是不是被装了什么流氓软件" → 触发 shell 审计
-- "把 .workbuddy 这个大目录从 C 盘挪到 D 盘" → 触发 mklink 迁移
+### 📚 端到端示例
 
-技能会自动：
-1. 只读诊断 → 给出方案
-2. 风险分档 → 你确认
-3. 分步执行 → 全部走回收站/可回退
-4. 验证汇报
+> "我的 WPS 老是自动升级，还弹窗，怎么彻底关掉？"
 
-## 📚 文档结构
+技能会按 `software-uninstall.md` 的 WPS 专项执行：
+1. **配置层（治本）**：注册表 `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo\UpdateMode` 从 `auto` → `manual`
+2. **任务层**：禁用 `WpsUpdateTask_*` / `WpsUpdateLogonTask_*` / `WpsWakeWnsLogonTask`
+3. **服务层**：禁用 `wpscloudsvr`
+4. 验证三个任务保持 `Disabled`，给用户回退 .reg
 
-| 文件 | 用途 |
-|------|------|
-| `SKILL.md` | 入口文件：六阶段工作流、安全原则、四档风险分级 |
-| `references/scan-scripts.md` | 16 个 PowerShell 模板（按需取用） |
-| `references/pitfalls.md` | 60+ 条实战踩坑（执行前必查） |
-| `references/bloatware-catalog.md` | 中国流氓软件识别清单 + 多路径检测方法学 |
-| `references/software-uninstall.md` | 软件卸载专项流程（含 WPS/钉钉/360） |
-| `references/services-optimization.md` | 50+ Windows 服务优化指南 |
-| `references/system-cleanup.md` | 系统级清理（更新残留、DriverStore） |
-| `references/memory-optimization.md` | 内存优化（含真假泄漏判定） |
-| `references/performance-tuning.md` | 性能调优（含电源/视觉/网络） |
-| `references/startup-audit.md` | 自启项审计流程 |
-| `references/mklink-migration.md` | 符号链接迁移通用指南 |
-| `references/case-study.md` | 迁移实战案例（Trae/VS Code/通用） |
-| `references/trae-guide.md` | Trae 专项（含稀疏文件处理） |
-| `scripts/selftest.py` | 技能自带回归测试 |
+### 🤝 贡献
 
-## 🛡️ 核心理念：零伤害
+见 [CONTRIBUTING.md](CONTRIBUTING.md)。提交 PR 时请同步：在 `pitfalls.md` 追加踩坑编号 +1、在 `scan-scripts.md` 追加模板编号 +1、跑 `python scripts/selftest.py`。
 
-- **所有清理走回收站**（可恢复）
-- **不动 C:\Windows、C:\Program Files、C:\ProgramData**（除非用户明确授权）
-- **关键操作前可建还原点**
-- **不确定就问用户**
+### 📄 许可 / License
 
-## 🤝 贡献
+[MIT](LICENSE) © 2026 MiniMax
 
-见 [CONTRIBUTING.md](CONTRIBUTING.md)。提交 PR 时请同步：
+---
 
-- 在 `references/pitfalls.md` 追加新的踩坑条目（编号续 +1）
-- 在 `references/scan-scripts.md` 加新模板（编号续 +1）
-- 跑 `python scripts/selftest.py` 通过
+## English
 
-## 🔒 安全
+### 📖 What is this?
 
-发现问题请私下报告，详见 [SECURITY.md](SECURITY.md)。
+A Windows cleanup & optimization **Agent Skill** for AI assistants (Claude Code / Codex / Cursor). Built around a **zero-harm guarantee**: every cleanup goes through the Recycle Bin (reversible), every optimization is risk-tiered (LOW/MEDIUM/HIGH/CRITICAL) with a full rollback command. Targets the most common China-market Windows issues: full C:\ drive, WPS auto-update loops, slow boot, bloatware residue (360/2345/DingTalk…), and bloaty AI-client caches.
 
-## 📄 协议
+### ✨ Core Features
+
+| Feature | Description |
+|---------|-------------|
+| 🧹 **Disk Cleanup** | Temp, electron-updater residue, npm/uv caches, AppData leftovers — all via Recycle Bin |
+| ⚡ **Services/Tasks** | 50+ Windows services risk-tiered (telemetry/Xbox/3rd-party updaters), admin-elevation flow |
+| 🔧 **Residue Detection** | WPS/QQ/2345/DingTalk/360 uninstall leftovers; **multi-path detection** handles non-standard install paths |
+| 📁 **mklink Migration** | Move big C:\ dirs (Trae/VS Code) to D:\ via `mklink /J`, logical path unchanged |
+| 🐕 **WPS Update Killer** | Config(UpdateMode)+task+service 3-layer defense against `ksolaunch` re-registering tasks |
+| 🔍 **Shell Audit** | Right-click menu tamper detection + bloatware whitelist matching (new 2026-08) |
+
+### 🚀 Quick Start
+
+1. Install the skill into your agent's skills directory (table below)
+2. Say: **"My C: drive is full, clean it up"** or **"WPS keeps self-updating, how do I stop it"**
+3. The skill will: read-only diagnose → risk-tier into 4 levels → confirm with you → execute step by step → verify & give rollback commands
+
+### 📥 Installation
+
+| Platform | Command |
+|----------|---------|
+| **Claude Code** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.claude/skills/windows-cleanup-optimize` |
+| **Codex** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.codex/skills/windows-cleanup-optimize` |
+| **Cursor** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.cursor/skills/windows-cleanup-optimize` |
+
+**Download** — HTTPS: `git clone https://github.com/hyt315/windows-cleanup-optimize.git` · SSH: `git@github.com:hyt315/windows-cleanup-optimize.git` · ZIP: [download](https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.zip) · Releases: [link](https://github.com/hyt315/windows-cleanup-optimize/releases)
+
+### 🛡️ Core Philosophy
+
+- All cleanup via Recycle Bin (reversible) — never `Remove-Item`
+- Never touch system dirs (`C:\Windows`, `C:\Program Files`, `C:\ProgramData`) by default
+- Restore points before critical ops (`Checkpoint-Computer`)
+- Every optimization is risk-tiered with a full rollback command
+- When unsure, ask the user — never batch-execute silently
+
+### 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). When adding: append pitfall #+1 in `pitfalls.md`, template #+1 in `scan-scripts.md`, and run `python scripts/selftest.py`.
+
+### 📄 License
 
 [MIT](LICENSE) © 2026 MiniMax
