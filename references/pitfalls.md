@@ -44,7 +44,7 @@
 
 24. **哈希视频缓存目录删除前先看 LastWriteTime。** 如果 LastWriteTime 在最近几天内，说明有播放器/浏览器正在写它——此时删除会失败（文件被占用），且清理后播放中的内容会中断。做法：先告知用户"该缓存正在使用，删除后会自动重建"，被占用导致失败时重试即可，不要反复死磕。
 
-25. **D 盘可能出现无法显示的乱码目录名**（如 `ļ`，GBK 字节被当 Unicode 显示）。这是正常现象（老工具创建的目录），不是文件损坏。用 `[System.IO.Directory]::GetDirectories('D:\')` 可读真实名；**不要凭乱码名猜测内容，先看内部再定档**（实战：乱码目录内部是 `Tencent Files`，实为 QQ 聊天文件数据，第四档）。
+25. **D 盘可能出现无法显示的乱码目录名**（如 `�����ļ�`，GBK 字节被当 Unicode 显示）。这是正常现象（老工具创建的目录），不是文件损坏。用 `[System.IO.Directory]::GetDirectories('D:\')` 可读真实名；**不要凭乱码名猜测内容，先看内部再定档**（实战：乱码目录内部是 `Tencent Files`，实为 QQ 聊天文件数据，第四档）。
 
 ## 空间/性能陷阱
 
@@ -156,6 +156,18 @@
 65. **electron-updater 残留目录扫描模板。** 2026-08 实战：在 `%LOCALAPPDATA%` 下扫到 `@opencode-aidesktop-updater`(241MB)、`qwen-work-cn-updater`(226.8MB) 两个残留。这些是早期版本的 electron 应用留下的更新缓存，软件本体可能已升级或卸载，但更新器缓存没人清。**扫描模式**：在 `LocalAppData`、`AppData`、各软件安装目录下找名字匹配 `*updater*`、`*update*`、`pending`、`*Update*` 的目录，结合 Uninstall 注册表交叉比对（已卸载软件的就清，没卸载看大小决定）。完整模板见 `scan-scripts.md` 模板 5。
 
 66. **服务禁用需要管理员，非管理员错误一律是 "OpenService FAILED 5: Access is denied"。** 2026-08 实战：`sc config <service> start= disabled` 在非管理员 token 下报这个错。`schtasks /change` 失败报 `Access is denied`。两者都通过 `%LOCALAPPDATA%\Temp\<script>.log` 抓日志后一目了然。**对策**：所有需要改 `HKLM`、服务、计划任务根目录的脚本，组装到独立的 `*_admin.ps1`，让用户双击 `*_admin.bat` 调 `powershell -Verb RunAs` 触发 UAC。把非管理员部分（HKCU 写、Temp 删除、用户目录扫描）放在普通脚本里并行跑。
+
+67. **PowerShell `Invoke-RestMethod` 往 GitHub API POST/PATCH 中文 body 会变乱码（`???`）。** 2026-08 实战：用 `Invoke-RestMethod -Body ($obj|ConvertTo-Json)` 创建含中文的 GitHub Release 后，名字和说明全变成 `?`。**根因**：PowerShell 5.1 的 HttpWebRequest 默认 ContentType 编码不是 UTF-8，中文被压成 `?` 存进 GitHub——之后怎么读都是 `?`，只能手动重建。**对策（必用）**：
+    - **幂等好法**：写临时 UTF-8 JSON 文件 + `curl.exe`：
+      ```powershell
+      $utf8 = New-Object System.Text.UTF8Encoding($false)
+      [System.IO.File]::WriteAllText("C:\Temp\payload.json", $json, $utf8)
+      & curl.exe -sS -X PATCH "$uri" -H "Authorization: Bearer $token" `
+          -H "Content-Type: application/json; charset=utf-8" --data-binary "@C:\Temp\payload.json"
+      ```
+    - 若必须用 `Invoke-RestMethod`：先 `$payload = $obj|ConvertTo-Json`（会输出 `\uXXXX` 转义的纯 ASCII），再 `Invoke-RestMethod -Body ([System.Text.Encoding]::UTF8.GetBytes($payload)) -ContentType "application/json; charset=utf-8"`。**绝不要**直接传字符串 body 且不带 charset。
+    - 验证：GET 回来后 `if($obj.body -match '\?\?\?') { '有乱码' }`。
+    - 延伸（pitfalls 备用）：GitHub token 应只从环境变量读取（`[Environment]::GetEnvironmentVariable('GITHUB_TOKEN','User')`），不要写进任何脚本文件——脚本文件里出现可用的凭据字面量属于高危。凭据用后按用户意图决定是否保留环境变量。
 
 ## 安全边界陷阱
 
