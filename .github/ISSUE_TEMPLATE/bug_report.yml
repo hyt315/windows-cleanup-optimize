@@ -1,0 +1,63 @@
+name: Bug 报告
+description: 报告脚本执行中的错误、踩坑或不符合预期行为
+title: "[Bug] "
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      content: |
+        报告脚本执行中的 bug。先用 Issue 搜索确认没有重复。
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 问题分类
+      options:
+        - 脚本执行报错（PowerShell 错误信息）
+        - 文档内容错误（与实际不符）
+        - 找不到目标（命令路径/注册表项不存在）
+        - 权限不足（但应该有权限）
+        - 清理/优化结果错误
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 执行 xxx 命令
+        2. 出现 xxx 错误
+        3. 期望 xxx
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 系统环境
+      value: |
+        - Windows 版本：
+        - PowerShell 版本：
+        - 节点路径（Program Files / 自定义）：
+      placeholder: "例如：Windows 11 23H2 / PS 7.4 / C:\Program Files (x86)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 错误日志
+      placeholder: "粘贴完整的 PowerShell 报错"
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: false

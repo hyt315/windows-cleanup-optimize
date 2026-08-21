@@ -1,0 +1,34 @@
+name: 改进建议
+description: 为本技能提出功能增强、文档改进、模板补充
+title: "[Suggestion] "
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      content: |
+        提出本技能的改进建议。请描述清楚使用场景。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题 / 需求
+      placeholder: "例如：WPS 卸载不干净，希望增加 DeepClean 流程"
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 典型使用场景
+      placeholder: "什么类型的清理/优化需要这个功能？"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      placeholder: "可选：你心里的实现想法"
+    validations:
+      required: false
