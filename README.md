@@ -11,22 +11,27 @@
 - 🔍 **右键菜单审计**：跨用户/系统的 shell 扩展篡改检测（2026-08 新增）
 - 🐕 **WPS 自动升级根治**：配置+任务+服务三层防护，永久防止 ksolaunch 重写任务
 
-## 📥 安装
+## 📥 下载 / Download
 
-各 AI Agent 平台的 Skills 目录约定不同，下面是常见路径：
+| 方式 | 命令 / 链接 |
+|------|------------|
+| HTTPS clone | `git clone https://github.com/hyt315/windows-cleanup-optimize.git` |
+| SSH clone | `git clone git@github.com:hyt315/windows-cleanup-optimize.git` |
+| GitHub CLI | `gh repo clone hyt315/windows-cleanup-optimize` |
+| ZIP 下载 | https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.zip |
+| 单文件（SKILL.md） | https://raw.githubusercontent.com/hyt315/windows-cleanup-optimize/main/SKILL.md |
+
+**安装到各 AI Agent 平台的 Skills 目录：**
 
 ```bash
 # Claude Code / Codex / 其他主流平台
-git clone <repo-url> ~/.claude/skills/windows-cleanup-optimize
+git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.claude/skills/windows-cleanup-optimize
 
 # Cursor (项目级)
-git clone <repo-url> .cursor/skills/windows-cleanup-optimize
+git clone https://github.com/hyt315/windows-cleanup-optimize.git .cursor/skills/windows-cleanup-optimize
 
 # GitHub CLI
-gh repo clone <owner>/windows-cleanup-optimize
-
-# 直接下载 ZIP
-# https://github.com/<owner>/windows-cleanup-optimize/archive/main.zip
+gh repo clone hyt315/windows-cleanup-optimize
 ```
 
 ## 🛠️ 使用示例
