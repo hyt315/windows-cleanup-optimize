@@ -35,3 +35,6 @@ audit-report.txt
 
 # 用户本地数据
 *本地诊断*.txt
+
+# Mimosa 安全扫描插件本地工作目录
+.mimosa/
