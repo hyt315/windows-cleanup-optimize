@@ -29,8 +29,9 @@ C drive full, slow boot, pop-up ads, system lagging — **Windows Cleanup & Opti
 | 🔍 **Smart user profiling** | 4 profiles (family / developer / gamer / laptop), asked once, never repeated, recommendations auto-adapt |
 | 🧹 **Bloatware identification** | Auto-detect 360 / 2345 / pop-up advertising bundled software, safe uninstall guidance |
 | ⚡ **Deep optimization** | Service tuning (telemetry, Xbox, etc.), memory tuning, power plan, SSD TRIM — all reversible |
-| 🔄 **Data migration** | Move large C-drive directories to D drive via `mklink /J`, no file copy needed |
-| 📋 **14 reference manuals** | Disk cleanup, uninstall, services, pitfalls, case studies, and more |
+| 🔄 **Data migration** | Official-first (in-app migration / folder redirection / official config); `mklink /J` only as fallback; special guides for WeChat/QQ/browsers/dev tools |
+| 🧩 **Thorough startup cleanup** | Covers 20+ Windows startup points; Edge/Chrome "kill the switch first, then the Run key" guide to stop startups from coming back; official AutoRuns tool |
+| 📋 **17 reference manuals** | Disk cleanup, uninstall, services, startup mechanisms, official migration, pitfalls, case studies, and more |
 
 ---
 
@@ -79,7 +80,7 @@ curl -O https://raw.githubusercontent.com/hyt315/windows-cleanup-optimize/main/S
 ```
 windows-cleanup-optimize/
 ├── SKILL.md                     # entry point (6-stage workflow + zero-harm safety principles)
-├── references/                  # 14 reference manuals (disk/services/software/memory/performance/pitfalls)
+├── references/                  # 17 reference manuals (disk/services/software/startup-mechanisms/migration/pitfalls)
 ├── scripts/
 │   └── selftest.py              # regression tests
 ├── LICENSE

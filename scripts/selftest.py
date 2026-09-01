@@ -27,13 +27,14 @@ REQUIRED_TEMPLATES = (
     "Get-PSDrive",           # 模板 9 验证汇报
 )
 
-# 必须被 SKILL.md 引用的参考文件（清理+优化双线扩展后）
+# 必须被 SKILL.md 引用的参考文件（清理+优化+自启动彻底化+官方迁移 扩展后）
 REQUIRED_REFS = (
     "scan-scripts.md", "pitfalls.md",
-    "startup-audit.md", "bloatware-catalog.md", "software-uninstall.md",
-    "system-cleanup.md",
+    "startup-audit.md", "startup-mechanisms.md", "bloatware-catalog.md",
+    "software-uninstall.md", "system-cleanup.md",
     "services-optimization.md", "memory-optimization.md", "performance-tuning.md",
-    "trae-guide.md", "mklink-migration.md", "case-study.md",
+    "trae-guide.md", "drive-migration-official.md", "chat-apps-migration.md",
+    "mklink-migration.md", "case-study.md",
 )
 
 

@@ -25,7 +25,9 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 - 按用户画像定制（家庭用户 / 开发者 / 游戏玩家 / 笔记本）
 
 **高级：**
-- C 盘大目录通过 `mklink /J` 迁移到 D 盘（TRAE、VS Code、Kimi 等任意软件）
+- 自启动"彻底关闭"（Edge/Chrome 启动提升 + 后台模式 + 20+ 隐藏启动点，用官方工具 AutoRuns 一键审计）
+- C 盘大目录搬 D 盘：**官方方案优先**（应用内迁移 / 系统重定向 / 官方配置项），mklink 仅作兜底
+- 微信/QQ/浏览器/开发工具等大目录的官方迁移到 D 盘
 
 ---
 
@@ -134,6 +136,7 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 |------|----------|----------|
 | 磁盘清理 | `Get-PSDrive C.Free` 对比 | 回收站恢复 |
 | 自启动清理 | 计划任务 `Get-ScheduledTask` 查状态 | 重新启用 Run 项 / 任务 |
+| 数据迁移 | 官方 UI 路径 + C/D 盘大小复查 + 重启回归（`drive-migration-official.md` 第五节） | 恢复旧目录 / 删 junction |
 | 服务优化 | `Get-Service` 查状态 | `sc config <svc> start= auto` |
 | 内存优化 | `Get-Counter '\Memory\*'` 查压力 | 重启电脑 |
 | 性能调优 | `powercfg /getactivescheme` 查电源计划 | `powercfg /setactive <原 GUID>` |
@@ -160,7 +163,8 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 |------|---------|
 | [references/scan-scripts.md](references/scan-scripts.md) | 执行任何扫描/清理/优化时，按编号取对应 PowerShell 模板（1-15） |
 | [references/pitfalls.md](references/pitfalls.md) | 遇到异常/边界情况时，先查踩坑记录（含 30+ 优化主题踩坑） |
-| [references/startup-audit.md](references/startup-audit.md) | 用户提到开机慢、自启动多、需要禁用某软件自启 |
+| [references/startup-audit.md](references/startup-audit.md) | 用户提到开机慢、自启动多、需要禁用某软件自启（含 Edge/Chrome「彻底关闭」专项） |
+| [references/startup-mechanisms.md](references/startup-mechanisms.md) | 用户反馈"关了还会自启/找不到它怎么起来的"（Windows 20+ 隐藏启动点 + 官方工具 AutoRuns） |
 | [references/bloatware-catalog.md](references/bloatware-catalog.md) | 用户提到 360、2345、弹窗广告、要识别可疑软件 |
 | [references/software-uninstall.md](references/software-uninstall.md) | 用户要卸载某软件（含 WPS/钉钉/360 专项清理） |
 | [references/system-cleanup.md](references/system-cleanup.md) | 用户需要系统级清理（Windows 更新残留、休眠文件、DriverStore 等） |
@@ -168,7 +172,9 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 | [references/memory-optimization.md](references/memory-optimization.md) | 用户提到内存不足、电脑卡顿、需要优化内存（含"内存清理工具都是 placebo"批判性分析） |
 | [references/performance-tuning.md](references/performance-tuning.md) | 用户提到电脑慢、想提升性能、电源计划/视觉效果/网络优化（含 Defender 排除列表） |
 | [references/trae-guide.md](references/trae-guide.md) | 扫描结果出现 `TRAE SOLO CN` / `.trae-cn` / 用户提到 TRAE |
-| [references/mklink-migration.md](references/mklink-migration.md) | 用户想把 C 盘大目录迁移到 D 盘（任意软件 mklink /J 通用方案，含兼容性矩阵） |
+| [references/drive-migration-official.md](references/drive-migration-official.md) | 用户想把 C 盘大目录搬到 D 盘（**官方方案优先决策树**：应用内迁移/系统重定向/官方配置项） |
+| [references/chat-apps-migration.md](references/chat-apps-migration.md) | 微信/QQ/钉钉 占 C 盘、"改了保存位置还占 C 盘"（官方迁移 + 遗留目录清理） |
+| [references/mklink-migration.md](references/mklink-migration.md) | 官方无方案时的 mklink /J 兜底（含兼容性预检、官方限制、真实失败案例） |
 | [references/case-study.md](references/case-study.md) | 执行 mklink 迁移前参考（TRAE 含稀疏文件、VS Code 典型 IDE、通用模式三案例） |
 
 ---
@@ -280,7 +286,11 @@ electron-updater 应用的 `pending\installer.exe` 残留是常见空间大户�
 
 完整模板见 `scan-scripts.md` 模板 5。
 
-#### 1.7 自启动项扫描（转 `startup-audit.md`）
+#### 1.7 自启动项扫描（转 `startup-audit.md` + `startup-mechanisms.md`）
+
+- 常规三机制（Run / 启动文件夹 / 计划任务）审计：`startup-audit.md`
+- 用户反馈"关了还会自启 / 找不到它怎么起来的"：加查 `startup-mechanisms.md` 的隐藏启动点，并**优先推荐官方工具 AutoRuns 一键审计**（勾选"隐藏微软签名项"后只看第三方）
+- Edge/Chrome 浏览器专项（启动提升 / 后台模式 + Run 键"复发"陷阱）：`startup-audit.md` 浏览器专项
 
 详细流程见 `startup-audit.md`。
 
@@ -384,7 +394,7 @@ Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Executio
 
 #### 4.3 清理 - 自启动
 
-按 `startup-audit.md` 流程：HKCU/HKLM Run 移除 + 计划任务禁用。
+按 `startup-audit.md` 流程：HKCU/HKLM Run 移除 + 计划任务禁用；**Edge/Chrome 按"浏览器专项"顺序**（先切开关层——启动提升/后台模式，再删 AutoLaunch Run 键，防写回复发）；隐藏启动点（Winlogon/Active Setup/AppInit 等）只读检出后转 `startup-mechanisms.md`，不擅自改。
 
 #### 4.4 优化 - 服务
 
@@ -398,9 +408,9 @@ Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Executio
 
 按 `performance-tuning.md` 流程：`powercfg` + 视觉效果 + `fsutil` 等。
 
-#### 4.7 高级 - mklink 迁移
+#### 4.7 高级 - 数据迁移（官方优先）
 
-按 `mklink-migration.md` 流程：参考 `case-study.md` 选择最接近的案例。
+先按 `drive-migration-official.md` 决策树找官方迁移能力（应用内迁移 / 系统重定向 / 官方配置项）；确认无官方方案时才走 `mklink-migration.md` 兜底（含兼容性预检），参考 `case-study.md` 选最接近的案例；微信/QQ/钉钉见 `chat-apps-migration.md`。
 
 ---
 
@@ -448,19 +458,25 @@ Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Executio
 
 ---
 
-## 进阶策略：符号链接迁移（mklink 通用）
+## 进阶策略：数据迁移到 D 盘（官方优先，mklink 兜底）
 
-C 盘占用大的目录（任何软件的 AppData、用户目录下的隐藏目录等）可以用 `mklink /J` 物理迁移到 D 盘而保持逻辑路径不变。
+C 盘占用大的目录搬到 D 盘，**顺序必须是**：官方迁移能力 → 系统级重定向 → 重装/便携版 → mklink 兜底。
 
-**迁移不是万能解药**：
-- 不是所有软件都兼容（Outlook / 微信 PC / QQ / Docker Desktop 等不兼容）
-- 含稀疏文件的目录（虚拟磁盘镜像类）需要混合复制策略
-- 部分软件有**官方配置项**可改路径，比 mklink 更稳
+**为什么官方优先**：微软从未官方支持"用 junction 搬 AppData"（官方通道 Folder Redirection 明确不含 AppData\Local）；微信/QQ/Steam/浏览器/开发工具/OneDrive 等大多有**官方迁移能力**，用了就零风险。mklink 的真实失败案例（新版 Chrome 程序目录闪退、OneDrive 不同步、MSIX 应用写异常、整体搬 AppData 开始菜单失灵等）都有可核验来源，见 `mklink-migration.md`"官方限制与真实失败案例"。
 
-**完整通用方案**（适用性矩阵 + 6 步流程 + 复制工具坑 + 兼容性测试与回退）见 `references/mklink-migration.md`。
-**实战案例**（TRAE 含稀疏文件 / VS Code 典型 IDE / 任意软件通用模式）见 `references/case-study.md`。
+**四步决策树**：
+1. 软件有官方"迁移/改存储位置"能力？→ 用（`drive-migration-official.md` 第三节）
+2. 是用户文件夹 / OneDrive 已知文件夹？→ 系统级重定向（`drive-migration-official.md` 第二节）
+3. 可以卸载重装到 D 盘 / 换官方便携版？→ 重装
+4. 都不行且路径硬编码 → `mklink /J` 兜底（**先做兼容性预检**）
 
-**执行迁移前必须先阅读 `mklink-migration.md` 的兼容性矩阵**，确认目标软件在 ✅ 列表里。
+**完整手册**：
+- 官方方案全集 + 决策树 → `references/drive-migration-official.md`
+- 微信/QQ/钉钉官方迁移与缓存清理 → `references/chat-apps-migration.md`
+- mklink 兜底（适用性矩阵 + 6 步流程 + 复制工具坑 + 官方限制 + 回退）→ `references/mklink-migration.md`
+- 实战案例（TRAE 含稀疏文件 / VS Code 典型 IDE / 通用模式三案例）→ `references/case-study.md`
+
+**执行 mklink 前必须先读 `mklink-migration.md` 的兼容性预检清单**，命中红灯项（自更新器 / MSIX / 云同步 / 系统目录 / 可移动介质目标盘等）即否决。
 
 ---
 
@@ -475,6 +491,8 @@ C 盘占用大的目录（任何软件的 AppData、用户目录下的隐藏目�
 - 陷阱 22：`C:\Program Files` 下删除失败的误导性报错，需提权
 - 陷阱 28：DriverStore 驱动存储库绝不手删，用 pnputil
 - 陷阱 30+：优化主题踩坑（内存清理工具 placebo / SysMain 决策 / Defender 排除列表等）
+- 陷阱 68/69：Edge/Chrome 自启"复发"根因（只删 Run 键不关浏览器开关；Chrome 无"启动提升"）与浏览器彻底关闭清单
+- 陷阱 74/75：微软从未官方支持 junction 搬 AppData；微信 4.x "改了还占 C 盘"（`%APPDATA%\Tencent\xwechat` 残留）
 
 ---
 

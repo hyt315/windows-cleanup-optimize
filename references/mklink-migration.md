@@ -3,6 +3,8 @@
 <!-- skill-doctor: allow-block SEC002（命令示例路径用 <user> / %用户名% 占位，无真实用户路径） -->
 
 > 本指南覆盖 Windows 上**任意目录**通过 `mklink /J`（junction）从 C 盘迁移到其他盘位的通用方法。TRAE、VS Code、JetBrains、Kimi、Claude 等都适用，**但不是所有软件都兼容**——开始前必读"兼容性矩阵"和"测试与回退"。
+>
+> ⚠️ **重要前提**：mklink 是**最后手段**。动手前先读 `drive-migration-official.md` 的官方方案优先决策树——微信/QQ/Steam/浏览器/开发工具/云盘大多有官方迁移能力，用了就完全不碰 mklink 风险。只有官方无方案且路径硬编码时，才走本指南。
 
 ---
 
@@ -63,17 +65,17 @@
 
 ### ❌ 不兼容（强烈不建议用 mklink）
 
-| 软件 | 原因 |
-|------|------|
-| **Docker Desktop** | WSL2 ext4 文件系统不识别 junction；Hyper-V 用 VHD。**用安装器参数**：`--wsl-default-data-root`、`--hyper-v-default-data-root` |
-| **Microsoft Outlook** | 微软官方警告禁止移动 PST/OST；MAPI profile 路径硬编码 |
-| **OneNote** | 与 OneDrive 深度集成，硬编码路径 |
-| **OneDrive** | OneDrive 自身用 reparse point（占位符），junction 与之冲突会损坏同步 |
-| **微信 PC (WeChat)** | 中文路径、硬编码路径，已知会导致文件损坏 |
-| **QQ** | 硬编码注册表路径，会话数据可能丢失 |
-| **钉钉 (DingTalk)** | 企业功能依赖硬编码安装路径 |
+| 软件 | 原因 | 正确做法 |
+|------|------|---------|
+| **Docker Desktop** | WSL2 ext4 文件系统不识别 junction；Hyper-V 用 VHD。**用安装器参数**：`--wsl-default-data-root`、`--hyper-v-default-data-root` | `drive-migration-official.md` §3.5 |
+| **Microsoft Outlook** | 微软官方警告禁止移动 PST/OST；MAPI profile 路径硬编码 | 用内置"邮箱数据文件位置" |
+| **OneNote** | 与 OneDrive 深度集成，硬编码路径 | OneDrive 已知文件夹移动（`drive-migration-official.md` §2.2） |
+| **OneDrive** | OneDrive 自身用 reparse point（占位符），junction 与之冲突会损坏同步 | OneDrive 官方"更改文件夹位置"（`drive-migration-official.md` §2.2） |
+| **微信 PC (WeChat)** | 中文路径、硬编码路径，已知会导致文件损坏 | **应用内"文件管理→更改保存位置"**（`chat-apps-migration.md`） |
+| **QQ** | 硬编码注册表路径，会话数据可能丢失 | **应用内"文件管理→更改默认存储路径"**（`chat-apps-migration.md`） |
+| **钉钉 (DingTalk)** | 企业功能依赖硬编码安装路径 | `chat-apps-migration.md`（且缓存不支持改盘符） |
 
-> ⚠️ **不兼容列表不是绝对的**：部分软件可能在新版本修复，但调研时无证据支持安全。出现这种情况，**先用测试 junction 试一次**（见下方"测试与回退"）。
+> ⚠️ **不兼容列表不是绝对的**：部分软件可能在新版本修复，但调研时无证据支持安全。出现这种情况，**先优先找官方迁移能力**（见 `drive-migration-official.md` 决策树），官方没有再考虑"测试 junction 试一次"。
 
 ---
 
@@ -88,6 +90,61 @@
 | 软件**频繁更新**且更新器校验路径 | 先观望，等更新器支持自定义路径 |
 | 目标盘**与系统盘不同文件系统** | 不适用（NTFS→ReFS/网络盘要用 symlink 不一样） |
 | **不确定是否兼容** | 见下方"测试与回退"先试一次 |
+
+---
+
+## 官方限制与真实失败案例（迁移前必读）
+
+> 本节所有结论都来自可核验来源（微软官方文档 / Stack Overflow / GitHub issue / 社区复盘），**不是社区玄学**。一句话结论：**微软从未官方支持"用 junction 搬 AppData"；官方通道是文件夹重定向（Folder Redirection），且官方清单明确不含 AppData\Local。**
+
+### 官方限制（微软文档可直接引用）
+
+| 限制 | 官方依据 | 实操含义 |
+|------|---------|---------|
+| junction（reparse point）是其上目录**必须为空**时创建 | [Reparse Points](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-points) | 先移走数据再建链接，顺序不可反 |
+| **单路径最多 63 个 reparse point**（完整限定路径时 31） | 同左 | 嵌套多层 junction（AppData 内再加）会撞上限 | <!-- skill-doctor: allow CK001（跨对象数字误报：63=NTFS 单路径 reparse point 上限，与 pitfalls.md/scan-scripts.md 的"6 个月"残留判定阈值无关） -->
+| reparse point 使文件系统行为偏离多数开发者预期；**备份/杀软/索引必须特判 reparse point** | [Reparse Points and File Operations](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-points-and-file-operations) | 这是"为什么部分备份/杀软/同步在 junction 下异常"的官方根源 |
+| VSS 备份**不得穿越 junction 遍历内容**，否则重复备份/循环 | [VSS: Junction Points](https://learn.microsoft.com/en-us/windows/win32/vss/junction-points) | 系统还原/备份对 junction 目标覆盖可能不完整 |
+| **文件夹重定向官方清单**：AppData/Roaming、Desktop、Documents、Downloads、Favorites、Links、Music、Pictures、Saved Games、Searches、Start Menu、Videos —— **不含 AppData\Local** | [Folder Redirection（GPO）](https://learn.microsoft.com/en-us/windows-server/storage/folder-redirection/folder-redirection-using-group-policy) | 想用"官方受支持"的方式搬数据，用文件夹重定向（`drive-migration-official.md` §2.1），别用 junction 硬搬 Local |
+| Windows Store 应用 exe 本身就是 AppExecLink reparse point | [Reparse Point Tags](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-point-tags) | 整盘 junction 迁移 WindowsApps/Packages 易损坏 |
+
+### 真实失败案例（按类别，均带来源）
+
+| 软件/场景 | 症状 | 原因（证据级别） | 来源 |
+|-----------|------|-----------------|------|
+| Windows 整体搬 `C:\Users\<user>\AppData` | 开始菜单、通知、任务栏失灵 | 社区现象，shell 基础设施对 AppData 路径敏感（推测） | [SuperUser](https://superuser.com/questions/1657262/i-moved-the-appdata-folder-now-the-start-menu-and-notifications-menu-isnt-work) |
+| 系统升级时 Users 挂了 junction | 升级成功与否不一；`C:\Windows\Installer` 的 junction 被移除致卸载/更新故障 | 社区报告，无官方定论 | [SuperUser](https://superuser.com/questions/922478/windows-10-upgrade-and-junctions) |
+| 把 `C:\Windows\SoftwareDistribution` 做 junction | `net start wuauserv` 报"找不到路径" | 社区案例（官方采纳答案判定根因是 mklink 语法错误，但结论仍是：该目录操作极易出错） | [SuperUser](https://superuser.com/questions/896926/update-junction-in-windows-8-1) |
+| 迁移 `C:\Windows\Installer` 省空间 | 软件修复/卸载/更新失效 | 社区记录 + CSDN 复盘 | [SuperUser](https://superuser.com/questions/922478/windows-10-upgrade-and-junctions) 答案 2、[CSDN](https://blog.csdn.net/weixin_29274337/article/details/158326683) |
+| **Chrome 程序目录** `Program Files\Google` 做 junction | **Chrome 直接闪退**，默认浏览器注册失效 | 新版 `App-Bound Encryption` 绑定安装路径，检测物理路径(`D:\`)与注册表路径(`C:\`)不一致（社区分析，含报错日志） | [CSDN 复盘](https://blog.csdn.net/weixin_63093824/article/details/161697353) |
+| Chrome **User Data** 目录 junction 到第二块硬盘 | 长期稳定后每天多次 APPCRASH | 社区观察（原帖已关闭） | [TenForums 转载帖](https://www.windowsphoneinfo.com/threads/chrome-appcrash-when-using-symbolic-link-or-junction-for-user-data.344326/) |
+| **OneDrive** 内 junction 目录 | 双向同步失效、一直"processing changes" | 多起独立报告；微软 Q&A 采纳回答：OneDrive 原生不支持同步 junction，同步的是被指向目录 | [SuperUser](https://superuser.com/questions/1308909/2-way-sync-doesnt-work-in-onedrive-when-using-symbolic-links-or-junctions)、[Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/1327239/onedrive-shortcuts-symlinks-and-junctions) |
+| **MSIX 应用**（如 Claude Desktop）的 `%APPDATA%\Claude` 含 junction | 会话卡片无法保存（伪 EEXIST） | MSIX 写虚拟化排除项未覆盖 junction 路径 | [GitHub issue](https://github.com/anthropics/claude-code/issues/83584) |
+| **Codex Desktop** `%LOCALAPPDATA%\OpenAI\Codex` junction 目标被删 | 应用反复退出/重置，无法初始化 | junction 目标失效 = 功能全灭 | [GitHub issue](https://github.com/openai/codex/issues/39475) |
+| **WSL2** 目标盘为 SD 卡/可移动介质 | WSL 内访问报 I/O error | 微软工程师参与回复，junction 目标盘必须为固定 NTFS 卷 | [microsoft/WSL issue](https://github.com/microsoft/WSL/issues/4943) |
+| Firefox 等便携软件 `AppData\Roaming\Mozilla` junction 被**随机删除** | 链接消失 | 应用关闭时用 `rmdir` 清残留目录，`rmdir` 对 junction 直接删链接为主因之一 | [SuperUser](https://superuser.com/questions/958452/directory-junction-keeps-being-deleted) |
+| 备份/增量同步对 junction 目录 | 不递归备份 / 漏备份 | 运维场景（robocopy `/XJ` 显式处理） | [Spiceworks](https://community.spiceworks.com/t/having-issues-with-using-mklink-to-create-junctions-to-appdata-folders/835305) |
+
+### 兼容性预检清单（判定一个软件能不能 junction）
+
+**第一步：能走官方通道的一律不走 junction**（`drive-migration-official.md` 决策树）。官方通道覆盖：OneDrive / 文档类、Steam、微信/QQ、WSL、Chrome、以及 npm/pnpm/IDE 等（均有官方迁移能力）。
+
+**第二步：红灯项（命中任一即否决或降级为只迁纯缓存）**：
+
+| 检查项 | 判定问题 |
+|--------|---------|
+| 有自更新器/安装器/增量升级 | 更新器常按"原路径删除-重建"或校验路径（Chrome、Codex、Installer 均栽于此）|
+| 是 MSIX / UWP / Store 应用 | WindowsApps exe 是官方 AppExecLink reparse point；MSIX 有写虚拟化排除问题 |
+| 涉及云同步/网盘（OneDrive 等） | 已证实不支持 junction 目录同步 |
+| 有文件监视/索引/实时备份组件 | 官方明确 reparse point 对备份/扫描/USN 读取特殊 |
+| 应用有"关闭时清残留目录"行为（便携类） | 分隔链接会被应用当残留删掉 |
+| 目标盘是 SD 卡/U 盘/移动硬盘 | 盘符切换全盘失效（WSL I/O error 实证）|
+| 有安全组件绑定安装路径（如新版 Chrome App-Bound）| 路径不匹配即拒绝解密/闪退 |
+| 多组件共享路径（浏览器/Office C2R）| 只迁一部分会造成"分裂大脑" |
+| 属于系统级目录（Users、Windows\Installer、SoftwareDistribution、WindowsApps、Program Files）| 升级/更新/服务可能移除或失败 |
+| 路径含空格/非 ASCII，或嵌套层数深 | 引号语法高频翻车；63 个 reparse 上限、260 上限 |
+
+**第三步：绿区建议**：单个、无更新器、无路径校验的**静态数据/纯缓存目录**相对稳妥（仍建议优先用应用内设置）。
 
 ---
 
@@ -326,3 +383,11 @@ rmdir "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>"
 - 陷阱 11：装到 D 盘不等于 AppData 搬走
 - 陷阱 15：mklink 复制工具的坑
 - 陷阱 16：非系统盘扫描策略与 C 盘不同
+- 陷阱 58：微信/QQ 用 mklink 会损坏数据
+- 新增：Edge/Chrome 浏览器"关不彻底"与 OneDrive junction 失效等（`pitfalls.md` 68+）
+
+## 先读官方方案
+
+- 官方优先迁移决策树 + 系统级/软件级全部官方能力 → `drive-migration-official.md`
+- 微信/QQ/钉钉专项 → `chat-apps-migration.md`
+- mklink 实战案例（TRAE/VS Code/通用） → `case-study.md`

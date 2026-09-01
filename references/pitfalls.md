@@ -11,6 +11,7 @@
 - 空间/性能陷阱（5-6, 12-13, 28-29）
 - 安全边界陷阱（7-8, 22, 26）
 - 迁移专项陷阱（11, 15-16）
+- 2026-09 自启动+迁移彻底化（68-78）
 
 ## 执行方式陷阱
 
@@ -188,3 +189,37 @@
 15. **mklink 迁移时复制工具的两大隐形坑（迁移必读，通用）。** （一）**稀疏文件膨胀**：robocopy 默认把稀疏文件（sparse file，逻辑大小远小于分配大小）展开到完整大小——常见于虚拟磁盘镜像类文件（如 TRAE `VMCache`、WSL2 `ext4.vhdx`、Docker VHD 等），复制后目标体积膨胀 2-3 倍。识别方法：`fsutil sparse queryflag <文件>`。**对策**：对含稀疏文件的子目录单独用 xcopy 或 `Copy-Item -Recurse`。（二）**junction 跟踪**：robocopy 默认跟随源目录内的 junction point，把 junction 指向的目标内容也复制一份，导致文件数暴增数倍。**对策**：加 `/XJ` 排除 junction。xcopy 没有这两个问题，但有 260 字符路径长度限制，深层 `node_modules` 会报"路径找不到"并跳过。实战最稳方案：**xcopy 复制主体 + robocopy `/XJ /E` 补充长路径子目录**，最后用文件数+大小双重验证。另外，bash/cmd 下直接调 robocopy 时 `/E`、`/MIR` 等参数会被 shell 当路径解析，必须写成 `.ps1` 脚本通过 `powershell -File` 执行。详见 `references/mklink-migration.md` 通用指南与 `references/case-study.md` Case A 实战。
 
 16. **非系统盘扫描策略与 C 盘完全不同。** C 盘有固定的 AppData 分层结构，可以逐层深入扫描。D 盘等非系统盘的目录结构完全由用户习惯决定，没有统一模式。正确做法是**根目录一级展开**，按大小排序后逐个识别，而不是套用 C 盘的 AppData 扫描逻辑。对 D 盘做 `Get-ChildItem -Recurse` 全盘扫描会非常慢（几十 GB 到上百 GB），应该只扫描根目录一级，然后对可疑大目录再深入一层。
+
+---
+
+## 2026-09 自启动 + 迁移彻底化（踩坑 68-78）
+
+> 依据：Edge/Chrome 官方策略与支持页、微软官方文档、Stack Overflow / GitHub issue / CSDN 复盘等多源交叉核验（详见 `startup-mechanisms.md`、`startup-audit.md`、`mklink-migration.md`、`drive-migration-official.md`、`chat-apps-migration.md`）。
+
+### 自启动"关不彻底"（68-70）
+
+68. **Edge/Chrome 自启"关了还会冒出来"的根因：只删了 Run 键，没关浏览器自己的后台开关。** Edge 的 `MicrosoftEdgeAutoLaunch_<hash>`、Chrome 的 `GoogleChromeAutoLaunch_<hash>` 只是"执行层"，真正的"开关层"是 Edge 的**启动提升(Startup Boost)+ 后台运行扩展** 与 Chrome 的**后台运行应用**。只删 Run 键不关开关，浏览器一运行/更新就把 Run 键写回。**对策（顺序不可反）**：①先关内置开关（用户级注册表），②强烈建议再写 `HKLM\SOFTWARE\Policies\...` 策略强制（防写回，管理员），③最后删 Run 键。完整命令见 `startup-audit.md` 浏览器专项。
+
+69. **Chrome 没有「启动提升 / Startup Boost」——那是 Edge 的功能。** 中文网大量文章将此混为一谈（Chrome 官方策略列表从未包含 `StartupBoostEnabled`）。给 Chrome 做彻底关闭时不要去找不存在的"启动提升"开关，Chrome 的对应物就是"关闭后继续运行后台应用"（`BackgroundModeEnabled`）+ Run 键。
+
+70. **Edge ≥153 新增"开机后可见启动"策略 `LaunchEdgeOnWindowsStartupEnabled`。** 用户反馈"开机直接弹出 Edge 窗口"而非后台进程时，查这个策略并置 0（`HKLM\SOFTWARE\Policies\Microsoft\Edge`，管理员）。它与"启动提升"的后台静默预启动是两回事。
+
+### 自启动隐藏机制（71-73）
+
+71. **任务管理器「启动」页"已禁用"只是打标记，Run 键值仍在。** 禁用状态记在 `HKCU\...\Explorer\StartupApproved\Run`（首字节 02=禁用/03=启用），Run 键本身没删。这解释了"看起来关了还会自启"，也解释了某些软件的勾反逻辑。彻底处理＝删除对应 Run 值。
+
+72. **Winlogon / Active Setup / AppInit / 策略 Run 等 20+ 个隐藏启动点，常规审计脚本看不到。** 用户说"实在找不到它怎么起来的"时，用微软官方工具 **AutoRuns**（Sysinternals，`download.sysinternals.com/files/Autoruns.zip`），勾选"隐藏微软签名项"后一键看全部第三方自启，比手查快 10 倍。详见 `startup-mechanisms.md`。
+
+73. **Chrome/Edge 的 `msedgewebview2.exe` / WebView2 组件进程不是浏览器自启。** 很多桌面应用（Office、各种 Electron 外壳）用 WebView2 渲染界面，进程名带 msedge。验证"Edge 是否还自启"时，只看 `msedge.exe`，别把 `msedgewebview2.exe` 误判为失败。
+
+### 迁移"搬不彻底"（74-78）
+
+74. **微软从未官方支持"用 junction 搬 AppData"。** 官方受支持通道是文件夹重定向（Folder Redirection），且官方清单**明确不含 AppData\Local**（官方文档：https://learn.microsoft.com/en-us/windows-server/storage/folder-redirection/folder-redirection-using-group-policy ）。想"官方地"搬用户数据→用系统重定向；AppData 只能走"软件官方迁移/配置项"或"有依据地 junction"（见 `mklink-migration.md` 兼容性预检）。
+
+75. **微信 4.x"改了保存位置还占 C 盘"的典型原因：`%APPDATA%\Tencent\xwechat` 那份没搬走。** 微信 4.x 数据目录在 `Documents\xwechat_files`（应用内可迁），但配置/登录缓存 `%APPDATA%\Tencent\xwechat`（实测可近 1 GB）**不会随迁移自动搬走**。迁移后需单独清理（退出微信后清 `log/crashinfo` 等，勿动 `config/login`）。详见 `chat-apps-migration.md`。
+
+76. **OneDrive 不认识 junction 目录。** 把目录 mklink 塞进 OneDrive，会导致"单向同步/一直 processing/不上传"。官方确认：OneDrive 原生不支持同步 symlink/junction，同步的是被指向的真实目录。避开：用 OneDrive 官方"更改位置 / 已知文件夹移动"。
+
+77. **新版 Chrome 程序目录（`Program Files\Google`）不能用 junction 迁移——会闪退。** Chrome 138+ 的 App-Bound Encryption 密钥与安装路径绑定：junction 后物理路径（`D:\`）与注册表路径（`C:\`）不一致，报 `Unable to decrypt key ... 0x80070002`，默认浏览器注册也失效。**正解**：官方离线包 `ChromeStandaloneSetup64.exe --install-dir="D:\..."` 真装到 D 盘，或只迁数据不动程序文件。同样，MSIX/UWP 应用（如 Claude/Codex）的数据目录含 junction 会写虚拟化异常，慎用。
+
+78. **迁移后要验证"真的搬走了且没坏"再算完成。** 三个动作：① `(Get-Item <路径> -Force).LinkType` 应为 Junction、Target 指向 D 盘；② 重启后任一时刻在 C 盘路径建文件，去 D 盘确认可见；③ **残留写入检测**：记录 C 盘该目录大小，一周后对比是否回升（或用 Sysinternals ProcMon 过滤 `Path contains C:\Users\<用户>\AppData` 的 WriteFile/CreateFile 看有没有组件绕过 junction 就地重建）。详见 `mklink-migration.md`"官方限制与真实失败案例"。
