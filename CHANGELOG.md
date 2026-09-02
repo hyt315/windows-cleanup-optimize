@@ -8,11 +8,25 @@
 ## [1.3.0] - 2026-09-02
 
 ### 新增
+- **深度专项卸载与常驻服务治理**（`software-uninstall.md` + `bloatware-catalog.md`）：
+  - **百度网盘**：系统常驻守护服务 `YunDetectService` 禁用/删除、`BaiduNetdiskUpdateTask` 计划任务禁用与 AppData 残留清理
+  - **迅雷**：`XLServicePlatform` 与 `ThunderNetwork` 后台 P2P 上传守护服务彻底禁用与下载引擎缓存清理
+  - **搜狗输入法**：`SogouCloud.exe` 云计算候选与 `SGDownload.exe` 弹窗下载器出站防火墙阻断及更新任务禁用
+  - **夸克网盘**：开机常驻守护与临时分片目录治理
+- **本地 AI 框架与模型大户迁移**（`drive-migration-official.md`）：
+  - **Ollama 本地大模型**：官方原生环境变量 `OLLAMA_MODELS=D:\OllamaModels` 换盘指南（拯救数十 GB C 盘空间）
+  - **Hugging Face / PyTorch**：预训练权重缓存环境变量 `HF_HOME=D:\HF_Cache` 迁移指南
+  - **Gradle / Android SDK**：`GRADLE_USER_HOME` 与 `ANDROID_HOME` 重定向
 - **微信 4.x / QQ NT / 钉钉深度治理**（`chat-apps-migration.md`）：
   - 微信 4.x `%APPDATA%\Tencent\xwechat` 目录结构与清理口径（`config` 保护、`xplugin` 保留、`log`/`crashinfo` 安全清理）
   - 微信 4.x `xwechat_files` 与 OneDrive 文件夹重定向 Fallback 机制解析与探测脚本
   - QQ NT 版（v9.9+）确切设置路径（「设置 → 存储管理」聊天记录迁移与「设置 → 文件管理」接收文件保存位置）
   - 钉钉 PC 缓存支持与范围（文件存储换盘、应用内缓存清理，禁止整体搬移 `%LOCALAPPDATA%\DingTalk_91`，提供 `AlibabaProtect` 残留服务提权清理命令）
+- **Win11 24H2 系统特性与避坑**（`system-cleanup.md` + `pitfalls.md`）：
+  - Windows 11 24H2 “8.63 GB 更新清理显示残留” 官方计算显示 Bug 误报提醒（严禁强删 WinSxS）
+  - BitLocker 全盘加密前置检测（`manage-bde -status C:`）与 48 位恢复密钥备份提醒
+- **踩坑库扩充 79-84**（`references/pitfalls.md`）：
+  - WPS UpdateMode 注册表复活链、百度/迅雷后台守护、搜狗 IME 伴随唤醒、Win11 24H2 更新误报、Ollama 模型爆盘、BitLocker 恢复密钥
 - **自启动审计与 AutoRuns 升级**（`startup-mechanisms.md` + `startup-audit.md`）：
   - 补充 AutoRuns `-accepteula` 与 `-vt` VirusTotal 首次交互同意实操提示
   - 补充 Edge 中文策略名（「启用启动增强」）与 UI 界面名称（「启动提升」）映射表
@@ -20,7 +34,7 @@
   - 新增深度内容级断言（自动验证自启策略关键词、微信 4.x 目录、官方迁移限制与决策树存在性）
 
 ### 改进
-- **SKILL.md 精简重构**：将冗长脚本抽离至 `scan-scripts.md`，主入口行数从 525 行优化至 150 余行，提升 Agent 读取效率并消除规范告警
+- **SKILL.md 精简重构**：将冗长脚本抽离至 `scan-scripts.md`，主入口行数从 525 行优化至 150 余行，提升 Agent 读取效率并消除规范告警（通过 skill-doctor 全部 37 项体检）
 - **双语 README 架构完善**（`README.md` / `README.en.md`）：补齐 15 个参考手册的完整架构清单与中英文说明
 
 ## [1.2.0] - 2026-09-01
