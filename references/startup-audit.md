@@ -131,10 +131,10 @@ Write-Host "审计完成: $outFile"
 
 ### A. Microsoft Edge 彻底关闭（6 个要点）
 
-| # | 机制 | 位置 / 命令 | 管理员 | 官方依据 |
-|---|------|------------|--------|----------|
-| 1 | **内置「启动提升」**（根因，须先关） | UI：`edge://settings/system` → 关闭「启动提升」；注册表：`HKCU\Software\Microsoft\Edge\StartupBoostEnabled = 0` | 用户级否；策略级是 | [官方支持页（启动提升）](https://support.microsoft.com/zh-cn/edge/get-help-with-startup-boost)、[策略 StartupBoostEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/startupboostenabled) |
-| 2 | **后台运行扩展和应用**（后台模式） | UI：`edge://settings/system` → 关闭后台运行；注册表：`HKCU\Software\Microsoft\Edge\BackgroundModeEnabled = 0` | 用户级否；策略级是 | [策略 BackgroundModeEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/backgroundmodeenabled) |
+| # | 机制 | 位置 / 命令 | 管理员 | 官方依据与中文命名映射 |
+|---|------|------------|--------|------------------------|
+| 1 | **内置「启动提升」**（根因，须先关） | UI：`edge://settings/system` → 关闭「启动提升」；注册表：`HKCU\Software\Microsoft\Edge\StartupBoostEnabled = 0` | 用户级否；策略级是 | [官方支持页（启动提升）](https://support.microsoft.com/zh-cn/edge/get-help-with-startup-boost)、[策略 StartupBoostEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/startupboostenabled)（注：官方策略中文名为「启用启动增强」，设置 UI 为「启动提升」） |
+| 2 | **后台运行扩展和应用**（后台模式） | UI：`edge://settings/system` → 关闭后台运行；注册表：`HKCU\Software\Microsoft\Edge\BackgroundModeEnabled = 0` | 用户级否；策略级是 | [策略 BackgroundModeEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/backgroundmodeenabled)（注：官方策略中文名为「允许后台应用继续运行」，设置 UI 为「在关闭后继续运行后台扩展和应用」） |
 | 3 | **执行层 Run 键**（最后清） | `reg query "HKCU\...\Run"` 下删 `MicrosoftEdgeAutoLaunch_<hash>*` | 否 | [实证问题帖（现象与用户反馈一致）](https://superuser.com/questions/1904981/disabling-issue-for-microsoft-edge-at-startup) |
 | 4 | **开机后可见启动**（Edge ≥153 新增策略） | `HKLM\SOFTWARE\Policies\Microsoft\Edge\LaunchEdgeOnWindowsStartupEnabled = 0` | 是 | [策略 LaunchEdgeOnWindowsStartupEnabled](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/launchedgeonwindowsstartupenabled)（**策略页正文无 Deprecated 标注**——索引页摘要里的 "Deprecated." 是相邻章节标题拼接误报，以正文为准） |
 | 5 | **EdgeUpdate 计划任务/服务**（只影响更新，与自启无关，一般不动） | `MicrosoftEdgeUpdateTaskMachineCore/UA`（机器级需管理员）；服务 `edgeupdate`/`edgeupdatem` | 部分 | [EdgeUpdate 更新策略](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies)（这些任务不拉起浏览器窗口） |

@@ -51,17 +51,23 @@
 WinSxS 目录是 Windows 组件存储，会随系统更新不断膨胀。直接删文件极其危险，只能用 DISM 命令安全清理：
 
 ```powershell
-# 需要先检查健康状态（可选，耗时较长）
+# 1. 检查健康状态（只读扫描）
 Dism /Online /Cleanup-Image /ScanHealth
 
-# 清理被取代的组件（安全，推荐）
+# 2. 清理被取代的旧组件（安全，推荐）
 Dism /Online /Cleanup-Image /StartComponentCleanup
 
-# 在上述基础上进一步清理旧版本备份（激进：之后无法卸载已安装的更新）
+# 3. 彻底清理旧版本备份（激进：之后无法卸载已安装的更新，不可回退）
 Dism /Online /Cleanup-Image /StartComponentCleanup /ResetBase
 ```
 
 第一条 `ScanHealth` 只是扫描不修改，可以放心跑。第二条 `StartComponentCleanup` 是安全操作，只删已被新版取代的旧组件。第三条带 `/ResetBase` 的比较激进——执行后无法回滚已安装的 Windows 更新，建议只在空间极度紧张时使用。
+
+> ⚠️ **Windows 11 24H2 避坑（8.63 GB 更新清理显示残留）**：  
+> 在 Win11 24H2 中，「设置 → 系统 → 存储」或 `cleanmgr` 会持续显示约 8.63 GB 的「Windows 更新清理」且勾选后看似无法消除。**这是微软官方确认的计算显示 Bug（实际已释放），绝不要去强删 WinSxS 目录**，否则可能导致系统崩溃或无法接收后续补丁。
+>
+> 🔒 **BitLocker 全盘加密前置预检**：  
+> Win11 24H2 起更多设备会默认开启 BitLocker 加密。在做深度清理或还原点前，可运行 `manage-bde -status C:`。若处于加密状态，确保已在微软账户（`account.microsoft.com/devices/recoverykey`）中备份 48 位恢复密钥。
 
 ## 休眠文件（hiberfil.sys）
 

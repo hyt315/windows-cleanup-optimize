@@ -31,7 +31,7 @@ C drive full, slow boot, pop-up ads, system lagging — **Windows Cleanup & Opti
 | ⚡ **Deep optimization** | Service tuning (telemetry, Xbox, etc.), memory tuning, power plan, SSD TRIM — all reversible |
 | 🔄 **Data migration** | Official-first (in-app migration / folder redirection / official config); `mklink /J` only as fallback; special guides for WeChat/QQ/browsers/dev tools |
 | 🧩 **Thorough startup cleanup** | Covers 20+ Windows startup points; Edge/Chrome "kill the switch first, then the Run key" guide to stop startups from coming back; official AutoRuns tool |
-| 📋 **17 reference manuals** | Disk cleanup, uninstall, services, startup mechanisms, official migration, pitfalls, case studies, and more |
+| 📋 **15 reference manuals** | Disk cleanup, uninstall, services, startup mechanisms, official migration, WeChat/QQ/DingTalk migration, pitfalls, case studies, and more |
 
 ---
 
@@ -75,14 +75,29 @@ curl -O https://raw.githubusercontent.com/hyt315/windows-cleanup-optimize/main/S
 
 ---
 
-## 📁 File Structure
+## 📁 File Structure & 15 Reference Manuals
 
 ```
 windows-cleanup-optimize/
 ├── SKILL.md                     # entry point (6-stage workflow + zero-harm safety principles)
-├── references/                  # 17 reference manuals (disk/services/software/startup-mechanisms/migration/pitfalls)
+├── references/                  # 15 reference manuals (loaded on demand)
+│   ├── scan-scripts.md          # 15 PowerShell scan/cleanup/tuning templates
+│   ├── pitfalls.md              # 30+ real-world Windows cleanup & optimization pitfalls
+│   ├── startup-audit.md         # Full startup audit & Edge/Chrome thorough shutdown
+│   ├── startup-mechanisms.md    # 20+ Windows startup mechanisms & AutoRuns guide
+│   ├── bloatware-catalog.md     # Bloatware / pop-up ad process identification catalog
+│   ├── software-uninstall.md    # Safe software uninstall & residue deep cleanup
+│   ├── system-cleanup.md        # System-level deep cleanup (WinUpdate/DriverStore)
+│   ├── services-optimization.md # 50+ Windows services tuning by user profile
+│   ├── memory-optimization.md   # Memory optimization, leak diagnosis & placebo analysis
+│   ├── performance-tuning.md    # System performance tuning (Power/Visual/TRIM)
+│   ├── trae-guide.md            # TRAE AI IDE deep cleanup & sparse file migration
+│   ├── drive-migration-official.md # C-drive migration master guide (Official-first tree)
+│   ├── chat-apps-migration.md   # WeChat 4.x / QQ NT / DingTalk migration & cache cleanup
+│   ├── mklink-migration.md      # mklink /J junction fallback with official limitations
+│   └── case-study.md            # Real-world migration case studies
 ├── scripts/
-│   └── selftest.py              # regression tests
+│   └── selftest.py              # Structural and deep-content regression tests
 ├── LICENSE
 ├── README.md  /  README.en.md  # bilingual docs (this file is English)
 ├── CHANGELOG.md

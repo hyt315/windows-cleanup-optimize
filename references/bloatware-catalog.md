@@ -100,20 +100,22 @@
 
 ---
 
-## 2. 下载工具类
+## 2. 下载工具与网盘同步类
 
-| 软件 | 进程名 | 安装目录 | AppData | 行为 | 推荐 |
+| 软件 | 进程名 / 服务名 | 安装目录 | AppData | 行为与后台隐蔽机制 | 推荐 |
 |------|--------|----------|---------|------|------|
-| **迅雷** | `Thunder.exe`, `ThunderKernel.exe` | `C:\Program Files (x86)\Thunder Network\Thunder` | `%APPDATA%\Thunder Network` | 捆绑、P2P 后台上传、弹窗 | ⚠️ |
+| **迅雷** | `Thunder.exe`, `ThunderKernel.exe`, 服务 `XLServicePlatform`, `ThunderNetwork` | `C:\Program Files (x86)\Thunder Network\Thunder` | `%APPDATA%\Thunder Network` | 捆绑、常驻 P2P 上传服务（退出软件后服务仍在跑）、弹窗 | ⚠️（需关服务） |
+| **百度网盘** | `baidunetdisk.exe`, `baidunetdiskhost.exe`, 服务 `YunDetectService` | `%APPDATA%\Baidu\BaiduNetdisk` 或 `%ProgramFiles%\Baidu` | `%APPDATA%\Baidu\BaiduNetdisk` | 退出后常驻 `YunDetectService` 探测守护服务、Shell 右键扩展占用 | ⚠️（需关服务） |
+| **夸克网盘** | `Quark.exe`, `QuarkServices.exe` | `%LOCALAPPDATA%\Programs\Quark` | `%APPDATA%\Quark` | 开机常驻守护、临时分片文件占用 C 盘 | ⚠️ |
 | **QQ 旋风**（已停服） | `QQDownload.exe`（残留） | 残留于 `C:\Program Files (x86)\Tencent\QQ旋风` | `%APPDATA%\Tencent\QQDownload` | 已停服，残留可清 | ❌（残留） |
 
 ---
 
 ## 3. 输入法类
 
-| 软件 | 进程名 | 安装目录 | AppData 路径 | 行为 | 推荐 |
+| 软件 | 进程名 | 安装目录 | AppData 路径 | 行为与伴随拉起 | 推荐 |
 |------|--------|----------|--------------|------|------|
-| **搜狗输入法** | `SogouService.exe`, `SogouIM.exe`, `SGMain.exe` | `C:\Program Files (x86)\SogouInput` | `%APPDATA%\SogouPY` | 词库弹窗、推荐装浏览器 | ⚠️ |
+| **搜狗输入法** | `SogouService.exe`, `SogouCloud.exe`, `SGDownload.exe`, `PinyinUp.exe` | `C:\Program Files (x86)\SogouInput` | `%APPDATA%\SogouPY` | 打字时随 IME 伴随拉起 `SogouCloud`（云计算）与 `SGDownload`（弹窗广告下载器） | ⚠️（需关弹窗） |
 | **2345 输入法** | `2345Ime.exe`, `2345Pinyin.exe` | `C:\Program Files (x86)\2345输入法` | `%APPDATA%\2345Ime` | 捆绑、弹窗 | ❌ |
 | **QQ 输入法** | `QQPinyin.exe`, `QQPinyinService.exe` | `C:\Program Files (x86)\Tencent\QQPinyin` | `%APPDATA%\Tencent\QQPinyin` | 相对温和 | ⚠️ |
 

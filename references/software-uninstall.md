@@ -430,6 +430,65 @@ Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" |
 
 ---
 
+## 专项卸载：百度网盘 (Baidu Netdisk)
+
+**常见残留**：即使在设置中关闭开机自启或卸载网盘，系统服务 `YunDetectService` 与右键菜单 Shell 扩展仍会长驻后台。
+
+**专项清理流程**：
+1. 终止所有百度网盘进程：
+   ```powershell
+   Get-Process | Where-Object { $_.Name -match 'baidunetdisk|YunDetect' } | Stop-Process -Force -EA SilentlyContinue
+   ```
+2. 禁用/删除后台常驻守护服务（需管理员）：
+   ```cmd
+   sc stop YunDetectService
+   sc config YunDetectService start= disabled
+   sc delete YunDetectService
+   ```
+3. 清理计划任务与 AppData 残留：
+   ```powershell
+   Disable-ScheduledTask -TaskName "BaiduNetdiskUpdateTask*" -EA SilentlyContinue
+   Remove-Item "$env:APPDATA\Baidu\BaiduNetdisk" -Recurse -Force -EA SilentlyContinue
+   ```
+
+---
+
+## 专项卸载：迅雷 (Thunder)
+
+**常见残留**：`XLServicePlatform` 与 `ThunderNetwork` 服务常驻后台进行 P2P 共享连接，消耗上行网络与内存。
+
+**专项清理流程**：
+1. 终止迅雷进程并彻底禁用底层服务（需管理员）：
+   ```cmd
+   taskkill /f /im Thunder.exe /im XLServicePlatform.exe
+   sc stop XLServicePlatform && sc config XLServicePlatform start= disabled && sc delete XLServicePlatform
+   sc stop ThunderNetwork && sc config ThunderNetwork start= disabled && sc delete ThunderNetwork
+   ```
+2. 清理 AppData 缓存与下载引擎残留：
+   ```powershell
+   Remove-Item "$env:LOCALAPPDATA\Thunder Network" -Recurse -Force -EA SilentlyContinue
+   Remove-Item "$env:APPDATA\Thunder Network" -Recurse -Force -EA SilentlyContinue
+   ```
+
+---
+
+## 专项卸载：搜狗输入法 (Sogou IME)
+
+**常见残留**：IME 模块被应用程序加载时唤醒 `SogouCloud.exe`（云计算候选词）、`SGDownload.exe`（弹窗下载器）、`PinyinUp.exe`（升级更新）。
+
+**专项治理流程**：
+1. 搜狗设置关闭「云计算候选」与「今日热点资讯」。
+2. 禁用升级任务：
+   ```powershell
+   Get-ScheduledTask | Where-Object { $_.TaskName -match 'Sogou|Pinyin' } | Disable-ScheduledTask -EA SilentlyContinue
+   ```
+3. 对弹窗可执行文件施加安全权限或出站防火墙阻断：
+   ```cmd
+   netsh advfirewall firewall add rule name="Block_SGDownload" dir=out action=block program="%ProgramFiles(x86)%\SogouInput\*\SGDownload.exe"
+   ```
+
+---
+
 ## 工具对比
 
 | 工具 | 价格 | 卸载彻底性 | 强制卸载 | 中文 UI | 推荐场景 |

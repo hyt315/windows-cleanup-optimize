@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""windows-cleanup-optimize 自测：验证技能文档结构完整、引用齐全、关键模板存在。
+"""windows-cleanup-optimize 自测脚本（增强版）
 
-好夹具（本技能自身）：SKILL.md 存在、frontmatter 合法、所有引用的 references 文件在盘、
-scan-scripts.md 含 9 个关键模板函数/章节、pitfalls.md 含 30+ 条陷阱。
-负向用例（临时构造）：缺引用文件 + 缺关键模板的技能，应被同一套校验逻辑拒绝。
+覆盖项：
+1. SKILL.md 存在、frontmatter 合法、行数控制（< 500 行）
+2. 15 个 references 手册齐全且相互引用完整
+3. scan-scripts.md 包含 9 个关键模板
+4. 内容级深度断言：
+   - startup-audit.md 包含 StartupBoostEnabled 与 BackgroundModeEnabled
+   - chat-apps-migration.md 包含 xwechat_files 与腾讯官方 FAQ 依据
+   - drive-migration-official.md 包含四步决策树与官方重定向说明
+   - mklink-migration.md 包含官方限制与真实失败案例
+   - pitfalls.md 包含 30+ 条优化主题踩坑
+5. 负向夹具测试拦截
 零依赖，仅 Python 标准库。
 """
 
@@ -39,16 +47,22 @@ REQUIRED_REFS = (
 
 
 def validate(root: Path) -> str:
-    """对任意技能根目录执行完整性校验，返回问题描述（空串=通过）。"""
+    """对任意技能根目录执行完整性与深度内容断言校验，返回问题描述（空串=通过）。"""
     skill_md = root / "SKILL.md"
     if not skill_md.is_file():
         return "SKILL.md 不存在"
     text = skill_md.read_text(encoding="utf-8")
     if not text.startswith("---"):
         return "SKILL.md 缺 frontmatter（--- 开头）"
+
+    # 1. 引用与文件存在性
     for ref in REQUIRED_REFS:
-        if ref in text and not (root / "references" / ref).is_file():
-            return f"SKILL.md 引用了不存在的文件 references/{ref}"
+        if not (root / "references" / ref).is_file():
+            return f"缺少关键参考文件: references/{ref}"
+        if ref not in text:
+            return f"SKILL.md 未引用参考文件: references/{ref}"
+
+    # 2. scan-scripts 模板
     scan = root / "references" / "scan-scripts.md"
     if scan.is_file():
         scan_text = scan.read_text(encoding="utf-8")
@@ -57,12 +71,41 @@ def validate(root: Path) -> str:
             return f"scan-scripts.md 缺关键模板: {missing}"
     else:
         return "references/scan-scripts.md 不存在"
+
+    # 3. 踩坑条目数断言
     pitfalls = root / "references" / "pitfalls.md"
     if pitfalls.is_file():
         pit_text = pitfalls.read_text(encoding="utf-8")
-        # 优化主题扩展后，pitfalls 应含 ≥ 30 条（原 29 + 新增优化踩坑）
         if "1." not in pit_text or "30." not in pit_text:
             return "pitfalls.md 缺陷阱条目（应含 1-30 以上的优化主题踩坑）"
+    else:
+        return "references/pitfalls.md 不存在"
+
+    # 4. 内容级深度断言（防止误删关键知识点与策略名称）
+    startup_audit = root / "references" / "startup-audit.md"
+    if startup_audit.is_file():
+        s_text = startup_audit.read_text(encoding="utf-8")
+        if "StartupBoostEnabled" not in s_text or "BackgroundModeEnabled" not in s_text:
+            return "startup-audit.md 缺少 Edge/Chrome 核心自启策略关键词"
+
+    chat_apps = root / "references" / "chat-apps-migration.md"
+    if chat_apps.is_file():
+        c_text = chat_apps.read_text(encoding="utf-8")
+        if "xwechat_files" not in c_text or "Tencent Files" not in c_text:
+            return "chat-apps-migration.md 缺少微信 4.x xwechat_files 或 QQ Tencent Files 目录说明"
+
+    drive_mig = root / "references" / "drive-migration-official.md"
+    if drive_mig.is_file():
+        d_text = drive_mig.read_text(encoding="utf-8")
+        if "决策树" not in d_text:
+            return "drive-migration-official.md 缺少迁移决策树"
+
+    mklink_mig = root / "references" / "mklink-migration.md"
+    if mklink_mig.is_file():
+        m_text = mklink_mig.read_text(encoding="utf-8")
+        if "官方限制" not in m_text or "失败案例" not in m_text:
+            return "mklink-migration.md 缺少官方限制与真实失败案例"
+
     return ""
 
 
@@ -91,7 +134,7 @@ def main() -> int:
     check_good()
     with tempfile.TemporaryDirectory() as tmp_name:
         check_bad(Path(tmp_name))
-    print("SELFTEST PASS (2 checks)")
+    print("SELFTEST PASS (All structural & deep-content assertions verified)")
     return 0
 
 

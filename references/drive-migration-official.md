@@ -120,16 +120,18 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 - **Discord**：安装器自带目录选择页，装到 D 盘即可；缓存（`%AppData%\Discord\Cache`）**官方无改路径功能**（社区共识），不折腾。
 - **Telegram Desktop**：官方就有 **Windows 便携版**，解压到 D 盘后数据随所在目录走。官方直达：https://telegram.org/dl/desktop/win64_portable （重定向到官方 CDN，实测可访问）。
 
-### 3.3 开发工具链
+### 3.3 开发工具链与本地 AI 框架
 
-| 工具 | 官方配置 | 命令 / 操作 | 官方来源 |
-|------|---------|------------|---------|
+| 工具 / 框架 | 官方配置 / 机制 | 命令 / 操作 | 官方来源 |
+|---|---|---|---|
+| **Ollama 本地大模型** | `OLLAMA_MODELS` 环境变量 | 设用户环境变量 `OLLAMA_MODELS=D:\OllamaModels`，重启 Ollama 服务即可将数十 GB 的模型目录整体重定向到 D 盘 | [Ollama 官方 FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.md) |
+| **Hugging Face / PyTorch** | `HF_HOME` 环境变量 | 设用户环境变量 `HF_HOME=D:\HF_Cache`，自动将预训练权重和 datasets 从 `%USERPROFILE%\.cache\huggingface` 移至 D 盘 | [Hugging Face Hub 环境变量](https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables) |
 | **npm** | `prefix` / `cache` | `npm config set prefix "D:\nodejs-global"`；`npm config set cache "D:\nodejs-cache"`；把 `D:\nodejs-global` 加入 PATH | [npm Folders](https://docs.npmjs.com/cli/v11/configuring-npm/folders)、[npm Config](https://docs.npmjs.com/cli/v11/using-npm/config) |
-| **pnpm** | `store-dir` / `global-bin-dir` / `virtual-store-dir` | `pnpm config set store-dir "D:\pnpm-store"` | [pnpm Settings](https://pnpm.io/settings) |
-| **Yarn** | `cacheFolder` | `yarn config set cacheFolder "D:\yarn-cache"` | [yarnrc 参考](https://yarnpkg.com/configuration/yarnrc) |
-| **pip** | `cache-dir` | `pip config set global.cache-dir "D:\pip-cache"`；验证 `python -m pip cache dir` | [pip 配置](https://pip.pypa.io/en/stable/topics/configuration/)、[pip cache](https://pip.pypa.io/en/stable/cli/pip_cache/) |
-| **Git for Windows** | `HOME` 环境变量（使全局配置随 D 盘） | 设用户环境变量 `HOME=D:\git-home` | [git-config 官方](https://git-scm.com/docs/git-config)（含 Windows `core.homeshim`）；整套搬 HOME 为社区共识 |
-| **JetBrains IDE** | `idea.properties` 重定位配置/系统/插件/日志 | 复制 `<IDE>\bin\idea.properties`，改 `idea.config.path` / `idea.system.path` / `idea.plugins.path` / `idea.log.path` 到 D 盘 | [Tuning the IDE](https://www.jetbrains.com/help/idea/tuning-the-ide.html)、[Directories used by the IDE](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)（官方明示不要改安装包内默认 properties，升级会被覆盖） |
+| **pnpm** | `store-dir` / `global-bin-dir` | `pnpm config set store-dir "D:\pnpm-store"` | [pnpm Settings](https://pnpm.io/settings) |
+| **pip** | `cache-dir` | `pip config set global.cache-dir "D:\pip-cache"`；验证 `python -m pip cache dir` | [pip 配置](https://pip.pypa.io/en/stable/topics/configuration/) |
+| **Gradle / Android SDK** | `GRADLE_USER_HOME` / `ANDROID_HOME` | 设用户环境变量 `GRADLE_USER_HOME=D:\gradle-cache`，`ANDROID_HOME=D:\AndroidSDK` | [Gradle 官方配置](https://docs.gradle.org/current/userguide/directory_layout.html) |
+| **Git for Windows** | `HOME` 环境变量 | 设用户环境变量 `HOME=D:\git-home` | [git-config 官方](https://git-scm.com/docs/git-config) |
+| **JetBrains IDE** | `idea.properties` 重定位 | 复制 `<IDE>\bin\idea.properties`，改 `idea.config.path` / `idea.system.path` / `idea.plugins.path` 到 D 盘 | [Tuning the IDE](https://www.jetbrains.com/help/idea/tuning-the-ide.html) |
 
 ### 3.4 浏览器
 

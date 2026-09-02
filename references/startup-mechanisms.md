@@ -139,10 +139,10 @@ Get-ScheduledTask | Where-Object { $_.Triggers.CimClass.CimClassName -match 'Log
 - **导出 CSV**（官方文档化命令）：
 
 ```cmd
-autorunsc64.exe -a * -m -s -c -vt -h > Autostart-Report.csv
+autorunsc64.exe -accepteula -a * -m -s -c -vt -h > Autostart-Report.csv
 ```
 
-  参数含义（官方页逐项）：`-a *`=全部条目、`-m`=隐藏微软项、`-s`=验证数字签名、`-c`=CSV、`-vt`=提交 VirusTotal 查毒（需先同意其条款）、`-h`=显示哈希。导出后用 Excel 过滤"签名验证失败"与"VirusTotal 非零检出"的条目。
+  参数含义（官方页逐项）：`-accepteula`=自动同意 Sysinternals 许可协议（规避命令行首次弹窗挂起）、`-a *`=全部条目、`-m`=隐藏微软项、`-s`=验证数字签名、`-c`=CSV、`-vt`=提交 VirusTotal 查毒（首次使用需在弹出窗口中同意 VirusTotal 服务条款，哈希将提交至 VT 云端多引擎比对）、`-h`=显示哈希。导出后用 Excel 过滤"签名验证失败"与"VirusTotal 非零检出"的条目。
 
 ---
 

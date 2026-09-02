@@ -223,3 +223,17 @@
 77. **新版 Chrome 程序目录（`Program Files\Google`）不能用 junction 迁移——会闪退。** Chrome 138+ 的 App-Bound Encryption 密钥与安装路径绑定：junction 后物理路径（`D:\`）与注册表路径（`C:\`）不一致，报 `Unable to decrypt key ... 0x80070002`，默认浏览器注册也失效。**正解**：官方离线包 `ChromeStandaloneSetup64.exe --install-dir="D:\..."` 真装到 D 盘，或只迁数据不动程序文件。同样，MSIX/UWP 应用（如 Claude/Codex）的数据目录含 junction 会写虚拟化异常，慎用。
 
 78. **迁移后要验证"真的搬走了且没坏"再算完成。** 三个动作：① `(Get-Item <路径> -Force).LinkType` 应为 Junction、Target 指向 D 盘；② 重启后任一时刻在 C 盘路径建文件，去 D 盘确认可见；③ **残留写入检测**：记录 C 盘该目录大小，一周后对比是否回升（或用 Sysinternals ProcMon 过滤 `Path contains C:\Users\<用户>\AppData` 的 WriteFile/CreateFile 看有没有组件绕过 junction 就地重建）。详见 `mklink-migration.md`"官方限制与真实失败案例"。
+
+### 深度根治与现代系统避坑（79-84）
+
+79. **WPS 自动更新反复复活的根因：只删计划任务没用，源头是注册表 `UpdateMode=auto`。** 只要打开任意文档，WPS 主程序就会触发静默检查，重新向任务计划程序写入 `WpsUpdateTask` 和 `WpsUpdateLogonTask`，并重新注册 `wpscloudsvr` 服务。**对策**：先将 `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo` 下的 `UpdateMode` 和 `LastUpdateMode` 改为 `manual`，再禁用计划任务并降级服务。
+
+80. **百度网盘与迅雷后台守护服务：退出界面不等于退出服务。** 百度网盘的 `YunDetectService` 与迅雷的 `XLServicePlatform`、`ThunderNetwork` 是独立系统服务，即使退出客户端，服务仍以 SYSTEM 运行进行后台探测或 P2P 上传。**对策**：必须在服务管理器或通过 `sc config <svc> start= disabled` 彻底禁用底层服务。
+
+81. **搜狗输入法打字伴随唤醒 `SogouCloud` 与 `SGDownload`。** 输入法不是独立进程而是 IME DLL。打字时任何窗口加载输入法都会触发后台唤醒。**对策**：输入法设置中关闭「云计算候选」与「今日热点」，禁用其更新任务，并对 `SGDownload.exe` 配置出站防火墙规则。
+
+82. **Windows 11 24H2 磁盘清理显示 8.63 GB 更新残留无法清除是误报。** 微软官方确认此为 UI 计算标记 Bug，实际旧更新已完成释放。**绝不要强删 `C:\Windows\WinSxS`**，否则可能损坏系统组件导致无法接收后续安全更新。
+
+83. **Ollama 本地大模型与 Hugging Face 权重默认吞噬 C 盘。** 运行 DeepSeek / Qwen 等大模型，权重默认保存在 `%USERPROFILE%\.ollama\models`，动辄占用数十 GB。**对策**：配置系统环境变量 `OLLAMA_MODELS=D:\OllamaModels` 与 `HF_HOME=D:\HF_Cache`，重启服务后官方原生换盘，严禁无脑 mklink。
+
+84. **Win11 24H2 默认开启 BitLocker 加密时的系统还原风险。** 在创建系统还原点或进行驱动清理前，应使用 `manage-bde -status C:` 检查加密状态，提醒用户在微软账户备份好 48 位恢复密钥，避免还原异常触发恢复锁定。

@@ -5,6 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [1.3.0] - 2026-09-02
+
+### 新增
+- **微信 4.x / QQ NT / 钉钉深度治理**（`chat-apps-migration.md`）：
+  - 微信 4.x `%APPDATA%\Tencent\xwechat` 目录结构与清理口径（`config` 保护、`xplugin` 保留、`log`/`crashinfo` 安全清理）
+  - 微信 4.x `xwechat_files` 与 OneDrive 文件夹重定向 Fallback 机制解析与探测脚本
+  - QQ NT 版（v9.9+）确切设置路径（「设置 → 存储管理」聊天记录迁移与「设置 → 文件管理」接收文件保存位置）
+  - 钉钉 PC 缓存支持与范围（文件存储换盘、应用内缓存清理，禁止整体搬移 `%LOCALAPPDATA%\DingTalk_91`，提供 `AlibabaProtect` 残留服务提权清理命令）
+- **自启动审计与 AutoRuns 升级**（`startup-mechanisms.md` + `startup-audit.md`）：
+  - 补充 AutoRuns `-accepteula` 与 `-vt` VirusTotal 首次交互同意实操提示
+  - 补充 Edge 中文策略名（「启用启动增强」）与 UI 界面名称（「启动提升」）映射表
+- **selftest.py 深度内容断言增强**（`scripts/selftest.py`）：
+  - 新增深度内容级断言（自动验证自启策略关键词、微信 4.x 目录、官方迁移限制与决策树存在性）
+
+### 改进
+- **SKILL.md 精简重构**：将冗长脚本抽离至 `scan-scripts.md`，主入口行数从 525 行优化至 150 余行，提升 Agent 读取效率并消除规范告警
+- **双语 README 架构完善**（`README.md` / `README.en.md`）：补齐 15 个参考手册的完整架构清单与中英文说明
+
 ## [1.2.0] - 2026-09-01
 
 ### 新增

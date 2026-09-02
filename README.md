@@ -31,7 +31,7 @@ C 盘红了、开机慢、弹窗广告、后台卡顿——**Windows 清理与�
 | ⚡ **深度优化** | 服务精简（遥测、Xbox 等）、内存调优、电源计划、SSD TRIM，全部可回退 |
 | 🔄 **数据迁移** | 官方方案优先（应用内迁移/系统重定向/官方配置项），mklink 仅兜底；微信/QQ/浏览器/开发工具专项 |
 | 🧩 **自启动彻底化** | 覆盖 Windows 20+ 启动点，Edge/Chrome「先切开关层再删 Run 键」根治"关了还会自启"，推荐官方工具 AutoRuns |
-| 📋 **17 个参考手册** | 磁盘清理、软件卸载、服务优化、自启动机制、官方迁移、陷阱库、实战案例等全覆盖 |
+| 📋 **15 个参考手册** | 磁盘清理、软件卸载、服务优化、自启动机制、官方迁移、微信/QQ/钉钉迁移、避坑库等全覆盖 |
 
 ---
 
@@ -75,14 +75,29 @@ curl -O https://raw.githubusercontent.com/hyt315/windows-cleanup-optimize/main/S
 
 ---
 
-## 📁 文件结构
+## 📁 文件结构与 15 个参考手册
 
 ```
 windows-cleanup-optimize/
 ├── SKILL.md                     # 技能入口（六阶段工作流 + 零伤害安全原则）
-├── references/                  # 17 个参考手册（磁盘／服务／软件／自启动机制／官方迁移／陷阱等）
+├── references/                  # 15 个参考手册（按需加载）
+│   ├── scan-scripts.md          # 15 个 PowerShell 扫描/清理/优化标准模板
+│   ├── pitfalls.md              # 30+ 条 Windows 清理与优化避坑库
+│   ├── startup-audit.md         # 自启动项全面审计与 Edge/Chrome 彻底关闭
+│   ├── startup-mechanisms.md    # Windows 20+ 自启动点机制与 AutoRuns 指南
+│   ├── bloatware-catalog.md     # 流氓软件/弹窗广告全家桶识别进程库
+│   ├── software-uninstall.md    # 软件安全卸载与深层残留清理（WPS/360/钉钉）
+│   ├── system-cleanup.md        # Windows 系统级深度清理（更新残留/驱动库等）
+│   ├── services-optimization.md # 50+ Windows 服务精简与用户画像推荐
+│   ├── memory-optimization.md   # 内存优化、真实泄漏识别与工具辨析
+│   ├── performance-tuning.md    # 系统性能调优（电源计划/视觉效果/TRIM）
+│   ├── trae-guide.md            # TRAE AI IDE 深度清理与稀疏文件迁移
+│   ├── drive-migration-official.md # C 盘大目录迁移全集（官方方案优先决策树）
+│   ├── chat-apps-migration.md   # 微信 4.x/QQ NT/钉钉官方迁移与缓存清理
+│   ├── mklink-migration.md      # mklink /J 目录联接兜底（官方限制与预检）
+│   └── case-study.md            # 真实迁移实战案例库
 ├── scripts/
-│   └── selftest.py              # 回归测试
+│   └── selftest.py              # 深度内容与结构回归测试
 ├── LICENSE
 ├── README.md  /  README.en.md  # 双语说明（本文件为中文）
 ├── CHANGELOG.md
