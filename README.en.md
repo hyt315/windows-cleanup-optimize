@@ -26,12 +26,13 @@ C drive full, slow boot, pop-up ads, system lagging — **Windows Cleanup & Opti
 | Feature | Description |
 |---------|-------------|
 | 🛡️ **Zero-harm guarantee** | Cleanup via `SendToRecycleBin`, system directories untouched, restore points before key operations, every optimization reversible |
+| 🤖 **Local AI & Model Migration** | Ollama local models (`OLLAMA_MODELS`), Hugging Face weights (`HF_HOME`) official environment variable drive migration (saves 20~80GB) |
 | 🔍 **Smart user profiling** | 4 profiles (family / developer / gamer / laptop), asked once, never repeated, recommendations auto-adapt |
-| 🧹 **Bloatware identification** | Auto-detect 360 / 2345 / pop-up advertising bundled software, safe uninstall guidance |
-| ⚡ **Deep optimization** | Service tuning (telemetry, Xbox, etc.), memory tuning, power plan, SSD TRIM — all reversible |
-| 🔄 **Data migration** | Official-first (in-app migration / folder redirection / official config); `mklink /J` only as fallback; special guides for WeChat/QQ/browsers/dev tools |
-| 🧩 **Thorough startup cleanup** | Covers 20+ Windows startup points; Edge/Chrome "kill the switch first, then the Run key" guide to stop startups from coming back; official AutoRuns tool |
-| 📋 **15 reference manuals** | Disk cleanup, uninstall, services, startup mechanisms, official migration, WeChat/QQ/DingTalk migration, pitfalls, case studies, and more |
+| 🧹 **Bloatware & Daemon Cure** | 360 / 2345 / Baidu Netdisk daemon / Xunlei P2P / Sogou ads / WPS 4-layer revival chain completely sealed & uninstalled |
+| ⚡ **Deep Optimization & Win11 24H2** | Win11 24H2 8.63GB cleanup bug mitigation, BitLocker pre-check, service tuning, memory tuning, power plans, SSD TRIM |
+| 🔄 **Data migration** | Official-first (in-app migration / folder redirection / official config); `mklink /J` only as fallback; special guides for WeChat 4.x / QQ NT / DingTalk / browsers |
+| 🧩 **Thorough startup cleanup** | Covers 20+ Windows startup points; Edge enterprise policy lock "kill the switch first, then the Run key"; official AutoRuns guide |
+| 📋 **15 reference manuals** | Full matrix of manuals covering disk cleanup, uninstall, services, startup mechanisms, official migration, pitfalls, case studies |
 
 ---
 

@@ -597,6 +597,45 @@ Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensio
 - **bloatware**：实现路径（InprocServer32）含 360 / 2345 / HaoZip / KuaiZip / SoGou / QQPCMgr / AlibabaProtect / BaiduNetdisk / Meitu 等关键词
 - **未知**：都不是。**给用户看**，让用户确认是否认识/需要（不是自动禁用）
 
-**用户问"我以前的XX去哪了"时**：让用户说出具体名字 → 用 `Get-ChildItem "HKLM:\Software\Classes\<ext>\shell" -Recurse` 或精确路径查那个注册表项。如果键不存在 = 真缺失（被删/未装）；如果存在但不在 Approved = 可能被禁；呈现给用户决定。
+---
+
+## 七、新增高价值扫描模板
+
+### 17. 本地 AI 框架与大模型缓存探测（Ollama / HuggingFace / Cursor / Gradle）
+
+```powershell
+function Scan-AiAndDevCaches {
+    $aiTargets = @(
+        @{ Label = "Ollama 本地大模型"; Path = "$env:USERPROFILE\.ollama\models" },
+        @{ Label = "HuggingFace 权重缓存"; Path = "$env:USERPROFILE\.cache\huggingface" },
+        @{ Label = "PyTorch / Torch 缓存"; Path = "$env:LOCALAPPDATA\torch" },
+        @{ Label = "Cursor 代码索引缓存"; Path = "$env:APPDATA\Cursor\User\workspaceStorage" },
+        @{ Label = "Cursor 更新包残留"; Path = "$env:LOCALAPPDATA\cursor-updater\pending" },
+        @{ Label = "Gradle 依赖缓存"; Path = "$env:USERPROFILE\.gradle\caches" },
+        @{ Label = "Android SDK 缓存"; Path = "$env:LOCALAPPDATA\Android\Sdk" }
+    )
+    foreach ($t in $aiTargets) {
+        if (Test-Path $t.Path) {
+            $size = (Get-ChildItem $t.Path -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum -EA SilentlyContinue).Sum
+            if ($size -gt 100MB) {
+                $sizeGB = [math]::Round($size / 1GB, 2)
+                Write-Host ("[AI/Dev] {0,-22} 占用: {1,6} GB -> {2}" -f $t.Label, $sizeGB, $t.Path)
+            }
+        }
+    }
+}
+```
+
+### 18. 顽固后台常驻服务与守护进程深度审计（百度网盘/迅雷/搜狗/WPS）
+
+```powershell
+function Audit-StubbornServices {
+    $targetServices = @('YunDetectService', 'XLServicePlatform', 'ThunderNetwork', 'wpscloudsvr', 'AlibabaProtect')
+    Get-Service -Name $targetServices -EA SilentlyContinue | ForEach-Object {
+        $startType = (Get-CimInstance Win32_Service -Filter "Name='$($_.Name)'" -EA SilentlyContinue).StartMode
+        Write-Host ("[Daemon] 服务名: {0,-18} 状态: {1,-8} 启动类型: {2}" -f $_.Name, $_.Status, $startType)
+    }
+}
+```
 
 **所有审计 .ps1 一律写到 `$env:TEMP` 或 `C:\Windows\Temp`**，不要放用户目录（参见 pitfalls 64）。
