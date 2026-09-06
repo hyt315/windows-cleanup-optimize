@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="Windows Cleanup & Optimize Banner" width="100%" />
+</p>
+
 # 🧹 Windows Cleanup & Optimization Assistant / windows-cleanup-optimize
 
 <div align="center">

@@ -5,6 +5,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [1.8.0] - 2026-09-06
+
+### 新增
+- **标准交付成果：Windows 分层体检事实卡 (Fact Card)**：
+  - 在 `SKILL.md` 中规范了标准交付成果模版，涵盖 L1 磁盘与缓存、L2 自启动与驻留、L3 流氓软件与弹窗、L4 服务与内存效能四层指标，明确测量实值、正常基线与状态判定，用客观事实说话。
+- **只读优先与显式授权安全纪律（Zero-Mutation）**：
+  - 在核心原则中明确确立阶段 1 排查完全只读（Zero-Mutation），绝不擅自修改系统配置或移动文件；破坏性治理对策必须经用户明确授权同意后方可手动执行，且提供完整回滚命令。
+- **代码级 AST 语法树回归门禁与 Pytest 支持**：
+  - `scripts/selftest.py` 引入 `System.Management.Automation.Language.Parser` 对核心扫描器 `scripts/full_scan.ps1` 进行 PowerShell AST 静态语法解析，并引入 Python `ast.parse` 校验；
+  - 补充 `tests/test_skill.py` 提供 Pytest 自动化发现与执行入口；
+  - 补充针对坏语法与坏破坏样本的负向对抗校验断言。
+- **高清矢量横幅与开源元数据补齐**：
+  - 新增 `assets/banner.svg` 高清暗色系矢量封面，集成磁盘护盾、性能表盘与零伤害核心特性徽章；
+  - 补齐标准 `manifest.json` 技能工程元数据。
+
 ## [1.7.0] - 2026-09-06
 
 ### 新增

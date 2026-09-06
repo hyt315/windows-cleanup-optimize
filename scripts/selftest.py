@@ -11,12 +11,21 @@
    - drive-migration-official.md 包含四步决策树与官方重定向说明
    - mklink-migration.md 包含官方限制与真实失败案例
    - pitfalls.md 包含 30+ 条优化主题踩坑
-5. 负向夹具测试拦截
+5. AST 代码级语法树门禁：
+   - scripts/full_scan.ps1 通过 PowerShell Parser 语法树校验
+   - scripts/*.py 通过 Python ast.parse 语法解析
+6. 负向破坏夹具测试（DY002 破坏样本必须被拦截）
 零依赖，仅 Python 标准库。
 """
 
 from __future__ import annotations
 
+import ast
+import json
+import re
+import shutil
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -147,14 +156,51 @@ def validate(root: Path) -> str:
     return ""
 
 
+def check_ps1_syntax(ps1_path: Path) -> bool:
+    """Verify PS1 file syntax via System.Management.Automation AST Parser without executing."""
+    if not ps1_path.is_file():
+        return False
+    pwsh = shutil.which("powershell") or shutil.which("pwsh")
+    if pwsh:
+        cmd = [
+            pwsh, "-NoProfile", "-Command",
+            f"$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile('{ps1_path}', [ref]$null, [ref]$errors); if ($errors.Count -gt 0) {{ exit 1 }} else {{ exit 0 }}"
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        return proc.returncode == 0
+    return True
+
+
+def check_python_ast(py_path: Path) -> bool:
+    """Verify Python file syntax via ast.parse."""
+    try:
+        source = py_path.read_text(encoding="utf-8")
+        ast.parse(source)
+        return True
+    except (SyntaxError, OSError):
+        return False
+
+
 def check_good() -> None:
     problem = validate(SKILL_ROOT)
     if problem:
         raise AssertionError(f"好夹具应通过，实际: {problem}")
 
+    # PS1 AST 语法校验
+    ps1_file = SKILL_ROOT / "scripts" / "full_scan.ps1"
+    if ps1_file.is_file():
+        if not check_ps1_syntax(ps1_file):
+            raise AssertionError(f"full_scan.ps1 存在语法错误 (Syntax error)")
+
+    # Python 语法校验
+    for py_file in (SKILL_ROOT / "scripts").glob("*.py"):
+        if not check_python_ast(py_file):
+            raise AssertionError(f"{py_file.name} Python 语法解析失败")
+
 
 def check_bad(tmp: Path) -> None:
-    """负向用例：坏夹具必须被同一套 validate() 拒绝。"""
+    """负向破坏夹具：坏夹具必须被校验逻辑拒绝 (should_fail)。"""
+    # 1. 结构与引用缺失破坏
     bad = tmp / "bad-skill"
     (bad / "references").mkdir(parents=True)
     (bad / "SKILL.md").write_text(
@@ -165,14 +211,26 @@ def check_bad(tmp: Path) -> None:
         "# 扫描模板\n缺全部关键模板。\n", encoding="utf-8")
     problem = validate(bad)
     if not problem:
-        raise AssertionError("负向夹具应 FAIL（引用缺失文件 + 缺关键模板），实际未拦住")
+        raise AssertionError("负向破坏夹具应 FAIL（引用缺失文件 + 缺关键模板），实际未拦住")
+
+    # 2. 负向 PowerShell 语法破坏
+    bad_ps1 = tmp / "bad_syntax.ps1"
+    bad_ps1.write_text("function bad_func { if ($true) { Write-Host 'unclosed' ", encoding="utf-8")
+    if check_ps1_syntax(bad_ps1):
+        raise AssertionError("负向 PS1 语法错误用例应被拦截 (Syntax error)，实际误放行")
+
+    # 3. 负向 Python 语法破坏
+    bad_py = tmp / "bad_syntax.py"
+    bad_py.write_text("def broken_syntax(:", encoding="utf-8")
+    if check_python_ast(bad_py):
+        raise AssertionError("负向 Python 语法错误用例应被拦截，实际误放行")
 
 
 def main() -> int:
     check_good()
     with tempfile.TemporaryDirectory() as tmp_name:
         check_bad(Path(tmp_name))
-    print("SELFTEST PASS (All structural & deep-content assertions verified)")
+    print("SELFTEST PASS (All structural, AST syntax & negative fixtures verified)")
     return 0
 
 
