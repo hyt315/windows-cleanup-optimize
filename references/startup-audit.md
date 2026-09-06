@@ -116,10 +116,32 @@ foreach ($g in $groups | Sort-Object Count -Descending | Select-Object -First 30
     "($($g.Count)x) $($g.Name) - 内存: $sz - 路径: $($firstProc.Path)" | Out-File $outFile -Append
 }
 
+# === 7. WMI 隐蔽自启动订阅 ===
+"" | Out-File $outFile -Append
+"===== [7] WMI 隐蔽自启动事件消费者 =====" | Out-File $outFile -Append
+Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -EA SilentlyContinue | ForEach-Object {
+    "[WMI启动项] $($_.Name) -> 执行: $($_.CommandLineTemplate)" | Out-File $outFile -Append
+}
+
+# === 8. 快捷方式参数劫持审计 ===
+"" | Out-File $outFile -Append
+"===== [8] 快捷方式 (.lnk) 网址参数劫持排查 =====" | Out-File $outFile -Append
+$shell = New-Object -ComObject WScript.Shell
+foreach ($p in @("$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs")) {
+    if (Test-Path $p) {
+        Get-ChildItem $p -Filter "*.lnk" -Recurse -EA SilentlyContinue | ForEach-Object {
+            $lnk = $shell.CreateShortcut($_.FullName)
+            if ($lnk.TargetPath -match 'chrome\.exe|msedge\.exe|firefox\.exe|360se\.exe' -and $lnk.Arguments -match 'http|\.com|\.cn|\.html') {
+                "[劫持警告] $($_.Name) -> 目标: $($lnk.TargetPath) 参数: $($lnk.Arguments)" | Out-File $outFile -Append
+            }
+        }
+    }
+}
+
 Write-Host "审计完成: $outFile"
 ```
 
-**输出解读**：脚本生成 `C:\Users\<用户名>\AppData\Local\Temp\startup_audit.txt`，按 6 节列出所有自启项。**第 6 节的后台进程列表**与 `bloatware-catalog.md` 的进程名库对照，立即可识别流氓软件。若脚本查完仍觉得"还有东西在跑"，用 `startup-mechanisms.md` 文末的 **AutoRuns** 官方工具查全类别。
+**输出解读**：脚本生成 `C:\Users\<用户名>\AppData\Local\Temp\startup_audit.txt`，按 8 节列出所有自启项。**第 6 节的后台进程列表**与 `bloatware-catalog.md` 的进程名库对照，立即可识别流氓软件；**第 7 节与第 8 节**可精准揪出 WMI 隐蔽自启动与快捷方式网址劫持。若脚本查完仍觉得"还有东西在跑"，用 `startup-mechanisms.md` 文末的 **AutoRuns** 官方工具查全类别。
 
 ---
 

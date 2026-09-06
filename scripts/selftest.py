@@ -76,8 +76,8 @@ def validate(root: Path) -> str:
     pitfalls = root / "references" / "pitfalls.md"
     if pitfalls.is_file():
         pit_text = pitfalls.read_text(encoding="utf-8")
-        if "1." not in pit_text or "30." not in pit_text:
-            return "pitfalls.md 缺陷阱条目（应含 1-30 以上的优化主题踩坑）"
+        if "1." not in pit_text or "86." not in pit_text:
+            return "pitfalls.md 缺陷阱条目（应含 1-86 以上的优化主题踩坑）"
     else:
         return "references/pitfalls.md 不存在"
 
@@ -117,8 +117,32 @@ def validate(root: Path) -> str:
     soft_uninst = root / "references" / "software-uninstall.md"
     if soft_uninst.is_file():
         u_text = soft_uninst.read_text(encoding="utf-8")
-        if "BCUninstaller" not in u_text:
-            return "software-uninstall.md 缺少 BCUninstaller 开源推荐"
+        if "BCUninstaller" not in u_text or "GetForegroundWindow" not in u_text:
+            return "software-uninstall.md 缺少 BCUninstaller 开源推荐或 GetForegroundWindow 弹窗定位器"
+
+    perf_tune = root / "references" / "performance-tuning.md"
+    if perf_tune.is_file():
+        p_text = perf_tune.read_text(encoding="utf-8")
+        if "Tcpip\\Parameters\\Interfaces" not in p_text or "autotuninglevel=normal" not in p_text:
+            return "performance-tuning.md 缺少 Interfaces 网卡 GUID 级 TCP 调优或 autotuninglevel 规范"
+
+    svc_opt = root / "references" / "services-optimization.md"
+    if svc_opt.is_file():
+        sv_text = svc_opt.read_text(encoding="utf-8")
+        if "GamingServices" not in sv_text or "AllowNewsAndInterests" not in sv_text:
+            return "services-optimization.md 缺少 GamingServices 正确拼写或 Win11 小组件后台调优"
+
+    bloat_cat = root / "references" / "bloatware-catalog.md"
+    if bloat_cat.is_file():
+        b_text = bloat_cat.read_text(encoding="utf-8")
+        if "wpscenter.exe" not in b_text or "Image File Execution Options" not in b_text:
+            return "bloatware-catalog.md 缺少 IFEO 弹窗静音 SOP 或关键弹窗程序配置"
+
+    startup_mech = root / "references" / "startup-mechanisms.md"
+    if startup_mech.is_file():
+        sm_text = startup_mech.read_text(encoding="utf-8")
+        if "CommandLineEventConsumer" not in sm_text or "__EventFilter" not in sm_text:
+            return "startup-mechanisms.md 缺少 WMI 事件订阅持久化常驻完整机制"
 
     return ""
 

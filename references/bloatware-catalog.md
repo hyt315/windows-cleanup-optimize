@@ -231,6 +231,47 @@ if ($hits) {
 
 ---
 
+## 9. 刚需软件免卸载“弹窗彻底静音”SOP（IFEO 映像劫持实战）
+
+用户因工作刚需**不能卸载** WPS、搜狗输入法、百度网盘、Flash 插件等，但天天被弹窗骚扰。
+
+> **核心原理**：软件的主程序与弹窗程序是分离的二进制文件。利用 Windows 原生 **IFEO（Image File Execution Options）** 注册表机制，将独立弹窗进程的 `Debugger` 绑定为系统空静默程序 `systray.exe`，使其被触发时秒退。**软件本体功能 100% 完好，但弹窗永远不再出现**。
+
+| 目标软件 | 弹窗可执行文件 | 一键静音命令（管理员 CMD） | 回退恢复命令 |
+|---|---|---|---|
+| **WPS Office** | `wpscenter.exe`<br>`ksobulletin.exe` | `reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\wpscenter.exe" /v Debugger /t REG_SZ /d "systray.exe" /f`<br>`reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\ksobulletin.exe" /v Debugger /t REG_SZ /d "systray.exe" /f` | `reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\wpscenter.exe" /f`<br>`reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\ksobulletin.exe" /f` |
+| **搜狗输入法** | `SGDownload.exe`<br>`SogouNews.exe` | `reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\SGDownload.exe" /v Debugger /t REG_SZ /d "systray.exe" /f`<br>`reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\SogouNews.exe" /v Debugger /t REG_SZ /d "systray.exe" /f` | `reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\SGDownload.exe" /f`<br>`reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\SogouNews.exe" /f` |
+| **Flash 中心** | `FFNewTask.exe` | `reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FFNewTask.exe" /v Debugger /t REG_SZ /d "systray.exe" /f` | `reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FFNewTask.exe" /f` |
+| **2345 好压** | `HaoZipPopup.exe` | `reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\HaoZipPopup.exe" /v Debugger /t REG_SZ /d "systray.exe" /f` | `reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\HaoZipPopup.exe" /f` |
+
+---
+
+## 10. 桌面与开始菜单快捷方式（.lnk）参数劫持排查与清洗
+
+国内流氓全家桶（2345、360、毒霸等）常在桌面/任务栏的浏览器快捷方式尾部强加推广网址（如 `chrome.exe http://www.2345.com/?...`）。
+
+**一键只读排查与安全净化脚本（PowerShell）**：
+```powershell
+$shell = New-Object -ComObject WScript.Shell
+$targets = @("$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs", "$env:ProgramData\Microsoft\Windows\Start Menu\Programs")
+foreach ($dir in $targets) {
+    if (-not (Test-Path $dir)) { continue }
+    Get-ChildItem $dir -Filter "*.lnk" -Recurse -EA SilentlyContinue | ForEach-Object {
+        $lnk = $shell.CreateShortcut($_.FullName)
+        if ($lnk.TargetPath -match 'chrome\.exe|msedge\.exe|firefox\.exe|360se\.exe' -and $lnk.Arguments -match 'http|\.com|\.cn|\.html') {
+            Write-Host "[劫持发现] 快捷方式: $($_.FullName)" -ForegroundColor Red
+            Write-Host "  -> 恶意参数: $($lnk.Arguments)" -ForegroundColor Yellow
+            # 若用户确认清洗参数：
+            # $lnk.Arguments = ""
+            # $lnk.Save()
+            # Write-Host "  -> 已成功复原干净目标！" -ForegroundColor Green
+        }
+    }
+}
+```
+
+---
+
 ## 替代软件推荐
 
 | 原 bloatware | 推荐替代 | 优势 |

@@ -57,7 +57,7 @@
 
 13. **WSL2 虚拟磁盘文件会无限增长。** `%LOCALAPPDATA%\Packages\*Ubuntu*\LocalState\ext4.vhdx` 只增不减，即使你在 WSL 里删了文件，vhdx 也不会自动缩小。需要用 `diskpart` 的 `compact vdisk` 命令手动压缩。如果用户有 WSL2 环境，这个路径值得单独检查。
 
-28. **DriverStore 驱动存储库是最大盲区之一。** `C:\Windows\System32\DriverStore\FileRepository` 累积所有旧版驱动（实测 11 GB、20+ 个 NVIDIA 版本）。**绝不手动删文件**，清理用 `pnputil /enum-drivers` + `pnputil -d oemXXX.inf`（详见 system-cleanup.md）。扫描阶段只测大小，若 >2 GB 提示用户。
+28. **DriverStore 驱动存储库是最大盲区之一。** `C:\Windows\System32\DriverStore\FileRepository` 累积所有旧版驱动（实测 11 GB、20+ 个 NVIDIA 版本）。**绝不手动删文件**，清理用 `pnputil /enum-drivers` + `pnputil /delete-driver oemXXX.inf /uninstall`（详见 system-cleanup.md）。扫描阶段只测大小，若 >2 GB 提示用户。
 
 29. **清理前建议建系统还原点。** 涉及驱动/系统组件的操作（pnputil、DISM）前，执行 `Checkpoint-Computer -Description "BeforeDriversDelete"`（需管理员），用户数据类清理不需要。
 
@@ -224,7 +224,7 @@
 
 78. **迁移后要验证"真的搬走了且没坏"再算完成。** 三个动作：① `(Get-Item <路径> -Force).LinkType` 应为 Junction、Target 指向 D 盘；② 重启后任一时刻在 C 盘路径建文件，去 D 盘确认可见；③ **残留写入检测**：记录 C 盘该目录大小，一周后对比是否回升（或用 Sysinternals ProcMon 过滤 `Path contains C:\Users\<用户>\AppData` 的 WriteFile/CreateFile 看有没有组件绕过 junction 就地重建）。详见 `mklink-migration.md`"官方限制与真实失败案例"。
 
-### 深度根治与现代系统避坑（79-84）
+### 深度根治与现代系统避坑（79-86）
 
 79. **WPS 自动更新反复复活的根因：只删计划任务没用，源头是注册表 `UpdateMode=auto`。** 只要打开任意文档，WPS 主程序就会触发静默检查，重新向任务计划程序写入 `WpsUpdateTask` 和 `WpsUpdateLogonTask`，并重新注册 `wpscloudsvr` 服务。**对策**：先将 `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo` 下的 `UpdateMode` 和 `LastUpdateMode` 改为 `manual`，再禁用计划任务并降级服务。
 
@@ -237,3 +237,8 @@
 83. **Ollama 本地大模型与 Hugging Face 权重默认吞噬 C 盘。** 运行 DeepSeek / Qwen 等大模型，权重默认保存在 `%USERPROFILE%\.ollama\models`，动辄占用数十 GB。**对策**：配置系统环境变量 `OLLAMA_MODELS=D:\OllamaModels` 与 `HF_HOME=D:\HF_Cache`，重启服务后官方原生换盘，严禁无脑 mklink。
 
 84. **Win11 24H2 默认开启 BitLocker 加密时的系统还原风险。** 在创建系统还原点或进行驱动清理前，应使用 `manage-bde -status C:` 检查加密状态，提醒用户在微软账户备份好 48 位恢复密钥，避免还原异常触发恢复锁定。
+
+85. **TCP Nagle 算法优化（TcpAckFrequency/TCPNoDelay）写在 `Tcpip\Parameters` 根下是完全无效的静默空跑。** 微软官方网络协议栈规范确认，`TcpAckFrequency` 与 `TCPNoDelay` 必须写入到当前活动网卡的特定 GUID 键值下：`HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{AdapterGUID}`。写在全局 Parameters 下系统不会读取，导致所谓“网络优化”变成安慰剂。**对策**：必须动态枚举网卡或路由匹配出有 IPv4 地址分配的活动网卡 GUID，再写入配置并重启网卡使之生效。
+
+86. **IFEO 映像劫持（Image File Execution Options）阻断弹窗时，Debugger 绝对不能随手乱填不存在的路径或空字符串。** 若 Debugger 键值无效，Windows 在尝试启动该 exe 时会弹系统级“找不到文件”报错框，或者引起调用方死循环反复抛异常拉起子进程。**对策**：必须将其劫持映射到 Windows 内置的静默退出宿主程序，如 `systray.exe` 或 `rundll32.exe`，确保被劫持的弹窗进程瞬时无感退出，既不弹窗也不报错。
+

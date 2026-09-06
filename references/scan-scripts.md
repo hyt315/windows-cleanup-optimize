@@ -625,18 +625,19 @@ Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensio
 
 ## 七、新增高价值扫描模板
 
-### 17. 本地 AI 框架与大模型缓存探测（Ollama / HuggingFace / Cursor / Gradle）
+### 17. 本地 AI 框架与大模型缓存探测（Ollama / HuggingFace / ModelScope / PyTorch / uv / AVD / Gradle）
 
 ```powershell
 function Scan-AiAndDevCaches {
     $aiTargets = @(
         @{ Label = "Ollama 本地大模型"; Path = "$env:USERPROFILE\.ollama\models" },
         @{ Label = "HuggingFace 权重缓存"; Path = "$env:USERPROFILE\.cache\huggingface" },
-        @{ Label = "PyTorch / Torch 缓存"; Path = "$env:LOCALAPPDATA\torch" },
+        @{ Label = "ModelScope 魔搭社区"; Path = "$env:USERPROFILE\.cache\modelscope" },
+        @{ Label = "PyTorch 权重缓存"; Path = "$env:USERPROFILE\.cache\torch" },
+        @{ Label = "Python uv 依赖缓存"; Path = "$env:LOCALAPPDATA\uv\cache" },
+        @{ Label = "Android AVD 虚拟机"; Path = "$env:USERPROFILE\.android\avd" },
         @{ Label = "Cursor 代码索引缓存"; Path = "$env:APPDATA\Cursor\User\workspaceStorage" },
-        @{ Label = "Cursor 更新包残留"; Path = "$env:LOCALAPPDATA\cursor-updater\pending" },
-        @{ Label = "Gradle 依赖缓存"; Path = "$env:USERPROFILE\.gradle\caches" },
-        @{ Label = "Android SDK 缓存"; Path = "$env:LOCALAPPDATA\Android\Sdk" }
+        @{ Label = "Gradle 依赖缓存"; Path = "$env:USERPROFILE\.gradle\caches" }
     )
     foreach ($t in $aiTargets) {
         if (Test-Path $t.Path) {
@@ -658,6 +659,66 @@ function Audit-StubbornServices {
     Get-Service -Name $targetServices -EA SilentlyContinue | ForEach-Object {
         $startType = (Get-CimInstance Win32_Service -Filter "Name='$($_.Name)'" -EA SilentlyContinue).StartMode
         Write-Host ("[Daemon] 服务名: {0,-18} 状态: {1,-8} 启动类型: {2}" -f $_.Name, $_.Status, $startType)
+    }
+}
+```
+
+### 19. WMI 隐蔽自启动与快捷方式网址劫持审计（WMI / LNK Arguments）
+
+```powershell
+function Audit-HiddenPersistence {
+    Write-Host "=== WMI 隐蔽自启动事件消费者 ==="
+    $wmiConsumers = Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -EA SilentlyContinue
+    if ($wmiConsumers) {
+        $wmiConsumers | ForEach-Object {
+            Write-Host ("[WMI] 名称: {0} -> 执行: {1}" -f $_.Name, $_.CommandLineTemplate) -ForegroundColor Red
+        }
+    } else {
+        Write-Host "  （无第三方 WMI 事件消费者，系统干净）"
+    }
+
+    Write-Host "`n=== 浏览器快捷方式 (.lnk) 网址劫持排查 ==="
+    $shell = New-Object -ComObject WScript.Shell
+    $dirs = @("$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs")
+    $foundHijack = $false
+    foreach ($d in $dirs) {
+        if (Test-Path $d) {
+            Get-ChildItem $d -Filter "*.lnk" -Recurse -EA SilentlyContinue | ForEach-Object {
+                $lnk = $shell.CreateShortcut($_.FullName)
+                if ($lnk.TargetPath -match 'chrome\.exe|msedge\.exe|firefox\.exe|360se\.exe' -and $lnk.Arguments -match 'http|\.com|\.cn|\.html') {
+                    Write-Host ("[劫持警告] {0} -> 目标: {1} 参数: {2}" -f $_.Name, $lnk.TargetPath, $lnk.Arguments) -ForegroundColor Red
+                    $foundHijack = $true
+                }
+            }
+        }
+    }
+    if (-not $foundHijack) { Write-Host "  （未发现浏览器快捷方式被恶意追加参数）" }
+}
+```
+
+### 20. 3 秒抓弹窗现行工具（原生 Win32 API 弹窗定位器）
+
+```powershell
+function Catch-ForegroundPopup {
+    Add-Type @"
+        using System; using System.Runtime.InteropServices;
+        public class WindowHelper {
+            [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+        }
+"@
+    Write-Host "请在 3 秒内点击或切换到那个广告弹窗窗口..." -ForegroundColor Cyan
+    Start-Sleep -Seconds 3
+    $hwnd = [WindowHelper]::GetForegroundWindow()
+    $pidRef = 0; [void][WindowHelper]::GetWindowThreadProcessId($hwnd, [ref]$pidRef)
+    if ($pidRef -ne 0) {
+        $proc = Get-Process -Id $pidRef -ErrorAction SilentlyContinue
+        Write-Host "`n[抓捕成功！弹窗所属进程信息]：" -ForegroundColor Green
+        Write-Host "  进程名: $($proc.Name)"
+        Write-Host "  进程PID: $($proc.Id)"
+        Write-Host "  程序路径: $($proc.Path)"
+    } else {
+        Write-Host "未能捕获到活动窗口，请重试。" -ForegroundColor Red
     }
 }
 ```

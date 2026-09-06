@@ -2,7 +2,7 @@
 .SYNOPSIS
     windows-cleanup-optimize 一键全量扫描脚本
 .DESCRIPTION
-    按 SKILL.md 阶段 0-A "全量扫描模式" 执行，一次性跑完所有 18 个模板。
+    按 SKILL.md 阶段 0-A "全量扫描模式" 执行，一次性跑完所有 20 个模板。
     输出三段式报告：按档位 + 按类型 + 按来源模板。
     自动反推用户画像（家庭/开发者/游戏玩家/笔记本/OEM）。
 
@@ -15,7 +15,7 @@
 
 .NOTES
     作者：windows-cleanup-optimize 团队
-    版本：v1.6.0（2026-09 增加 AI 模型缓存与 WSL 稀疏扫描、Quick 模式）
+    版本：v1.7.0（2026-09 增加 WMI 常驻与快捷方式劫持审计、弹窗定位与现代 Win11 优化）
     依赖：Windows 10/11 + PowerShell 5.1+ + 标准命令行工具（powercfg）
 #>
 
@@ -252,6 +252,9 @@ Log "=== [T17] 本地 AI / 开发框架缓存 ==="
 $aiTargets = @(
     @{L='Ollama';P="$env:USERPROFILE\.ollama\models"},
     @{L='HuggingFace';P="$env:USERPROFILE\.cache\huggingface"},
+    @{L='PyTorch 权重缓存';P="$env:USERPROFILE\.cache\torch"},
+    @{L='uv 包缓存';P="$env:LOCALAPPDATA\uv\cache"},
+    @{L='Android AVD 镜像';P="$env:USERPROFILE\.android\avd"},
     @{L='Trae-CN 隐藏';P="$env:USERPROFILE\.trae-cn"},
     @{L='TRAE SOLO CN';P="$env:APPDATA\TRAE SOLO CN"},
     @{L='WorkBuddy 数据';P="$env:LOCALAPPDATA\Programs\WorkBuddy"},
@@ -394,6 +397,43 @@ Log ("  良性: {0}  疑似 bloatware: {1}  未知/待定: {2}" -f $fGood, $fBlo
 foreach ($u in $fUnknown) {
     Log ("    未知: {0,-40} {1,-30} -> {2}" -f $u.CLSID, $u.Name, $u.Impl)
 }
+Log ""
+
+# ===== [T19] WMI 持久化与快捷方式劫持审计 =====
+Log "=== [T19] WMI 持久化与快捷方式劫持审计 ==="
+# 1. WMI 命令行事件消费者
+$wmiConsumers = Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -EA SilentlyContinue
+if ($wmiConsumers) {
+    foreach ($c in $wmiConsumers) {
+        Log ("  ⚠️  [WMI常驻] 名称: {0} | 命令行: {1}" -f $c.Name, $c.CommandLineTemplate)
+        Add-Finding 'T19' 'WMI持久化常驻' '🔴' "root\subscription:$($c.Name)" 0 'n/a' "命令行: $($c.CommandLineTemplate)"
+    }
+} else { Log "  ✅ 未检测到 WMI CommandLineEventConsumer 常驻" }
+
+# 2. 桌面与开始菜单 LNK 快捷方式参数审计（检测劫持推广参数）
+$shell = New-Object -ComObject WScript.Shell
+$lnkDirs = @(
+    [Environment]::GetFolderPath('Desktop'),
+    [Environment]::GetFolderPath('CommonDesktopDirectory'),
+    [Environment]::GetFolderPath('StartMenu'),
+    [Environment]::GetFolderPath('CommonStartMenu')
+)
+$hijackedLnks = 0
+foreach ($dir in $lnkDirs) {
+    if (Test-Path $dir) {
+        Get-ChildItem -Path $dir -Filter *.lnk -Recurse -EA SilentlyContinue | ForEach-Object {
+            try {
+                $sc = $shell.CreateShortcut($_.FullName)
+                if ($sc.Arguments -match 'http|www\.|\.com|\.cn|channel=|tn=|--flag') {
+                    Log ("  ⚠️  [快捷方式劫持] {0} -> 参数: {1}" -f $_.Name, $sc.Arguments)
+                    Add-Finding 'T19' 'LNK参数劫持' '🟡' $_.FullName 0 'n/a' "参数: $($sc.Arguments)"
+                    $hijackedLnks++
+                }
+            } catch {}
+        }
+    }
+}
+if ($hijackedLnks -eq 0) { Log "  ✅ 未发现带可疑推广网址或启动参数的快捷方式" }
 Log ""
 
 # ===== [T13] 内存基线 =====

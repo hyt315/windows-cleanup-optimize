@@ -97,6 +97,23 @@ Get-ScheduledTask | Where-Object { $_.Triggers.CimClass.CimClassName -match 'Log
 - 任务管理器"启动"页的开关，实际写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run`（字节首值 02=禁用 / 03=启用，社区实测值）。
 - **常见误区**：用户在「设置→应用→启动」里关了某开关，但只改了 StartupApproved 标记、**Run 键里的值还在**——某些流氓软件检测到 Run 值被删会自己写回。彻底手法见 `startup-audit.md` 的"先切源头再清 Run 键"。
 
+### 18. WMI 事件订阅（现代流氓软件最爱用的"无文件影子自启动"）
+
+- **攻防背景**：这是现代流氓全家桶（如 2345、各类仿冒激活工具）最隐蔽的自启动通道。它们不在任务管理器、不在注册表 Run 键、不在启动文件夹留痕迹，而是将触发规则（`__EventFilter`）与执行指令（`CommandLineEventConsumer`）写入 WMI 数据库，开机触发系统事件时自动由系统 WMI 服务拉起！
+- **只读探测**（正常干净系统通常为空或仅有微软预置）：
+  ```powershell
+  # 检出所有自启动消费者与触发过滤器
+  Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer | Select-Object Name, CommandLineTemplate
+  Get-CimInstance -Namespace root\subscription -ClassName __EventFilter | Select-Object Name, Query
+  ```
+- **安全清除（必须三件套连根拔起）**：
+  ```powershell
+  # 以可疑项 "BadStartup" 为例：
+  Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -Filter "Name='BadStartup'" | Remove-CimInstance
+  Get-CimInstance -Namespace root\subscription -ClassName __EventFilter -Filter "Name='BadStartup'" | Remove-CimInstance
+  Get-CimInstance -Namespace root\subscription -ClassName __FilterToConsumerBinding | Where-Object { $_.Consumer -like "*BadStartup*" } | Remove-CimInstance
+  ```
+
 ---
 
 ## 普通用户核心审计清单（8 项）

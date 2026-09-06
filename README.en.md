@@ -32,11 +32,11 @@ It completely abandons dangerous "one-click brute-force deletion" practices, adh
 |---|---|---|
 | **🛡️ Zero-Harm Safety Net** | Recycle Bin deletion by default, restore point creation, rollback commands attached | 100% protection against accidental system corruption |
 | **🤖 Native AI & Dev Environment Migration** | Official environment variables for Ollama, Hugging Face, ModelScope, Python uv, Android AVD, and WSL2 sparse VHDX auto-shrink | Frees dozens to hundreds of GBs from Drive C natively |
-| **🔍 Two Scan Modes** | 🅰️ Full Scan (all 18 templates + AI/VHDX detection) + 🅱️ Profile Scan (Home/Gamer/Developer/AI/Laptop) | User freedom; non-tech users aren't blocked, power users get tailored advice |
-| **🧹 Bloatware & Popup Eradication** | 4-layer resurrection chain blocker for persistent background updaters, powered by BCUninstaller confidence logic | Targets root cause, completely preventing background respawns |
-| **⚡ Win11 24H2 & Performance Tuning** | 24H2 cleanup bug safeguards, BitLocker preflight, native Delivery Optimization cmdlet, 50+ services, TRIM | Millisecond-level speedups in responsiveness and boot time |
+| **🔍 Two Scan Modes** | 🅰️ Full Scan (all 20 templates + AI/VHDX & WMI/LNK hijacking audit) + 🅱️ Profile Scan (Home/Gamer/Developer/AI/Laptop) | User freedom; non-tech users aren't blocked, power users get tailored advice |
+| **🧹 Bloatware & Popup Eradication** | IFEO Image Hijacking popup muting SOP, 3-sec active popup locator, WMI persistence & LNK hijacking audit, 4-layer bloatware blocker | Completely silences popups and cleans root-level persistence |
+| **⚡ Win11 Modern & Network Tuning** | Per-adapter GUID TCP Nagle optimization, Win11 Widgets & WebView2 suppression, Delivery Optimization purge, 50+ services, TRIM | Millisecond-level network latency drop and smoother responsiveness |
 | **🔄 Official Data Migration** | Native in-app migration优先, WeChat 4.x(and legacy 3.x island cleanup) / WeCom / QQ NT / DingTalk, mklink fallback | Highly stable and fully compliant with app auto-updates |
-| **📋 15 Reference Manuals** | Comprehensive coverage from disk cleanup to software uninstall and service matrices | Deep knowledge base ensuring flawless AI agent decision making |
+| **📋 15 Reference Manuals** | Comprehensive coverage from disk cleanup to software uninstall, startup, and 86-item pitfall library | Deep knowledge base ensuring flawless AI agent decision making |
 
 ---
 

@@ -180,40 +180,64 @@ SSD 上 Windows Search 索引器会消耗写入寿命（理论上）。但现代
 
 ## 四、网络性能优化
 
-### 4.1 Nagle 算法（在线游戏玩家）
+### 4.1 Nagle 算法（在线游戏竞技玩家）
 
-**风险**：🟡 MEDIUM（仅游戏场景）
+**风险**：🟡 MEDIUM（仅游戏竞技场景推荐）
 
-Nagle 算法合并小数据包以节省带宽，但会增加延迟。**竞技游戏玩家禁用**。
+Nagle 算法合并小数据包以节省网络带宽，但会引入数十毫秒的微小延迟。**电竞游戏玩家可精准禁用**。
 
-**禁用**（需要改注册表）：
+> ⚠️ **官方技术纠偏**（[Microsoft Learn: TcpAckFrequency](https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/description-tcp-ip-related-registry-keys)）：
+> 网上流传直接写在 `Tcpip\Parameters` 根键下是**完全无效**的（系统根本不读取）。必须写入正在联网的**网卡具体接口 GUID** 下：`Tcpip\Parameters\Interfaces\{AdapterGUID}`。
+
+**正确禁用命令（PowerShell 管理员）**：
 ```powershell
-# 对全局 TCP 连接禁用 Nagle（修改 HKEY_LOCAL_MACHINE）
-$regPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
-Set-ItemProperty -Path $regPath -Name "TcpAckFrequency" -Value 1 -Type DWord
-Set-ItemProperty -Path $regPath -Name "TCPNoDelay" -Value 1 -Type DWord
+# 1. 动态获取当前正在联网的主网卡接口 GUID
+$activeNic = Get-NetAdapter | Where-Object Status -eq 'Up' | Sort-Object LinkSpeed -Descending | Select-Object -First 1
+if ($activeNic) {
+    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$($activeNic.InterfaceGuid)"
+    Set-ItemProperty -Path $regPath -Name "TcpAckFrequency" -Value 1 -Type DWord
+    Set-ItemProperty -Path $regPath -Name "TCPNoDelay" -Value 1 -Type DWord
+    Write-Host "已对活跃网卡 [$($activeNic.Name)] 禁用 Nagle 算法（TcpAckFrequency=1, TCPNoDelay=1）"
+}
 ```
 
-**回退**：
+**回退恢复**：
 ```powershell
-Remove-ItemProperty -Path $regPath -Name "TcpAckFrequency" -Force
-Remove-ItemProperty -Path $regPath -Name "TCPNoDelay" -Force
+$activeNic = Get-NetAdapter | Where-Object Status -eq 'Up' | Sort-Object LinkSpeed -Descending | Select-Object -First 1
+if ($activeNic) {
+    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$($activeNic.InterfaceGuid)"
+    Remove-ItemProperty -Path $regPath -Name "TcpAckFrequency" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path $regPath -Name "TCPNoDelay" -ErrorAction SilentlyContinue
+    Write-Host "已恢复默认 Nagle 算法设置"
+}
 ```
 
-### 4.2 DoH（加密 DNS）
+### 4.2 现代 TCP 窗口自适应与拥塞控制（Win10 / Win11）
+
+**风险**：🟢 LOW（系统底层标准维护）
+
+- **TCP 窗口自适应复位**（确保千兆宽带跑满）：某些第三方网络加速器退出后会将 autotuninglevel 篡改为 disabled，导致下载速度腰斩。
+  ```cmd
+  netsh int tcp set global autotuninglevel=normal
+  ```
+- **拥塞控制提供者检查**：
+  ```powershell
+  Get-NetTCPSetting | Select-Object SettingName, CongestionProvider
+  ```
+  Windows 11 默认已升级为 `CUBIC` 算法，在高速高丢包网络中吞吐表现远胜于老旧的 NewReno。
+- **网卡节能（EEE）跳 ping 避坑（游戏玩家专项）**：
+  在“设备管理器 → 网络适配器 → 你的有线网卡 → 属性 → 高级”中，找到 **“节能以太网 (Energy Efficient Ethernet)”** 与 **“环保节能 (Green Ethernet)”**，将其设为 **关闭 (Disabled)**。这能彻底杜绝网卡在无密集数据流时自动降频休眠所导致的 10~50ms 突发跳 ping。
+
+### 4.3 DoH（加密 DNS）
 
 **风险**：🟢 LOW（免费安全升级）
 
-DNS over HTTPS 加密 DNS 查询——避免 ISP / 公共 WiFi 监听。
+DNS over HTTPS 加密 DNS 查询——避免 ISP / 公共 WiFi 监听与域名劫持。
 
 **Win11**：
-设置 → 网络和 Internet → WiFi / 以太网 → DNS 属性 → 选"加密的 DNS"模板（如 Cloudflare 或 Google）
+设置 → 网络和 Internet → WiFi / 以太网 → DNS 属性 → 选"加密的 DNS"模板（如 Cloudflare 或 阿里云公共 DNS）。
 
-**Win10**：需改注册表或装第三方工具（如 DNS-over-HTTPS 客户端）。
-
-### 4.3 TCP 自动调优级别
-
-**默认已经是 normal**（系统管理）。手动调整收益小，不推荐折腾。
+**Win10**：需改注册表或装第三方客户端。
 
 ---
 

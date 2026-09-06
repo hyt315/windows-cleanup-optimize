@@ -81,6 +81,36 @@ Win+R → appwiz.cpl → Enter → 找到目标 → 右键 → 卸载
 
 ---
 
+## 专项工具：3 秒“抓弹窗现行”定位利器（原生 Win32 API）
+
+当电脑屏幕右下角或中央突然弹出垃圾广告、但不知道是哪个后台软件所为时：
+
+```powershell
+# 保存为 find_popup.ps1 执行
+Add-Type @"
+    using System; using System.Runtime.InteropServices;
+    public class WindowHelper {
+        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    }
+"@
+Write-Host "请在 3 秒内点击或切换到那个广告弹窗窗口..." -ForegroundColor Cyan
+Start-Sleep -Seconds 3
+$hwnd = [WindowHelper]::GetForegroundWindow()
+$pidRef = 0; [void][WindowHelper]::GetWindowThreadProcessId($hwnd, [ref]$pidRef)
+if ($pidRef -ne 0) {
+    $proc = Get-Process -Id $pidRef -ErrorAction SilentlyContinue
+    Write-Host "`n[抓捕成功！弹窗所属进程信息]：" -ForegroundColor Green
+    Write-Host "  进程名: $($proc.Name)"
+    Write-Host "  进程PID: $($proc.Id)"
+    Write-Host "  程序路径: $($proc.Path)"
+} else {
+    Write-Host "未能捕获到活动窗口，请重试。" -ForegroundColor Red
+}
+```
+
+---
+
 ## Step 3：残留清理（AppData + 注册表 + 服务 + 计划任务）
 
 > **残留甄别核心原则（借鉴 BCUninstaller 置信度机制）**：

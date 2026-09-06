@@ -15,17 +15,17 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 - 磁盘空间不足 / C 盘红了
 - AppData 累积的缓存（uv / npm / pnpm / 软件日志 / TRAE / WPS / WorkBuddy / 本地大模型等）
 - 软件卸载后残留（注册表、AppData、安装目录、计划任务、服务）
-- 自启动项过多，开机慢
-- 流氓软件 / 捆绑软件识别与清理（360 / 2345 / 各类弹窗广告）
+- 自启动项过多，开机慢（支持 WMI 事件订阅持久化常驻与桌面/开始菜单快捷方式劫持深度审计）
+- 流氓软件 / 捆绑软件治理与弹窗根治（刚需软件免卸载静音、IFEO 映像劫持阻断弹窗、3 秒活动弹窗进程秒级定位、360 / 2345 等）
 
 **优化类：**
-- Windows 服务精简（遥测、Xbox、第三方更新器等可安全禁用的服务）
+- Windows 服务精简（遥测、Xbox、第三方更新器等可安全禁用的服务，Win11 小组件后台与网络抑制）
 - 内存优化（识别真正的内存泄漏进程；批判性看待"内存清理工具"）
-- 系统性能调优（电源计划、视觉效果、SSD TRIM、网络等）
+- 系统性能调优（电源计划、视觉效果、SSD TRIM、TCP Nagle 协议栈精准调优等）
 - 按用户画像定制（家庭用户 / 开发者 / AI 创作者 / 游戏玩家 / 笔记本）
 
 **高级：**
-- 自启动"彻底关闭"（Edge/Chrome 启动提升 + 后台模式 + 20+ 隐藏启动点，用官方工具 AutoRuns 一键审计）
+- 自启动"彻底关闭"（Edge/Chrome 启动提升 + 后台模式 + 20+ 隐藏启动点，含 WMI 事件订阅持久化与快捷方式劫持，用官方工具 AutoRuns 一键审计）
 - C 盘大目录搬 D 盘：**官方方案优先**（应用内迁移 / 系统重定向 / 官方配置项），mklink 仅作兜底
 - 微信 4.x(及3.x孤岛清理)/企业微信/QQ/钉钉/浏览器/开发工具/AI模型/安卓AVD 等大目录的官方迁移到 D 盘
 
@@ -54,16 +54,16 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 
 | 文件 | 何时阅读 / 覆盖内容 |
 |------|-------------------|
-| [references/scan-scripts.md](references/scan-scripts.md) | 执行任何扫描/清理/优化时，按编号取对应 PowerShell 模板（1-15） |
-| [references/pitfalls.md](references/pitfalls.md) | 遇到异常/边界情况时，先查踩坑记录（含 30+ 优化主题踩坑） |
-| [references/startup-audit.md](references/startup-audit.md) | 开机慢、自启动多、需要禁用自启（含 Edge/Chrome「彻底关闭」专项） |
-| [references/startup-mechanisms.md](references/startup-mechanisms.md) | "关了还会自启/找不到怎么启动的"（Windows 20+ 隐藏启动点 + AutoRuns） |
-| [references/bloatware-catalog.md](references/bloatware-catalog.md) | 识别 360、2345、弹窗广告等流氓软件与可疑进程库 |
-| [references/software-uninstall.md](references/software-uninstall.md) | 卸载软件与深层残留清理（含 WPS/钉钉/360 专项清理） |
+| [references/scan-scripts.md](references/scan-scripts.md) | 执行任何扫描/清理/优化时，按编号取对应 PowerShell 模板（1-20） |
+| [references/pitfalls.md](references/pitfalls.md) | 遇到异常/边界情况时，先查踩坑记录（含 86 条权威踩坑规避） |
+| [references/startup-audit.md](references/startup-audit.md) | 开机慢、自启动多、需要禁用自启（含 Edge/Chrome「彻底关闭」、WMI 常驻与快捷方式审计） |
+| [references/startup-mechanisms.md](references/startup-mechanisms.md) | "关了还会自启/找不到怎么启动的"（Windows 20+ 隐藏启动点、WMI 事件订阅持久化 + AutoRuns） |
+| [references/bloatware-catalog.md](references/bloatware-catalog.md) | 识别 360、2345、弹窗广告等流氓软件与可疑进程库（含刚需软件 IFEO 静音 SOP 与快捷方式劫持清理） |
+| [references/software-uninstall.md](references/software-uninstall.md) | 卸载软件与深层残留清理（含 WPS/钉钉/360 专项清理与活动弹窗进程定位器） |
 | [references/system-cleanup.md](references/system-cleanup.md) | 系统级清理（Windows 更新残留、休眠文件、DriverStore 驱动库等） |
-| [references/services-optimization.md](references/services-optimization.md) | 服务优化、后台进程多、禁用遥测/Xbox/更新器（50+ 服务按画像分类） |
+| [references/services-optimization.md](references/services-optimization.md) | 服务优化、后台进程多、禁用遥测/Xbox/更新器（50+ 服务按画像分类，含 Win11 小组件与现代后台调优） |
 | [references/memory-optimization.md](references/memory-optimization.md) | 内存不足、电脑卡顿（真泄漏识别 + 内存工具 placebo 批判性分析） |
-| [references/performance-tuning.md](references/performance-tuning.md) | 性能调优、电源计划/视觉效果/网络/Defender 排除列表 |
+| [references/performance-tuning.md](references/performance-tuning.md) | 性能调优、电源计划/视觉效果/网卡 GUID 级 TCP 调优/Defender 排除列表 |
 | [references/trae-guide.md](references/trae-guide.md) | 扫描结果出现 `TRAE SOLO CN` / `.trae-cn` / 用户提到 TRAE |
 | [references/drive-migration-official.md](references/drive-migration-official.md) | C 盘大目录搬 D 盘（**官方方案优先决策树**：应用内/系统重定向/配置项） |
 | [references/chat-apps-migration.md](references/chat-apps-migration.md) | 微信 4.x/QQ NT/钉钉 占 C 盘、"改了保存位置还涨"（官方迁移+缓存清理） |
@@ -80,7 +80,7 @@ AI 开场白（**首次执行时询问一次，之后不再重复**）：
 
 > 这次扫描你想怎么处理？两个选项：
 >
-> **🅰️ 全量扫描** —— 一次性扫完所有 18 个模板，自动反推你的用户画像。
+> **🅰️ 全量扫描** —— 一次性扫完所有 20 个模板，自动反推你的用户画像。
 > 适合"想给电脑做一次彻底清洁 / 我也不知道哪些该清"的用户。
 >
 > **🅱️ 画像扫描** —— 先告诉我你属于哪类用户（家庭用户 / 开发者 / 游戏玩家 / 笔记本用户），AI 按画像给定制化的清理/优化建议。适合"我知道自己的方向，只想要针对性结果"的用户。
@@ -105,7 +105,7 @@ AI 开场白（**首次执行时询问一次，之后不再重复**）：
 
 ### 阶段 1：全面诊断（只读扫描）
 
-**🅰️ 全量扫描模式**：直接调用 `scripts/full_scan.ps1`，一次性跑完所有 18 个模板（详见 `references/scan-scripts.md` 模板 0）。**不再分步执行各模板**。
+**🅰️ 全量扫描模式**：直接调用 `scripts/full_scan.ps1`，一次性跑完所有 20 个模板（详见 `references/scan-scripts.md` 模板 0）。**不再分步执行各模板**。
 
 **🅱️ 画像扫描模式**：按顺序执行只读扫描，摸清系统全貌（PowerShell 脚本保存为 `.ps1` 文件执行）：
 

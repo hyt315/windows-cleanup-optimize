@@ -5,6 +5,41 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [1.7.0] - 2026-09-06
+
+### 新增
+- **刚需软件免卸载“弹窗彻底静音”与 IFEO 阻断技术（`references/bloatware-catalog.md`）**：
+  - 针对用户无法卸载但频繁弹窗的国产刚需软件（WPS、搜狗输入法、FlashCenter、好压等），提供基于 Windows 映像劫持（Image File Execution Options, IFEO）的底层拦截方案。
+  - 将弹窗专用进程（`wpscenter.exe`、`ksobulletin.exe`、`SGDownload.exe`、`SogouNews.exe`、`FFNewTask.exe`、`HaoZipPopup.exe` 等）通过 Debugger 键值重定向至系统内置静默退出程序 `systray.exe`，彻底切断弹窗拉起，同时保证主程序文字排版、输入打字、解压缩等核心功能完全正常。
+  - 配套提供一键静音与一键恢复 PowerShell 脚本。
+- **活动弹窗进程秒级定位器（`references/software-uninstall.md` + 模板 20）**：
+  - 新增基于 Win32 原生 API（`GetForegroundWindow` / `GetWindowThreadProcessId`）的 3 秒瞬时弹窗归属溯源脚本，用户只需在弹窗弹出时点击窗口，脚本即可精准提取对应进程 ID、进程名、可执行文件完整路径及所属命令行，让伪装无标题弹窗无所遁形。
+- **WMI 事件订阅持久化常驻与桌面/开始菜单快捷方式劫持审计（`references/startup-mechanisms.md` + `references/startup-audit.md` + 模板 19）**：
+  - 完善自启动机制第 18 类：深度解析流氓软件利用 WMI `CommandLineEventConsumer`、`__EventFilter` 和 `__FilterToConsumerBinding` 在操作系统底层实现无进程、无服务隐蔽常驻的原理，并提供一键检测与协同清理命令。
+  - 新增桌面、公共桌面、开始菜单 `.lnk` 快捷方式目标路径与附加参数审计，检测并清洗静默追加的恶意网址、渠道推广号或静默唤醒参数。
+- **Windows 11 现代后台与网络传输性能调优（`references/services-optimization.md` + `references/performance-tuning.md`）**：
+  - **Win11 小组件与后台 WebView 资源释放**：通过策略配置 `AllowNewsAndInterests = 0` 彻底封冻 `Widgets.exe` 与后台持续驻留的 `msedgewebview2.exe`，释放多余内存与 CPU 占用。
+  - **Windows 聚焦后台静音**：抑制聚焦锁屏与后台热点推送在空闲时频繁唤醒网络与磁盘。
+  - **TCP 协议栈现代化优化**：补充 Win10/Win11 原生 TCP 自动调谐级别校验（`autotuninglevel=normal`）、CUBIC 拥塞控制算法确认及网卡节能以太网（EEE）延迟规避指南。
+- **踩坑记录权威扩充至 86 条（`references/pitfalls.md`）**：
+  - 新增第 85 条：TCP Nagle 算法（`TcpAckFrequency`/`TCPNoDelay`）必须写入活动网卡特定的 `Interfaces\{GUID}` 路径，写在全局根路径下为无效空跑。
+  - 新增第 86 条：IFEO 映像劫持拦截弹窗时，Debugger 必须指向合法静默宿主（如 `systray.exe`），不可随意填空或不存在的路径，防止系统报错中断或子进程异常循环。
+
+### 修复
+- **TCP Nagle 注册表路径缺陷修复（`references/performance-tuning.md`）**：
+  - 修正此前将 `TcpAckFrequency` 与 `TCPNoDelay` 写入 `Tcpip\Parameters` 根目录的错误逻辑，改为动态获取当前具备有效 IPv4 默认网关的活动物理网卡 GUID，精准写入 `Tcpip\Parameters\Interfaces\{GUID}`，确保网络协议栈调优真实生效。
+- **服务拼写错误修复（`references/services-optimization.md`）**：
+  - 修正 `GammingServices` 为官方正确服务名称 `GamingServices`。
+- **PyTorch 模型权重缓存路径修正（`references/scan-scripts.md` + `scripts/full_scan.ps1`）**：
+  - 修正此前 `$env:LOCALAPPDATA\torch` 探测路径，规范为 PyTorch 官方统一的 `$env:USERPROFILE\.cache\torch`，并同步加入全量扫描模板 17。
+
+### 变更
+- **全量扫描脚本升级（`scripts/full_scan.ps1`）**：
+  - 模板总数由 18 项扩充至 20 项，集成 `[T19]` WMI 持久化常驻与桌面/开始菜单快捷方式劫持自动审计。
+  - 版本号与说明同步升至 `v1.7.0`。
+- **自测试套件全面强化（`scripts/selftest.py`）**：
+  - 扩展深度内容断言，覆盖网卡 GUID TCP 注册表路径、GamingServices 拼写、Win11 Widgets 优化、IFEO 映像劫持 SOP、Win32 弹窗定位器与 WMI 消费者检查，确保技能知识库的工程严谨度与可验证性。
+
 ## [1.6.0] - 2026-09-06
 
 ### 新增

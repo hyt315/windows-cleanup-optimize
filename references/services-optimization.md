@@ -90,7 +90,7 @@ sc stop WSearch
 | **XblGameSave** | Xbox Live Game Save | ✅ | Xbox 云存档。不用可禁用 |
 | **XboxGipSvc** | Xbox Accessory Management Service | ✅ | Xbox 配件管理 |
 | **XboxNetApiSvc** | Xbox Live Networking Service | ✅ | Xbox 网络 |
-| **GammingServices** | Gaming Services | ⚠️ | **游戏玩家保留**——Microsoft Store 游戏和 Xbox Game Pass 需要 |
+| **GamingServices** | Gaming Services | ⚠️ | **游戏玩家保留**——Microsoft Store 游戏和 Xbox Game Pass 需要 |
 | **BcastDVRUserService** | GameDVR and Broadcast User Service | ⚠️ | 游戏录制和直播，不用可禁用 |
 
 **禁用命令**（非游戏玩家）：
@@ -245,6 +245,16 @@ foreach ($p in $thirdPartyUpdates) {
 | **RetailDemo** | Retail Demo Service | ✅ | 零售演示模式（一般机器上没有） |
 | **wisvc** | Windows Insider Service | ✅ | 预览体验计划 |
 | **WpnService** | WpnService (Windows Push Notifications) | ✅ | 推送通知 |
+
+---
+
+## 十三、Windows 11 现代后台进程链与小组件降噪
+
+| 功能 / 策略 | 影响范围 | 风险 | 优化方法与收益 |
+|---|---|---|---|
+| **小组件（Widgets）进程链** | `Widgets.exe` 与 4~6 个 `msedgewebview2.exe` | ✅ | **彻底释放 300MB~800MB 物理内存**。官方策略禁用：<br>`reg add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f`<br>回退：`reg delete "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /f` |
+| **Windows 聚焦（Spotlight）静默壁纸拉取** | 锁屏后台网络与遥测 | ✅ | 停止后台静默拉取 4K 商业广告壁纸与遥测：<br>`reg add "HKCU\Software\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsSpotlightFeatures /t REG_DWORD /d 1 /f` |
+| **跨设备连接平台（CDPUserSvc）** | 跨设备剪贴板流转 | ⚠️ | 不使用跨设备协同/手机连接的单机用户，可在服务中将其设为手动（Manual） |
 
 ---
 
