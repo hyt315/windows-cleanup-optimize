@@ -14,7 +14,7 @@
 - **全量扫描主脚本**（`scripts/full_scan.ps1` + `references/scan-scripts.md` 模板 0）：
   - 一次性跑完 18 个模板，输出三段式报告（按档位 / 按类型 / 按来源模板）
   - 末尾自动反推用户画像（家庭 / 开发者 / 游戏玩家 / 笔记本）
-  - 输出文件：`C:\Users\<user>\full_scan_<timestamp>.txt`
+  - 输出文件：`%USERPROFILE%\full_scan_<timestamp>.txt`
 - **Shell 扩展审计升级**（`references/scan-scripts.md` 模板 16）：
   - `$expectedGood` 补充 Win11 新组件：Previous Versions / Portable Devices / CD Burning / ModernSharing / PinTo 等
   - 修复"Win11 系统自带扩展被误判为未知"的实战痛点
