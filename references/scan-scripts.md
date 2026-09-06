@@ -6,12 +6,30 @@
 
 ## 目录
 
+- 〇、**全量扫描主脚本**（SKILL.md 阶段 0-A 一键跑完所有模板）⭐ v1.5.0 新增
 - 一、通用扫描模板（Scan-Directory / Scan-NonSystemDrive）
 - 二、残留检测模板（Roaming / 安装目录 / 更新包）
 - 三、安全清理模板（ReparsePoint 预检 / SafeRecycle / Temp 被锁处理）
 - 四、验证汇报模板（清理后对比）
 - 五、新增模板（清理+优化双线）
 - 六、Shell 扩展审计（2026-08 实战新增）
+
+## 〇、全量扫描主脚本（SKILL.md 阶段 0-A，v1.5.0 新增）
+
+> **使用方式**：用户选 🅰️ 全量扫描时，**直接调用 `scripts/full_scan.ps1`**，不再分步跑各模板。
+
+**完整脚本见 `scripts/full_scan.ps1`**。一次性跑完所有 18 个模板，输出三段式报告：
+- 按"档位 / 类型 / 来源模板"组织输出
+- 末尾自动反推用户画像（家庭 / 开发者 / 游戏玩家 / 笔记本）
+- 输出文件：`C:\Users\<user>\full_scan_<timestamp>.txt`
+- 耗时：约 2-6 分钟
+
+**为什么需要"全量"入口**：很多用户不是开发者/玩家，就是"想给电脑做一次彻底清洁"。画像应该是**推荐维度**而非**执行阻塞**——把选择权交给用户。
+
+**为什么不直接在 SKILL.md 里塞全量脚本**：
+1. SKILL.md 只保留流程说明与关键逻辑，脚本放 `scripts/` 目录
+2. 模板 0 调用模板 1-18，复用已有逻辑
+3. 模板编号保留，引用 `scripts/full_scan.ps1` 即可
 
 ## 一、通用扫描模板
 
@@ -524,7 +542,13 @@ $expectedGood = @(
     'New','NvCplDesktopContext','EnhancedStorageShell',                    # 系统
     'Open With kwpsshellext','Open With qingshellext',                    # WPS
     'QingNseContextMenu','qkdesktopshellext',                              # WPS
-    'CF444751-60FC-48B8-AC0F-363063EB2A9E'                                  # DeskGo (CDeskmgrShellMenu)
+    'CF444751-60FC-48B8-AC0F-363063EB2A9E',                                 # DeskGo (CDeskmgrShellMenu)
+    # === Win11 新增系统组件（v1.5.0 补充）===
+    'Previous Versions','PreviousVersions',                                # 文件属性 → 以前的版本
+    'Portable Devices','PortableDevices',                                  # U盘/手机右键
+    'CD Burning','CDBurning',                                              # 光盘刻录
+    'Search','ModernSharing','PinTo','PinToStart',                         # Win11 通用
+    'Microsoft','OneDrive','Defender','Windows','Shell','Explorer'         # 通用 Microsoft
 )
 
 # === 2. 已知流氓 / bloatware shell 扩展关键词（与 bloatware-catalog.md 对齐）===
