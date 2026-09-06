@@ -37,9 +37,9 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 
 1. **只读排查优先（Zero-Mutation 原则）** — 阶段 1 诊断阶段（`scripts/full_scan.ps1` 与所有探测脚本）均为纯只读排查，绝不擅自修改任何系统配置、绝不删除或移动任何文件，不动任何设置。
 2. **治理建议须用户授权** — 所有涉及移入回收站、删除文件、注册表更改、服务禁用、IFEO 映像劫持阻断、目录迁移等破坏性写操作，仅作为针对性治理建议向用户呈报，**须用户明确同意后手动执行（须用户授权）**，绝不擅自越界变更。
-3. **所有清理走回收站** — 使用 `SendToRecycleBin`（`Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory`），不用 `Remove-Item`（模板见 `scan-scripts.md` 模板 7），保证 100% 可恢复。
+3. **所有清理走回收站** — 使用 `SendToRecycleBin`（`Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory`），不用 `Remove-Item`（👉 动作：先读 [references/scan-scripts.md](references/scan-scripts.md) 模板 7），保证 100% 可恢复。
 4. **优化项分四级风险** — 每项明确标注 🟢 LOW / 🟡 MEDIUM / 🟠 HIGH / 🔴 CRITICAL。
-5. **不动系统目录** — `C:\Windows`、`C:\Program Files`、`C:\ProgramData` 默认只读扫描；卸载残留需交叉比对且经用户确认后处理。
+5. **不动系统目录与官方规范底线** — `C:\Windows`、`C:\Program Files`、`C:\ProgramData` 默认只读扫描；卸载残留需交叉比对且经用户确认后处理。涉及 WinSxS、Installer 缓存或卷影副本等深水区，👉 动作：先读 [references/windows-cleanup-optimize-pitfalls.md](references/windows-cleanup-optimize-pitfalls.md) 遵循官方底线，严禁擅自执行 `/ResetBase` 或直接清空 Installer 目录。
 6. **关键操作前建还原点** — 涉及驱动/服务/系统组件时，执行 `Checkpoint-Computer -Description "BeforeXxx"`。
 7. **提供完整回退对策与安全恢复命令** — 每个禁用项/优化项都给出安全恢复与"如何恢复"的完整回退对策。
 8. **被锁文件跳过不强制** — 遇到 `IOException` 占用错误时跳过并记录，不中断流程。
@@ -56,7 +56,8 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 
 | 文件 | 何时阅读 / 覆盖内容 |
 |------|-------------------|
-| [references/scan-scripts.md](references/scan-scripts.md) | 执行任何扫描/清理/优化时，按编号取对应 PowerShell 模板（1-20） |
+| [references/scan-scripts.md](references/scan-scripts.md) | 执行任何扫描/清理/优化前，先读对应 PowerShell 模板（1-20） |
+| [references/windows-cleanup-optimize-pitfalls.md](references/windows-cleanup-optimize-pitfalls.md) | 涉及 DISM、WinSxS、云端随选文件遍历、Installer 缓存、VSS 还原点等深水操作时，先读避坑与官方规范基线 |
 | [references/pitfalls.md](references/pitfalls.md) | 遇到异常/边界情况时，先查踩坑记录（含 86 条权威踩坑规避） |
 | [references/startup-audit.md](references/startup-audit.md) | 开机慢、自启动多、需要禁用自启（含 Edge/Chrome「彻底关闭」、WMI 常驻与快捷方式审计） |
 | [references/startup-mechanisms.md](references/startup-mechanisms.md) | "关了还会自启/找不到怎么启动的"（Windows 20+ 隐藏启动点、WMI 事件订阅持久化 + AutoRuns） |
@@ -107,7 +108,7 @@ AI 开场白（**首次执行时询问一次，之后不再重复**）：
 
 ### 阶段 1：全面诊断（只读扫描）
 
-**🅰️ 全量扫描模式**：直接调用 `scripts/full_scan.ps1`，一次性跑完所有 20 个模板（详见 `references/scan-scripts.md` 模板 0）。**不再分步执行各模板**。
+**🅰️ 全量扫描模式**：直接调用 `scripts/full_scan.ps1`，一次性跑完所有 20 个模板（👉 动作：先读 [references/scan-scripts.md](references/scan-scripts.md) 模板 0，或直接执行该脚本）。**不再分步执行各模板**。
 
 **🅱️ 画像扫描模式**：按顺序执行只读扫描，摸清系统全貌（PowerShell 脚本保存为 `.ps1` 文件执行）：
 
@@ -173,6 +174,7 @@ AI 开场白（**首次执行时询问一次，之后不再重复**）：
 
 按用户选择，调用对应手册的安全执行流程：
 - **磁盘清理**：使用 `scan-scripts.md` 模板 7（`SafeRecycle`）移入回收站，遇到占用自动跳过。
+- **系统核心深度清理**：👉 动作：读取 [references/windows-cleanup-optimize-pitfalls.md](references/windows-cleanup-optimize-pitfalls.md)，核验 WinSxS 组件库、Installer 缓存、OneDrive 随选占位符与卷影副本安全底线。
 - **自启动清理**：按 `startup-audit.md` 执行（Edge/Chrome 按"先切开关层，再清 Run 键"防复发）。
 - **软件卸载**：按 `software-uninstall.md` 规范卸载并清理残留。
 - **服务优化**：按 `services-optimization.md` 执行服务禁用（`sc config <svc> start= disabled`）。

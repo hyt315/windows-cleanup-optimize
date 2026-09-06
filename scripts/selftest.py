@@ -52,6 +52,7 @@ REQUIRED_REFS = (
     "services-optimization.md", "memory-optimization.md", "performance-tuning.md",
     "trae-guide.md", "drive-migration-official.md", "chat-apps-migration.md",
     "mklink-migration.md", "case-study.md",
+    "windows-cleanup-optimize-pitfalls.md",
 )
 
 
@@ -152,6 +153,12 @@ def validate(root: Path) -> str:
         sm_text = startup_mech.read_text(encoding="utf-8")
         if "CommandLineEventConsumer" not in sm_text or "__EventFilter" not in sm_text:
             return "startup-mechanisms.md 缺少 WMI 事件订阅持久化常驻完整机制"
+
+    win_pitfalls = root / "references" / "windows-cleanup-optimize-pitfalls.md"
+    if win_pitfalls.is_file():
+        wp_text = win_pitfalls.read_text(encoding="utf-8")
+        if "ResetBase" not in wp_text or "ReparsePoint" not in wp_text or "C:\\Windows\\Installer" not in wp_text:
+            return "windows-cleanup-optimize-pitfalls.md 缺少 ResetBase / ReparsePoint / Installer 核心避坑断言"
 
     return ""
 

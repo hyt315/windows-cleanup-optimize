@@ -1,6 +1,6 @@
 {
   "name": "windows-cleanup-optimize",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "owner": "hyt315",
   "updated_at": "2026-09-06",
   "description": "Zero-harm Windows cleanup & optimization assistant: disk space, bloatware uninstall, IFEO popup silencing, WMI startup audit, official-first drive migration, and performance tuning."

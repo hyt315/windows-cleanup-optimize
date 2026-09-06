@@ -5,6 +5,22 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [1.9.0] - 2026-09-06
+
+### 新增
+- **微软官方底层规范与深度清理避坑库（`references/windows-cleanup-optimize-pitfalls.md`）**：
+  - **WinSxS 组件存储库与 DISM `/ResetBase` 风险防控**：规范组件存储安全分析与清理流程，严格禁令默认带 `/ResetBase` 参数，防止当前累积更新（LCU）被永久固化、丧失故障回滚能力；
+  - **OneDrive / iCloud "文件随选 (Files On-Demand)" 水合雪崩防御**：在递归扫描与大文件排查中加入 `ReparsePoint` 与 `SparseFile` 属性拦截，严禁读取云端占位文件内容，杜绝触发后台强制下载撑爆 C 盘空间；
+  - **Windows Installer (`C:\Windows\Installer`) 误删灾难拦截**：明确禁止手动批量删除 `.msi` / `.msp` 注册缓存，防止 Office、Visual Studio、SQL Server 等大型软件陷入无法更新、修复或卸载的永久损坏状态；
+  - **卷影副本 (VSS) 与系统还原点防误清**：规范 `vssadmin delete shadows` 调用边界，避免静默清空用户关键系统还原点与“以前的版本”；
+  - **CompactOS 原生系统文件无损压缩规范**：规范基于 WOF 驱动的 `compact /compactos:always` 压缩指令，安全稳定释放 2.0GB ~ 4.5GB C 盘空间；
+  - **休眠文件 `hiberfil.sys` 瘦身权衡**：推荐使用 `powercfg /h /type reduced` 保留快速启动并缩减 50% 空间，避免盲目关闭导致开机耗时倍增。
+- **工作流指令就近内联动作重构与弱引用治理（`SKILL.md`）**：
+  - 全面消除流程中“详见/可参考”弱引用措辞，升级为规范的 `👉 动作：先读 [文件]` 就近内联动作指令，确保 Agent 调度时不漏步、不跳步；
+  - 将深度清理避坑库无缝挂载至核心安全原则与分模块执行流程中。
+- **回归测试套件强化（`scripts/selftest.py`）**：
+  - 扩展 `REQUIRED_REFS` 必检清单，新增 `ResetBase`、`ReparsePoint`、`Installer` 缓存等底层避坑要点的深度内容级断言校验。
+
 ## [1.8.0] - 2026-09-06
 
 ### 新增
