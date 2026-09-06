@@ -5,6 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [1.5.0] - 2026-09-06
+
+### 新增
+- **🅰️ 全量扫描入口**（`SKILL.md` 阶段 0 二选一）：
+  - 用户首次执行时 AI 询问"全量扫描 vs 画像扫描"，不再阻塞非技术用户
+  - 完整流程与开场白模板见 `SKILL.md` 阶段 0
+- **全量扫描主脚本**（`scripts/full_scan.ps1` + `references/scan-scripts.md` 模板 0）：
+  - 一次性跑完 18 个模板，输出三段式报告（按档位 / 按类型 / 按来源模板）
+  - 末尾自动反推用户画像（家庭 / 开发者 / 游戏玩家 / 笔记本）
+  - 输出文件：`C:\Users\<user>\full_scan_<timestamp>.txt`
+- **Shell 扩展审计升级**（`references/scan-scripts.md` 模板 16）：
+  - `$expectedGood` 补充 Win11 新组件：Previous Versions / Portable Devices / CD Burning / ModernSharing / PinTo 等
+  - 修复"Win11 系统自带扩展被误判为未知"的实战痛点
+
+### 变更
+- **SKILL.md 阶段 0** 拆分为"入口选择（🅰️/🅱️）"和"用户画像（仅🅱️ 模式）"
+- **SKILL.md 阶段 1** 增加"🅰️ 全量扫描模式"分支说明
+- **SKILL.md 阶段 2** 新增"画像自动反推"小节（仅🅰️ 模式）
+- **README.md** 核心特性表更新为"两种扫描入口"（🅰️ + 🅱️）
+
 ## [1.4.0] - 2026-09-02
 
 ### 新增

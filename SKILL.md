@@ -74,7 +74,26 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 
 ## 工作流（六阶段）
 
-### 阶段 0：用户画像（首次执行时）
+### 阶段 0：入口选择（首次执行时）
+
+AI 开场白（**首次执行时询问一次，之后不再重复**）：
+
+> 这次扫描你想怎么处理？两个选项：
+>
+> **🅰️ 全量扫描** —— 一次性扫完所有 18 个模板，自动反推你的用户画像。
+> 适合"想给电脑做一次彻底清洁 / 我也不知道哪些该清"的用户。
+>
+> **🅱️ 画像扫描** —— 先告诉我你属于哪类用户（家庭用户 / 开发者 / 游戏玩家 / 笔记本用户），AI 按画像给定制化的清理/优化建议。适合"我知道自己的方向，只想要针对性结果"的用户。
+>
+> 直接回 A / B，或者告诉我你想要的。
+
+**两种入口处理流程**：
+- **🅰️ 全量扫描** → 直接进入阶段 1，跳过阶段 0.5 画像确认
+- **🅱️ 画像扫描** → 进入阶段 0.5 用户画像确认 → 阶段 1
+
+> **为什么分开**：很多用户不是开发者/玩家，就是"想给电脑做一次彻底清洁"。画像应该是**推荐维度**而非**执行阻塞**——把选择权交给用户。
+
+### 阶段 0.5：用户画像（仅🅱️ 画像扫描模式）
 
 明确用户类型，影响后续所有推荐（**一次画像后不重复询问**）：
 - **家庭用户**：弹窗广告清理、家庭友好服务优化
@@ -86,7 +105,9 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 
 ### 阶段 1：全面诊断（只读扫描）
 
-按顺序执行只读扫描，摸清系统全貌（PowerShell 脚本保存为 `.ps1` 文件执行）：
+**🅰️ 全量扫描模式**：直接调用 `scripts/full_scan.ps1`，一次性跑完所有 18 个模板（详见 `references/scan-scripts.md` 模板 0）。**不再分步执行各模板**。
+
+**🅱️ 画像扫描模式**：按顺序执行只读扫描，摸清系统全貌（PowerShell 脚本保存为 `.ps1` 文件执行）：
 
 1. **磁盘基准与分区**：运行 `scan-scripts.md` 模板 9（`Get-PSDrive`）记录空间基准。
 2. **用户目录分层扫描**：调用 `scan-scripts.md` 模板 1（`Scan-Directory`）扫描 Profile 各层（Local / Roaming / Programs）。
@@ -99,6 +120,18 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 ---
 
 ### 阶段 2：四档风险分级与汇总
+
+**🅰️ 全量扫描模式**额外执行"画像自动反推"——根据扫描发现自动给出画像标签：
+
+| 画像标签 | 触发条件（任一）|
+|---|---|
+| 🏠 家庭用户 | 装了 WPS / 360 / 2345 / 腾讯管家等 |
+| 👨‍💻 开发者 | 装了 Docker Desktop / WSL / VS Code / JetBrains / 任意 AI IDE |
+| 🎮 游戏玩家 | 装了 Steam / 暴雪 / GeForce Experience / 任意 Game Bar 服务 |
+| 💼 办公用户 | 装了 Office / 钉钉 / 飞书 / 企业微信 |
+| 💻 笔记本/OEM | 系统制造商电源计划（Acer/Lenovo/Dell 等 OEM 方案）|
+
+每个画像给出该画像**专属的优化建议**（如家庭用户重点是弹窗广告清理，开发者重点是保留 Hyper-V/WSL/Docker）。
 
 将扫描发现自动归类呈报：
 
