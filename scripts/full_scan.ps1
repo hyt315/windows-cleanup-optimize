@@ -15,11 +15,14 @@
 
 .NOTES
     作者：windows-cleanup-optimize 团队
-    版本：v1.5.0（2026-09 增加全量扫描模式）
+    版本：v1.6.0（2026-09 增加 AI 模型缓存与 WSL 稀疏扫描、Quick 模式）
     依赖：Windows 10/11 + PowerShell 5.1+ + 标准命令行工具（powercfg）
 #>
 
-param([string]$OutDir = "$env:USERPROFILE")
+param(
+    [string]$OutDir = "$env:USERPROFILE",
+    [switch]$Quick
+)
 
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -163,6 +166,37 @@ if (Test-Path $tempPath) {
         Sort-Object Length -Descending | Select-Object -First 10 | ForEach-Object {
             Log ("  [T5D-Temp] {0,-8}  {1}" -f (MB $_.Length), $_.Name)
         }
+}
+Log ""
+
+# ===== [T5E] AI 模型缓存与虚拟磁盘 =====
+Log "=== [T5E] AI 模型缓存与虚拟磁盘 ==="
+$aiTargets = @(
+    @{N='Ollama Models'; P="$env:USERPROFILE\.ollama\models"; Note='Ollama本地模型，可通过OLLAMA_MODELS环境变量官方迁移D盘'},
+    @{N='Hugging Face Cache'; P="$env:USERPROFILE\.cache\huggingface"; Note='HF模型与数据缓存，可通过HF_HOME环境变量官方迁移D盘'},
+    @{N='ModelScope Cache'; P="$env:USERPROFILE\.cache\modelscope"; Note='魔搭模型缓存，可通过MODELSCOPE_CACHE环境变量官方迁移D盘'},
+    @{N='PyTorch Cache'; P="$env:USERPROFILE\.cache\torch"; Note='PyTorch预训练权重缓存，可通过TORCH_HOME环境变量官方迁移D盘'},
+    @{N='Python uv Cache'; P="$env:LOCALAPPDATA\uv\cache"; Note='uv包管理器缓存，可运行uv cache prune修剪或UV_CACHE_DIR迁移'},
+    @{N='Android AVD Emulators'; P="$env:USERPROFILE\.android\avd"; Note='安卓虚拟设备镜像，可通过ANDROID_AVD_HOME官方迁移D盘'}
+)
+foreach ($item in $aiTargets) {
+    if (Test-Path $item.P) {
+        $s = Get-DirSize $item.P
+        if ($s -ge 50MB) {
+            Log ("  [T5E-AI] {0,-8}  {1}  (写 {2:yyyy-MM-dd})" -f (MB $s), $item.N, (Get-Item $item.P).LastWriteTime)
+            Add-Finding 'T5E' 'AI与虚拟化缓存' '🟡' $item.P $s (Get-Item $item.P).LastWriteTime.ToString('yyyy-MM-dd') $item.Note
+        }
+    }
+}
+# VHDX 虚拟磁盘扫描（WSL2 / Docker）
+$pkgDir = "$env:LOCALAPPDATA\Packages"
+if (Test-Path $pkgDir) {
+    Get-ChildItem $pkgDir -Filter "*.vhdx" -Recurse -Force -EA SilentlyContinue | ForEach-Object {
+        if ($_.Length -ge 100MB) {
+            Log ("  [T5E-VHDX] {0,-8}  {1}" -f (GB $_.Length), $_.FullName)
+            Add-Finding 'T5E' 'AI与虚拟化缓存' '🟡' $_.FullName $_.Length $_.LastWriteTime.ToString('yyyy-MM-dd') 'WSL2/Docker虚拟磁盘，可通过wsl --manage --set-sparse true启用自动缩容或compact压缩'
+        }
+    }
 }
 Log ""
 
@@ -389,6 +423,9 @@ if ($wpsFamily) { $profile += '🏠 家庭用户（装了 WPS/360/2345/腾讯管
 # 开发者：Docker / WSL / VS Code / JetBrains / AI IDE
 $devPaths = $findings | Where-Object { $_.Path -match 'JetBrains|Programs\\Python|Programs\\OpenCode|Programs\\antigravity|\\.codex|\\.gemini|Programs\\HanaAgent' }
 if ($devPaths) { $profile += '👨‍💻 开发者（装了 JetBrains/Python/AI IDE）' }
+# AI 创作者 / 虚拟化用户：本地大模型、WSL2、Docker、AVD 镜像
+$aiPaths = $findings | Where-Object { $_.Type -eq 'AI与虚拟化缓存' -or $_.Path -match 'ollama|huggingface|modelscope|\.android\\avd|\.vhdx' }
+if ($aiPaths) { $profile += '🤖 AI创作者/虚拟化用户（存在本地大模型/WSL/Docker/AVD虚拟磁盘）' }
 # 游戏玩家
 $steamProc = Get-Process Steam -EA SilentlyContinue
 if ($steamProc) { $profile += '🎮 游戏玩家（Steam 在跑）' }

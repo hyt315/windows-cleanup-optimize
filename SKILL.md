@@ -13,7 +13,7 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 
 **清理类：**
 - 磁盘空间不足 / C 盘红了
-- AppData 累积的缓存（npm / pnpm / 软件日志 / TRAE / WPS / WorkBuddy 等）
+- AppData 累积的缓存（uv / npm / pnpm / 软件日志 / TRAE / WPS / WorkBuddy / 本地大模型等）
 - 软件卸载后残留（注册表、AppData、安装目录、计划任务、服务）
 - 自启动项过多，开机慢
 - 流氓软件 / 捆绑软件识别与清理（360 / 2345 / 各类弹窗广告）
@@ -22,12 +22,12 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 - Windows 服务精简（遥测、Xbox、第三方更新器等可安全禁用的服务）
 - 内存优化（识别真正的内存泄漏进程；批判性看待"内存清理工具"）
 - 系统性能调优（电源计划、视觉效果、SSD TRIM、网络等）
-- 按用户画像定制（家庭用户 / 开发者 / 游戏玩家 / 笔记本）
+- 按用户画像定制（家庭用户 / 开发者 / AI 创作者 / 游戏玩家 / 笔记本）
 
 **高级：**
 - 自启动"彻底关闭"（Edge/Chrome 启动提升 + 后台模式 + 20+ 隐藏启动点，用官方工具 AutoRuns 一键审计）
 - C 盘大目录搬 D 盘：**官方方案优先**（应用内迁移 / 系统重定向 / 官方配置项），mklink 仅作兜底
-- 微信/QQ/钉钉/浏览器/开发工具等大目录的官方迁移到 D 盘
+- 微信 4.x(及3.x孤岛清理)/企业微信/QQ/钉钉/浏览器/开发工具/AI模型/安卓AVD 等大目录的官方迁移到 D 盘
 
 ---
 
@@ -127,6 +127,7 @@ AI 开场白（**首次执行时询问一次，之后不再重复**）：
 |---|---|
 | 🏠 家庭用户 | 装了 WPS / 360 / 2345 / 腾讯管家等 |
 | 👨‍💻 开发者 | 装了 Docker Desktop / WSL / VS Code / JetBrains / 任意 AI IDE |
+| 🤖 AI创作者/虚拟化 | 装了 Ollama / HuggingFace / ModelScope / Android AVD / WSL2 / Docker |
 | 🎮 游戏玩家 | 装了 Steam / 暴雪 / GeForce Experience / 任意 Game Bar 服务 |
 | 💼 办公用户 | 装了 Office / 钉钉 / 飞书 / 企业微信 |
 | 💻 笔记本/OEM | 系统制造商电源计划（Acer/Lenovo/Dell 等 OEM 方案）|

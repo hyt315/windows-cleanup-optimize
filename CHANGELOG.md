@@ -5,6 +5,30 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [1.6.0] - 2026-09-06
+
+### 新增
+- **现代开发工具链官方换盘与缓存修剪**（`references/drive-migration-official.md`）：
+  - **Python uv**：支持 `UV_CACHE_DIR` 环境变量与 `uv cache prune` / `uv cache clean` 官方命令
+  - **Android AVD 模拟器**：支持 `ANDROID_AVD_HOME` 环境变量将数十 GB 虚拟机镜像从 C 盘迁出
+  - **ModelScope 魔搭社区**：支持 `MODELSCOPE_CACHE` 环境变量重定向
+  - **PyTorch**：支持 `TORCH_HOME` 环境变量模型权重重定向
+- **WSL 2.0+ 原生稀疏虚拟磁盘自动缩容**（`references/drive-migration-official.md`）：
+  - 支持 Win11 23H2/24H2 原生 `wsl --manage <发行版> --set-sparse true` 稀疏磁盘模式（Linux 内删文件宿主机 VHDX 自动缩容）
+  - 保留 `diskpart compact vdisk` 通用离线压缩与 export/import 迁移指南
+- **微信 4.0 升级后旧版 3.x 孤岛残留治理**（`references/chat-apps-migration.md`）：
+  - 针对升级 4.0 并迁移后旧版 `Documents\WeChat Files` 遗留 30GB~80GB 孤儿目录的痛点，提供 SafeRecycle 安全排查与处置 SOP
+  - 补充企业微信（WeCom / WXWork）存储迁移与缓存安全清理指南
+- **GitHub 顶级开源工具经验吸收**（`references/software-uninstall.md` + `references/system-cleanup.md`）：
+  - 推荐顶级开源项目 **BCUninstaller (Bulk Crap Uninstaller)** 并引入其残余扫描“置信度分级（Confidence Levels）”原则
+  - 规范现代驱动清理语法为 `pnputil /delete-driver oemXX.inf /uninstall`
+  - 补充 Windows 原生传递优化 Cmdlet `Clear-DeliveryOptimizationCache -Force`
+  - 补充系统崩溃转储（`MEMORY.DMP` / `Minidump`）安全清理指导
+- **全量扫描脚本升级**（`scripts/full_scan.ps1`）：
+  - 新增 `[T5E]` 专项：只读探测本地大模型（Ollama/HF/ModelScope/PyTorch）、uv 缓存、AVD 模拟器与 WSL/Docker VHDX 虚拟磁盘
+  - 新增 `-Quick` 快速模式开关
+  - 画像反推新增 `🤖 AI创作者/虚拟化用户`
+
 ## [1.5.0] - 2026-09-06
 
 ### 新增

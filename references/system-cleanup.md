@@ -120,7 +120,8 @@ Checkpoint-Computer -Description "BeforeDriversDelete"   # 管理员
 # 注：若报错"系统保护未启用"，先在 系统属性→系统保护 里为 C 盘启用，
 #     或跳过还原点直接操作（驱动清理本身风险低，但建议保留回滚手段）
 pnputil /enum-drivers | Select-String "oem"               # 确认要删的包
-pnputil -d oemXX.inf                                      # 删除旧版本驱动包
+pnputil /delete-driver oemXX.inf /uninstall               # 现代官方标准语法（先从设备安全卸载再移除驱动包）
+# 若提示驱动正在使用但确认需废弃：pnputil /delete-driver oemXX.inf /uninstall /force
 ```
 
 规则：同一驱动（同名 INF）保留**最新版本**，删其余旧版。实战案例删除约 40 个旧驱动释放约 8 GB（多数为 NVIDIA）。第三方图形化工具 DevManView 亦可，但 pnputil 最稳。删除后接入新设备需重新联网装驱动（属预期行为）。
@@ -133,11 +134,26 @@ Windows 更新、商店、Edge、Defender 的下载经由 Delivery Optimization�
 - 或 `C:\ProgramData\Microsoft\Windows\DeliveryOptimization\Cache`
 
 清理方式（按优先级）：
-1. 设置 → Windows 更新 → 高级选项 → 传递优化（可清空或限制带宽/缓存盘）
-2. `cleanmgr` 勾选相关项
-3. 手动清空缓存目录（删了下次更新重新下载，无风险；建议先停 `DoSvc` 服务避免占用，`Stop-Service DoSvc`）
+1. **PowerShell 官方原生 Cmdlet（最推荐）**：
+   ```powershell
+   Clear-DeliveryOptimizationCache -Force
+   ```
+2. 设置 → Windows 更新 → 高级选项 → 传递优化（可清空或限制带宽/缓存盘）
+3. `cleanmgr` 勾选"传递优化文件"
+4. 手动清空缓存目录（删了下次更新重新下载，无风险；建议先停 `DoSvc` 服务避免占用，`Stop-Service DoSvc`）
 
 可选的更优方案：组策略/注册表把缓存目录改到非系统盘（`DoCachePath`），一劳永逸。
+
+## 系统崩溃转储（Crash Dump）与错误报告清理
+
+当 Windows 蓝屏或桌面程序崩溃时，系统会在 C 盘保留转储快照，积攒过多会虚耗数 GB 空间：
+
+- **系统核心转储**：`C:\Windows\MEMORY.DMP`（蓝屏全内存转储，常占 1GB~10GB）
+- **内核小转储**：`C:\Windows\Minidump\`（每次蓝屏生成的 `.dmp` 记录）
+- **应用错误报告**：`%LOCALAPPDATA%\CrashDumps`、`C:\ProgramData\Microsoft\Windows\WER`
+
+**安全清理原则（对标 ChrisTitusTech winutil & Optimizer）**：
+若当前电脑运行稳定，且用户不需要排查历史蓝屏 dump 日志，以上文件属于 🟢 LOW 级缓存，可直接使用 `SafeRecycle` 移入回收站或通过 `cleanmgr`（勾选"系统错误内存转储文件"）安全释放。
 
 ## 注册表残留检测（可选，需谨慎）
 

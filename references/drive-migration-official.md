@@ -125,7 +125,11 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 | 工具 / 框架 | 官方配置 / 机制 | 命令 / 操作 | 官方来源 |
 |---|---|---|---|
 | **Ollama 本地大模型** | `OLLAMA_MODELS` 环境变量 | 设用户环境变量 `OLLAMA_MODELS=D:\OllamaModels`，重启 Ollama 服务即可将数十 GB 的模型目录整体重定向到 D 盘 | [Ollama 官方 FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.md) |
-| **Hugging Face / PyTorch** | `HF_HOME` 环境变量 | 设用户环境变量 `HF_HOME=D:\HF_Cache`，自动将预训练权重和 datasets 从 `%USERPROFILE%\.cache\huggingface` 移至 D 盘 | [Hugging Face Hub 环境变量](https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables) |
+| **Hugging Face Hub** | `HF_HOME` 环境变量 | 设用户环境变量 `HF_HOME=D:\HF_Cache`，自动将预训练权重和 datasets 从 `%USERPROFILE%\.cache\huggingface` 移至 D 盘 | [Hugging Face Hub 环境变量](https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables) |
+| **ModelScope 魔搭社区** | `MODELSCOPE_CACHE` 环境变量 | 设用户环境变量 `MODELSCOPE_CACHE=D:\ModelScopeCache`，将默认 `~/.cache/modelscope/hub` 迁移至 D 盘 | [ModelScope 官方文档](https://modelscope.cn/docs) |
+| **PyTorch** | `TORCH_HOME` 环境变量 | 设用户环境变量 `TORCH_HOME=D:\TorchCache`，将模型权重从默认 `~/.cache/torch` 迁移至 D 盘 | [PyTorch Hub 官方文档](https://pytorch.org/docs/stable/hub.html) |
+| **Python uv 包管理器** | `UV_CACHE_DIR` / CLI 命令 | 设环境变量 `UV_CACHE_DIR=D:\uv-cache`；或运行 `uv cache prune` 安全修剪，`uv cache clean` 清空全局缓存 | [Astral uv 官方文档](https://docs.astral.sh/uv/reference/cli/#uv-cache) |
+| **Android AVD 模拟器** | `ANDROID_AVD_HOME` 环境变量 | 设用户环境变量 `ANDROID_AVD_HOME=D:\AndroidAVD`，将数十 GB 的安卓虚拟设备镜像（默认在 `~/.android/avd`）整体移至 D 盘 | [Android 官方环境变量指南](https://developer.android.com/tools/variables#emulator) |
 | **npm** | `prefix` / `cache` | `npm config set prefix "D:\nodejs-global"`；`npm config set cache "D:\nodejs-cache"`；把 `D:\nodejs-global` 加入 PATH | [npm Folders](https://docs.npmjs.com/cli/v11/configuring-npm/folders)、[npm Config](https://docs.npmjs.com/cli/v11/using-npm/config) |
 | **pnpm** | `store-dir` / `global-bin-dir` | `pnpm config set store-dir "D:\pnpm-store"` | [pnpm Settings](https://pnpm.io/settings) |
 | **pip** | `cache-dir` | `pip config set global.cache-dir "D:\pip-cache"`；验证 `python -m pip cache dir` | [pip 配置](https://pip.pypa.io/en/stable/topics/configuration/) |
@@ -147,8 +151,8 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 
 | 工具 | 官方方式 | 操作 | 官方来源 |
 |------|---------|------|---------|
-| **Docker Desktop** | 设置里改 Disk image location | 设置→Resources→Advanced→**Disk image location** 改 D 盘（**仅 Hyper-V 后端**）；WSL2 后端用下方 WSL2 迁移 | [Docker 设置文档](https://docs.docker.com/desktop/settings-and-maintenance/settings/)、[Docker + WSL](https://docs.docker.com/desktop/wsl/) |
-| **WSL2（搬 .vhdx）** | `wsl --export` / `--import` | `wsl --shutdown` → `wsl --export <发行版> D:\backup\my.tar` → `wsl --unregister <发行版>`（卸掉旧的）→ `wsl --import <发行版> D:\wsl\<发行版> D:\backup\my.tar --version 2` → `wsl -l -v` 验证 | [WSL 自定义发行版](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro)、[WSL 基础命令](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)（均为官方文档） |
+| **Docker Desktop** | 设置里改 Disk image location | 设置→Resources→Advanced→**Disk image location** 改 D 盘（**仅 Hyper-V 后端**）；WSL2 后端用下方 WSL2 迁移；CLI 原生清理 `docker system prune -a --volumes` | [Docker 设置文档](https://docs.docker.com/desktop/settings-and-maintenance/settings/)、[Docker + WSL](https://docs.docker.com/desktop/wsl/) |
+| **WSL2（稀疏压缩 / 搬盘）** | 官方原生稀疏压缩（Win11 WSL 2.0+）或 export/import | **原生稀疏缩容**：`wsl --shutdown` → `wsl --manage <发行版> --set-sparse true`（自动缩容）；<br>**搬盘重定向**：`wsl --shutdown` → `wsl --export <发行版> D:\backup\my.tar` → `wsl --unregister <发行版>` → `wsl --import <发行版> D:\wsl\<发行版> D:\backup\my.tar --version 2`；<br>**离线 compact 压缩**：`wsl --shutdown` → `diskpart` → `select vdisk file="<ext4.vhdx路径>"` → `compact vdisk` | [WSL 基础命令与管理](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)、[WSL 自定义发行版](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro) |
 | **VirtualBox** | 默认机器文件夹 | 文件→全局设置→General→**Default Machine Folder** 改 D 盘；已有 VM 用菜单"复制/移动"迁移 | [VirtualBox Manual](https://www.virtualbox.org/manual/ch03.html) |
 | **VMware Workstation** | 默认虚拟机位置 | 编辑→首选项→工作区→默认虚拟机位置改 D 盘；旧 VM 直接搬目录后"打开" | [官方文档:Configuring the Default Locations for Virtual Machine Files](https://techdocs.broadcom.com/us/en/vmware-cis/desktop-hypervisors/workstation-pro/17-0/using-vmware-workstation-pro/changing-workstation-pro-preference-settings/configuring-workspace-preference-settings/configuring-the-default-locations-for-virtual-machine-files-and-screenshots.html)（VMware 文档已并入 Broadcom techdocs） |
 

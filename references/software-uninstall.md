@@ -55,30 +55,37 @@ Win+R → appwiz.cpl → Enter → 找到目标 → 右键 → 卸载
 
 ---
 
-## Step 2：专用卸载工具（Geek / Revo / IObit）
+## Step 2：专用卸载工具（BCUninstaller / Geek / Revo）
 
 标准卸载往往留大量垃圾——专用工具能扫出"控制面板看不到"的残留项。
 
-| 工具 | 推荐 | 优势 | 下载 |
+| 工具 | 推荐 | 优势 | 下载 / 仓库 |
 |------|------|------|------|
-| **Geek Uninstaller** | ⭐⭐⭐⭐⭐ | 极轻量（6 MB）、免安装、强制删除（删除时跳过标准卸载，直接扫残留）、支持右键菜单集成 | https://geekuninstaller.com |
+| **BCUninstaller (Bulk Crap Uninstaller)** | ⭐⭐⭐⭐⭐ | **GitHub 顶级开源（Apache-2.0，8.5k+ Stars）**。全自动静默批量卸载、业界最强的残留引擎与智能置信度评估、开源透明安全 | [GitHub 官方仓库](https://github.com/BCUninstaller/Bulk-Crap-Uninstaller) / [官网](https://www.bcuninstaller.com) |
+| **Geek Uninstaller** | ⭐⭐⭐⭐⭐ | 极轻量（6 MB）、免安装单文件、强制删除（删除时跳过标准卸载直接扫残留） | https://geekuninstaller.com |
+| **HiBit Uninstaller** | ⭐⭐⭐⭐ | 免费单文件便携版、功能全面（强制卸载、批量、清理注册表、自启管理） | https://hibitsoft.ir |
 | **Revo Uninstaller Free** | ⭐⭐⭐⭐ | 内置 Hunter Mode（拖动瞄准镜到窗口定位卸载）、清理彻底 | https://www.revouninstaller.com |
 | **IObit Uninstaller** | ⭐⭐⭐ | 中文 UI、有"软件健康"评分、批量卸载 | https://www.iobit.com |
-| **HiBit Uninstaller** | ⭐⭐⭐⭐⭐ | 开源、轻量、功能齐全（强制卸载、批量、清理注册表、Startup 管理） | https://hibitsoft.ir |
 
-**Geek Uninstaller 使用流程**（推荐）：
+**BCUninstaller 使用流程（开源推荐）**：
+1. 下载并运行 BCUninstaller 便携版（无需安装）。
+2. 在软件列表中勾选需要卸载的一款或多款软件 → 点击"Quiet uninstall（静默卸载）"或"Uninstall"。
+3. 软件卸载后自动触发“Look for leftovers（残留扫描）”。
+4. **置信度过滤**：BCU 会将扫描结果分为 Very High / Good / Questionable / Bad。默认选择 High 置信度项，存疑项需人工核对后再删除。
+
+**Geek Uninstaller 使用流程**（极速单文件）：
 1. 下载（不安装，绿色版）
 2. 右键目标软件 → "卸载"（先走标准流程）
 3. 卸载完成后弹窗"扫描注册表残留" → 勾选全部 → 删除
 4. 再扫描"文件残留" → 全部删除
 
-**强制卸载**（标准卸载卡死/失败时）：
-- Geek：右键 → "强制卸载"（直接删文件 + 注册表，跳过正常卸载）
-- Revo：高级模式 → "强制卸载"
-
 ---
 
 ## Step 3：残留清理（AppData + 注册表 + 服务 + 计划任务）
+
+> **残留甄别核心原则（借鉴 BCUninstaller 置信度机制）**：
+> - 🟢 **高置信度（安全可清）**：目录名与已卸载软件名完全一致、包含该软件专属 GUID、或位于该软件独立子目录中（如 `%APPDATA%\360safe`）。
+> - 🟡 **低置信度/存疑（强制人工确认）**：目录为大厂公共目录（如 `Tencent`、`Microsoft`、`Adobe`、`Common Files`），里面可能共存其他仍在使用的软件数据，**严禁整目录删除**，必须深入到具体子目录核实。
 
 ### 3.1 AppData 残留
 

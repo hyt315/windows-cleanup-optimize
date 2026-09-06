@@ -99,12 +99,26 @@ def validate(root: Path) -> str:
         d_text = drive_mig.read_text(encoding="utf-8")
         if "决策树" not in d_text:
             return "drive-migration-official.md 缺少迁移决策树"
+        if "UV_CACHE_DIR" not in d_text or "ANDROID_AVD_HOME" not in d_text or "set-sparse" not in d_text:
+            return "drive-migration-official.md 缺少 uv / AVD / WSL 稀疏压缩核心依据"
 
     mklink_mig = root / "references" / "mklink-migration.md"
     if mklink_mig.is_file():
         m_text = mklink_mig.read_text(encoding="utf-8")
         if "官方限制" not in m_text or "失败案例" not in m_text:
             return "mklink-migration.md 缺少官方限制与真实失败案例"
+
+    sys_clean = root / "references" / "system-cleanup.md"
+    if sys_clean.is_file():
+        s_text = sys_clean.read_text(encoding="utf-8")
+        if "Clear-DeliveryOptimizationCache" not in s_text or "pnputil /delete-driver" not in s_text:
+            return "system-cleanup.md 缺少原生传递优化或现代 pnputil /delete-driver 语法"
+
+    soft_uninst = root / "references" / "software-uninstall.md"
+    if soft_uninst.is_file():
+        u_text = soft_uninst.read_text(encoding="utf-8")
+        if "BCUninstaller" not in u_text:
+            return "software-uninstall.md 缺少 BCUninstaller 开源推荐"
 
     return ""
 
