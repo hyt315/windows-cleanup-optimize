@@ -34,7 +34,9 @@ $script:findings = @()
 function Log($s) { $script:lines += $s; Write-Host $s }
 function Get-DirSize($p) {
     if (-not (Test-Path $p)) { return 0 }
-    $s = (Get-ChildItem $p -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum -EA SilentlyContinue).Sum
+    $s = (Get-ChildItem $p -Recurse -Force -EA SilentlyContinue |
+          Where-Object { -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) } |
+          Measure-Object Length -Sum -EA SilentlyContinue).Sum
     if ($null -eq $s) { 0 } else { $s }
 }
 function MB($b) { if ($null -eq $b -or $b -eq 0) { '0 MB' } else { '{0:N1} MB' -f ($b/1MB) } }
@@ -452,6 +454,17 @@ Log ""
 Log "=== [T14] 电源计划 ==="
 $ps = & powercfg /getactivescheme 2>$null
 Log "  当前: $ps"
+Log ""
+
+# ===== [T21] CompactOS 压缩状态 =====
+Log "=== [T21] CompactOS 压缩状态 ==="
+$compactQuery = & compact.exe /compactos:query 2>$null
+if ($compactQuery) {
+    $cState = ($compactQuery | Out-String).Trim()
+    Log "  $cState"
+} else {
+    Log "  CompactOS: 未能获取状态"
+}
 Log ""
 
 # ===== 自动画像反推 =====

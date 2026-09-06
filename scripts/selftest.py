@@ -79,8 +79,16 @@ def validate(root: Path) -> str:
         missing = [t for t in REQUIRED_TEMPLATES if t not in scan_text]
         if missing:
             return f"scan-scripts.md 缺关键模板: {missing}"
+        if "Query-CompactOS" not in scan_text or "Analyze-WinSxS" not in scan_text:
+            return "scan-scripts.md 缺少 CompactOS 探测或 WinSxS 分析模板"
+
+    full_scan = root / "scripts" / "full_scan.ps1"
+    if full_scan.is_file():
+        fs_text = full_scan.read_text(encoding="utf-8")
+        if "ReparsePoint" not in fs_text or "compactos:query" not in fs_text:
+            return "full_scan.ps1 缺少 ReparsePoint 属性过滤或 CompactOS 探测"
     else:
-        return "references/scan-scripts.md 不存在"
+        return "scripts/full_scan.ps1 不存在"
 
     # 3. 踩坑条目数断言
     pitfalls = root / "references" / "pitfalls.md"

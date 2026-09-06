@@ -18,8 +18,14 @@
 - **工作流指令就近内联动作重构与弱引用治理（`SKILL.md`）**：
   - 全面消除流程中“详见/可参考”弱引用措辞，升级为规范的 `👉 动作：先读 [文件]` 就近内联动作指令，确保 Agent 调度时不漏步、不跳步；
   - 将深度清理避坑库无缝挂载至核心安全原则与分模块执行流程中。
+- **核心扫描器与脚本库硬防御升级（`scripts/full_scan.ps1` + `references/scan-scripts.md`）**：
+  - **ReparsePoint 重解析点硬过滤**：在 `Get-DirSize`、`Scan-Directory` 与 `Scan-NonSystemDrive` 中加入 `ReparsePoint` 属性硬过滤，彻底杜绝扫描过程中因读取 OneDrive/iCloud 随选占位符或目录 Junction 引发的水合雪崩与软链接死循环；
+  - **模板 21（CompactOS 压缩状态查询与安全管理）**：新增 `Query-CompactOS`、`Enable-CompactOS` 与 `Disable-CompactOS` 原生 PowerShell 模板；
+  - **模板 22（WinSxS 组件库安全分析与标准清理）**：新增 `Analyze-WinSxS` 与 `Start-SafeComponentCleanup` 原生 PowerShell 模板，代码级物理隔绝 `/ResetBase` 参数；
+  - **全量扫描探针集成**：`scripts/full_scan.ps1` 增加 `[T21]` CompactOS 压缩状态只读探针。
 - **回归测试套件强化（`scripts/selftest.py`）**：
-  - 扩展 `REQUIRED_REFS` 必检清单，新增 `ResetBase`、`ReparsePoint`、`Installer` 缓存等底层避坑要点的深度内容级断言校验。
+  - 扩展 `REQUIRED_REFS` 必检清单，新增 `ResetBase`、`ReparsePoint`、`Installer` 缓存等底层避坑要点的深度内容级断言校验；
+  - 补充对 `full_scan.ps1` ReparsePoint 属性过滤、CompactOS 与 WinSxS 模板的回归断言。
 
 ## [1.8.0] - 2026-09-06
 

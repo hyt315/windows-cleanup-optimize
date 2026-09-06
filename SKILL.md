@@ -56,7 +56,7 @@ description: Diagnoses and cleans Windows disk space, identifies and uninstalls 
 
 | 文件 | 何时阅读 / 覆盖内容 |
 |------|-------------------|
-| [references/scan-scripts.md](references/scan-scripts.md) | 执行任何扫描/清理/优化前，先读对应 PowerShell 模板（1-20） |
+| [references/scan-scripts.md](references/scan-scripts.md) | 执行任何扫描/清理/优化前，先读对应 PowerShell 模板（1-22） |
 | [references/windows-cleanup-optimize-pitfalls.md](references/windows-cleanup-optimize-pitfalls.md) | 涉及 DISM、WinSxS、云端随选文件遍历、Installer 缓存、VSS 还原点等深水操作时，先读避坑与官方规范基线 |
 | [references/pitfalls.md](references/pitfalls.md) | 遇到异常/边界情况时，先查踩坑记录（含 86 条权威踩坑规避） |
 | [references/startup-audit.md](references/startup-audit.md) | 开机慢、自启动多、需要禁用自启（含 Edge/Chrome「彻底关闭」、WMI 常驻与快捷方式审计） |

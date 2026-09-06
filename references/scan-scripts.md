@@ -39,7 +39,9 @@
 function Scan-Directory {
     param([string]$Path, [int]$TopN = 20)
     Get-ChildItem $Path -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        # 排除 ReparsePoint 重解析点（防 OneDrive/iCloud 随选占位符水合雪崩与软链接循环）
         $size = (Get-ChildItem $_.FullName -Recurse -Force -ErrorAction SilentlyContinue |
+                 Where-Object { -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) } |
                  Measure-Object Length -Sum -ErrorAction SilentlyContinue).Sum
         if ($null -eq $size) { $size = 0 }
         [PSCustomObject]@{
@@ -65,6 +67,7 @@ function Scan-NonSystemDrive {
     $root = "${DriveLetter}:\"
     Get-ChildItem $root -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object {
         $size = (Get-ChildItem $_.FullName -Recurse -Force -ErrorAction SilentlyContinue |
+                 Where-Object { -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) } |
                  Measure-Object Length -Sum -ErrorAction SilentlyContinue).Sum
         if ($null -eq $size) { $size = 0 }
         [PSCustomObject]@{
@@ -720,6 +723,46 @@ function Catch-ForegroundPopup {
     } else {
         Write-Host "未能捕获到活动窗口，请重试。" -ForegroundColor Red
     }
+}
+```
+
+### 21. CompactOS 压缩状态查询与安全管理
+
+```powershell
+# 1. 查询系统当前 CompactOS 压缩状态（纯只读）
+function Query-CompactOS {
+    Write-Host "=== CompactOS 状态查询 ===" -ForegroundColor Cyan
+    compact.exe /compactos:query
+}
+
+# 2. 安全启用 CompactOS 无损压缩（可安全释放 2.0GB ~ 4.5GB C 盘空间，不影响系统启动速度）
+# 须以管理员身份运行并在用户明确授权后执行
+function Enable-CompactOS {
+    Write-Host "=== 正在启用 CompactOS 核心系统文件无损压缩（耗时约 3-10 分钟）===" -ForegroundColor Yellow
+    compact.exe /compactos:always
+}
+
+# 3. 恢复/回退为未压缩状态
+function Disable-CompactOS {
+    Write-Host "=== 正在恢复 CompactOS 状态 ===" -ForegroundColor Yellow
+    compact.exe /compactos:never
+}
+```
+
+### 22. WinSxS 组件存储库安全分析与清理（严禁 /ResetBase）
+
+```powershell
+# 1. 分析 WinSxS 可回收空间与是否建议清理（纯只读排查）
+function Analyze-WinSxS {
+    Write-Host "=== 正在分析 WinSxS 组件存储库（耗时约 1-3 分钟）===" -ForegroundColor Cyan
+    Dism.exe /Online /Cleanup-Image /AnalyzeComponentStore
+}
+
+# 2. 执行标准安全回收（仅清理被取代的旧版本，保留当前 LCU 回滚能力）
+# 🚨 警告：严禁追加 /ResetBase 参数！否则当前所有已安装累积更新将永久无法卸载回退。
+function Start-SafeComponentCleanup {
+    Write-Host "=== 执行 WinSxS 标准安全清理（安全保留回滚点）===" -ForegroundColor Yellow
+    Dism.exe /Online /Cleanup-Image /StartComponentCleanup
 }
 ```
 
