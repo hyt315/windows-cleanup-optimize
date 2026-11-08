@@ -62,6 +62,7 @@
   - `case-study.md` 和 `trae-guide.md` 合并为 `migration-cases.md`。
 - description 改为中英双语，写进用户的原话，并写明不适用的场景。
 - selftest 自动核对文档里写的模板数量，防止数字和实际不一致。
+- README（中英）保留原有章节结构，内容按 v2.0 全部更新：手册数、模板数、六阶段流程、安全原则、文件结构、FAQ，并加 CI 徽章；横幅去掉"100% 可回退""ZERO-HARM GUARANTEED"；PR 模板与 SECURITY.md 同步新规则。
 - README 删掉不存在的文件（`validate_repo.py`、`agents/`、`SUPPORT.md`）和"绝不会误删"这类绝对化承诺。
 
 ### 已知未做

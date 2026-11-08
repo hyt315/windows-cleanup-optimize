@@ -89,7 +89,7 @@
     <g transform="translate(0, 0)">
       <rect width="365" height="28" rx="14" fill="url(#badgeGrad)" stroke="#10b981" stroke-width="1" stroke-opacity="0.5" />
       <circle cx="16" cy="14" r="4.5" fill="#10b981" />
-      <text x="30" y="18.5" class="header-pill">WINDOWS 10 / 11 TUNING • ZERO-HARM GUARANTEED</text>
+      <text x="30" y="18.5" class="header-pill">WINDOWS 10 / 11 TUNING • DRY-RUN FIRST • UNDO</text>
     </g>
 
     <!-- Main Title -->
@@ -99,7 +99,7 @@
     <text x="0" y="114" class="subtitle">Windows 磁盘瘦身 • 弹窗静音 • 自启动清障 • 性能调优</text>
 
     <!-- Tagline -->
-    <text x="0" y="146" class="tagline">Zero-Harm Architecture, Read-Only Telemetry First &amp; Multi-Tier Fact Card Delivery</text>
+    <text x="0" y="146" class="tagline">Read-Only Diagnosis First, Dry-Run by Default &amp; Generated Undo Script</text>
 
     <!-- Feature Pills Row -->
     <g transform="translate(0, 182)">
@@ -111,7 +111,7 @@
       <!-- Pill 2: 零伤害可回退 -->
       <g transform="translate(176, 0)">
         <rect width="152" height="32" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" />
-        <text x="13" y="21" class="badge-text">🛡️ 零伤害 / 100% 可回退</text>
+        <text x="13" y="21" class="badge-text">🛡️ 先演练 / 一键回退</text>
       </g>
       <!-- Pill 3: IFEO 弹窗静音 -->
       <g transform="translate(338, 0)">
