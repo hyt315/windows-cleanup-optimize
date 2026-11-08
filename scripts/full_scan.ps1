@@ -70,7 +70,7 @@ if ($os.Version -like '10.0.1*') { Log "提示: 这是 Windows 10（微软已于
 Log ""
 
 # ===== 运行前检查（只读；只提示，不阻断扫描）=====
-Log "=== 运行前检查 ==="
+Log "=== [PRE] 运行前检查 ==="
 $pre = @()
 if (-not $isAdmin) { $pre += "非管理员：部分数据不全。修法：开始菜单搜 PowerShell → 右键「以管理员身份运行」，再执行本脚本。" }
 if ($PSVersionTable.PSVersion.Major -lt 5) { $pre += "PowerShell 版本过低（$($PSVersionTable.PSVersion)）。修法：安装 Windows Management Framework 5.1。" }
@@ -550,7 +550,7 @@ if ($personas.Count -gt 0) {
 Log ""
 
 # ===== 发现汇总（按档位）=====
-Log "===== 发现汇总（按档位）====="
+Log "===== [SUM] 发现汇总（按档位）====="
 if ($findings.Count -eq 0) {
     Log "  未发现需要处理的项"
 } else {

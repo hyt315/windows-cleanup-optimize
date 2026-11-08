@@ -84,7 +84,7 @@ jobs:
           $report = Get-ChildItem $out -Filter 'full_scan_*.txt' | Select-Object -First 1
           if (-not $report) { Write-Host '::error::no report written'; exit 1 }
           $text = Get-Content $report.FullName -Raw -Encoding UTF8
-          foreach ($marker in '[T0]', '[T9]', '[T5]', '[T10]', '运行前检查', '发现汇总') {
+          foreach ($marker in '[T0]', '[T9]', '[T5]', '[T10]', '[PRE]', '[SUM]') {
             if (-not $text.Contains($marker)) { Write-Host "::error::report missing $marker"; exit 1 }
           }
           Write-Host "OK: read-only, report $($report.Length) bytes"

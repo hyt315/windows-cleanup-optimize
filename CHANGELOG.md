@@ -23,7 +23,7 @@
 ### 代码质量
 - 8 个模板函数改用 PowerShell 认可的动词，例如 `Scan-Directory` 改为 `Measure-Directory`，`Query-CompactOS` 改为 `Get-CompactOSState`。文档和 selftest 已同步。
 - 新增 `PSScriptAnalyzerSettings.psd1`，CI 加跑 PSScriptAnalyzer，目前 0 条告警。
-- 空 `catch {}` 改为写 Verbose；Windows CI 额外检查报告里有"运行前检查"和"发现汇总"两段。
+- 空 `catch {}` 改为写 Verbose；Windows CI 额外检查报告里有"运行前检查"（[PRE]）和"发现汇总"（[SUM]）两段。
 
 ## [2.0.0] - 2026-11-08
 
