@@ -41,9 +41,9 @@ v2.0 起，模板代码不再写在本文件里，而是放在 `scripts/template
 
 > 代码：[`scripts/templates/t01-scan-user-profile.ps1`](../scripts/templates/t01-scan-user-profile.ps1)（只读模板可直接运行；写操作模板默认演练，加 `-Apply` 才执行）
 
-扫描顺序（从粗到细）：第一层 `$env:USERPROFILE` 一级目录（含隐藏）→ 第二层 `AppData\Local` → 第三层 `AppData\Roaming` → 第四层 `AppData\Local\Programs` → 第五层用户目录隐藏目录（.cache、.rustup、.hermes-web-ui 等）。对每一层调用 `Scan-Directory` 汇总。
+扫描顺序（从粗到细）：第一层 `$env:USERPROFILE` 一级目录（含隐藏）→ 第二层 `AppData\Local` → 第三层 `AppData\Roaming` → 第四层 `AppData\Local\Programs` → 第五层用户目录隐藏目录（.cache、.rustup、.hermes-web-ui 等）。对每一层调用 `Measure-Directory` 汇总。
 
-> **模板作用域警告（2026-08 实战踩坑）：** 若要把扫描结果追加到脚本级变量（`$report += ...`），**必须写成 `$script:report += ...`**。PowerShell 函数内普通赋值会创建函数局部变量、不会写回外部变量——表现是扫描报告大片空白、白扫一轮。推荐做法：让函数直接返回对象数组（如上），由调用方 `$rows = Scan-Directory ...` 捕获输出。
+> **模板作用域警告（2026-08 实战踩坑）：** 若要把扫描结果追加到脚本级变量（`$report += ...`），**必须写成 `$script:report += ...`**。PowerShell 函数内普通赋值会创建函数局部变量、不会写回外部变量——表现是扫描报告大片空白、白扫一轮。推荐做法：让函数直接返回对象数组（如上），由调用方 `$rows = Measure-Directory ...` 捕获输出。
 
 > **进度反馈：** 全盘扫描耗时 2-6 分钟且无输出，用户会以为卡死。建议每完成一层输出一行 `Write-Host "[1/5] 用户目录扫描完成 ..."`；Bash 调用设 `timeout 300000ms` 以上。
 
@@ -127,10 +127,10 @@ v2.0 起，模板代码不再写在本文件里，而是放在 `scripts/template
 
 > 代码：[`scripts/templates/t09-verify-report.ps1`](../scripts/templates/t09-verify-report.ps1)（只读模板可直接运行；写操作模板默认演练，加 `-Apply` 才执行）
 
-管理员权限判定与提权：代码在 `t09-verify-report.ps1` 末尾；公共模块里也有 `Test-WcoAdmin`。
+默认核对所有本地盘，也可用 `-Drive C,D` 指定。普通权限时只打印提权命令，不自动弹 UAC；公共模块里也有 `Test-WcoAdmin`。
 
 提权脚本要点：
-- **日志必须写绝对路径**（`Out-File 'C:\Users\<用户名>\AppData\Local\Temp\report.txt'`），不要用 `$env:TEMP`——提权进程的 TEMP 可能指向不同位置，导致报告"丢失"。
+- **报告路径显式传进去**（`-OutDir <绝对路径>`）。用另一个管理员账号提权时，提权进程的 `$env:TEMP` 指向那个账号，报告会"丢失"。
 - 提权后移入回收站通常就能成功。仍失败（被锁）时，**不要退回 `Remove-Item -Recurse -Force`**，那是永久删除（v2.0 改）。正确做法是记下来、让用户重启后再试；确实是 0 项的空壳，用 `rmdir`。
 - 空壳目录（0 项内容）回收失败的另类原因：目录内有 0 字节/隐藏文件未被统计——先 `Get-ChildItem -Recurse -Force` 核对项数，再决定 `rmdir`（只删空目录，非空自动失败，安全）。
 - 一次 UAC 弹窗处理尽量合并所有需提权的目录，减少打扰。

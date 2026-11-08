@@ -28,6 +28,13 @@ jobs:
           $c.Run.Exit = $true
           $c.Output.Verbosity = 'Detailed'
           Invoke-Pester -Configuration $c
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          $r | Format-Table -AutoSize
+          if ($r) { exit 1 }
 
   windows:
     name: Windows (PowerShell 5.1 + 7) read-only proof
@@ -77,7 +84,7 @@ jobs:
           $report = Get-ChildItem $out -Filter 'full_scan_*.txt' | Select-Object -First 1
           if (-not $report) { Write-Host '::error::no report written'; exit 1 }
           $text = Get-Content $report.FullName -Raw -Encoding UTF8
-          foreach ($marker in '[T0]', '[T9]', '[T5]', '[T10]') {
+          foreach ($marker in '[T0]', '[T9]', '[T5]', '[T10]', '运行前检查', '发现汇总') {
             if (-not $text.Contains($marker)) { Write-Host "::error::report missing $marker"; exit 1 }
           }
           Write-Host "OK: read-only, report $($report.Length) bytes"

@@ -1,7 +1,7 @@
 ﻿# 模板 2：scan-nonsystem-drive（从 references/scan-scripts.md 抽出，v2.0）
 # 用法见 references/scan-scripts.md 第 2 节。
 
-function Scan-NonSystemDrive {
+function Measure-NonSystemDrive {
     param([string]$DriveLetter = "D")
     $root = "${DriveLetter}:\"
     Get-ChildItem $root -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object {

@@ -1,7 +1,7 @@
 ﻿# 模板 1：scan-user-profile（从 references/scan-scripts.md 抽出，v2.0）
 # 用法见 references/scan-scripts.md 第 1 节。
 
-function Scan-Directory {
+function Measure-Directory {
     param([string]$Path, [int]$TopN = 20)
     Get-ChildItem $Path -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object {
         # 排除 ReparsePoint 重解析点（防 OneDrive/iCloud 随选占位符水合雪崩与软链接循环）

@@ -1,7 +1,7 @@
 ﻿# 模板 17：detect-ai-model-caches（从 references/scan-scripts.md 抽出，v2.0）
 # 用法见 references/scan-scripts.md 第 17 节。
 
-function Scan-AiAndDevCaches {
+function Find-AiDevCache {
     $aiTargets = @(
         @{ Label = "Ollama 本地大模型"; Path = "$env:USERPROFILE\.ollama\models" },
         @{ Label = "HuggingFace 权重缓存"; Path = "$env:USERPROFILE\.cache\huggingface" },

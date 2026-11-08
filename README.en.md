@@ -103,7 +103,7 @@ gh skill install hyt315/windows-cleanup-optimize windows-cleanup-optimize --agen
 ### Option D: Run the scan and tests yourself
 
 ```powershell
-# Elevated PowerShell, from the repo folder
+# Elevated PowerShell, from the repo folder; the scan is read-only and its report opens with a pre-flight check
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\full_scan.ps1   # read-only, report in %TEMP%\wco
 python scripts/selftest.py                                                    # structure / counts / BOM / syntax
 Invoke-Pester ./tests                                                         # module unit tests (Pester 5+)

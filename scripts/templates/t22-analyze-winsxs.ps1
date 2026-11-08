@@ -2,7 +2,7 @@
 # 用法见 references/scan-scripts.md 第 22 节。
 
 # 1. 分析 WinSxS 可回收空间与是否建议清理（纯只读排查）
-function Analyze-WinSxS {
+function Measure-WinSxS {
     Write-Host "=== 正在分析 WinSxS 组件存储库（耗时约 1-3 分钟）===" -ForegroundColor Cyan
     Dism.exe /Online /Cleanup-Image /AnalyzeComponentStore
 }

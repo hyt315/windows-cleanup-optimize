@@ -31,8 +31,8 @@ SKILL_ROOT = Path(__file__).resolve().parent.parent
 
 # 关键模板：scripts/templates 下的文件里必须能找到这些标识
 REQUIRED_TEMPLATES = (
-    "Scan-Directory",        # 模板 1 用户目录扫描
-    "Scan-NonSystemDrive",   # 模板 2 非系统盘扫描
+    "Measure-Directory",        # 模板 1 用户目录扫描
+    "Measure-NonSystemDrive",   # 模板 2 非系统盘扫描
     "installedLower",        # 模板 3 Roaming 交叉比对
     "knownSys",              # 模板 4 安装目录残留
     "updater",               # 模板 5 更新包检测
@@ -40,8 +40,8 @@ REQUIRED_TEMPLATES = (
     "Invoke-WcoRecycle",     # 模板 7 回收站（v2.0 走公共模块）
     "LOCALAPPDATA\\Temp",   # 模板 8 被锁文件
     "Get-PSDrive",           # 模板 9 验证汇报
-    "Query-CompactOS",       # 模板 21
-    "Analyze-WinSxS",        # 模板 22
+    "Get-CompactOSState",       # 模板 21
+    "Measure-WinSxS",        # 模板 22
 )
 EXPECTED_TEMPLATE_COUNT = 22
 

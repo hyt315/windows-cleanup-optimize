@@ -1,7 +1,7 @@
 ﻿# 模板 20：locate-popup-window（从 references/scan-scripts.md 抽出，v2.0）
 # 用法见 references/scan-scripts.md 第 20 节。
 
-function Catch-ForegroundPopup {
+function Watch-ForegroundPopup {
     Add-Type @"
         using System; using System.Runtime.InteropServices;
         public class WindowHelper {

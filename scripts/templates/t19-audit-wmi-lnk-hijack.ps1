@@ -1,7 +1,7 @@
 ﻿# 模板 19：audit-wmi-lnk-hijack（从 references/scan-scripts.md 抽出，v2.0）
 # 用法见 references/scan-scripts.md 第 19 节。
 
-function Audit-HiddenPersistence {
+function Find-HiddenPersistence {
     Write-Host "=== WMI 隐蔽自启动事件消费者 ==="
     $wmiConsumers = Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -EA SilentlyContinue
     if ($wmiConsumers) {

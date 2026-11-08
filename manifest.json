@@ -1,6 +1,6 @@
 {
   "name": "windows-cleanup-optimize",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "owner": "hyt315",
   "updated_at": "2026-11-08",
   "description": "Windows 10/11 cleanup & optimization skill: read-only diagnosis, tiered plan, dry-run by default, recycle-bin safety checks, change log with generated undo script, official-first migration (incl. Dev Drive)."

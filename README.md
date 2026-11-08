@@ -105,7 +105,7 @@ gh skill install hyt315/windows-cleanup-optimize windows-cleanup-optimize --agen
 ### 方式 D：不用 Agent，自己跑扫描与自测
 
 ```powershell
-# 以管理员身份打开 PowerShell，进入仓库目录
+# 以管理员身份打开 PowerShell，进入仓库目录；扫描只读，报告开头会列出缺的条件和修法
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\full_scan.ps1   # 只读扫描，报告在 %TEMP%\wco
 python scripts/selftest.py                                                    # 结构 / 计数 / BOM / 语法自测
 Invoke-Pester ./tests                                                         # 公共模块单元测试（需 Pester 5+）

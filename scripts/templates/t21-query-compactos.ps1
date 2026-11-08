@@ -2,7 +2,7 @@
 # 用法见 references/scan-scripts.md 第 21 节。
 
 # 1. 查询系统当前 CompactOS 压缩状态（纯只读）
-function Query-CompactOS {
+function Get-CompactOSState {
     Write-Host "=== CompactOS 状态查询 ===" -ForegroundColor Cyan
     compact.exe /compactos:query
 }

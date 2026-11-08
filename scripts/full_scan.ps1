@@ -2,9 +2,9 @@
 .SYNOPSIS
     windows-cleanup-optimize 一键全量扫描脚本
 .DESCRIPTION
-    按 SKILL.md 阶段 0-A "全量扫描模式" 执行，一次性跑完 scripts/templates 下的全部只读扫描模板。
-    输出三段式报告：按档位 + 按类型 + 按来源模板。
-    自动反推用户画像（家庭/开发者/游戏玩家/笔记本/OEM）。
+    SKILL.md 阶段 1（只读诊断）的入口：一次跑完全部只读扫描，不改设置、不删文件。
+    开头做运行前检查（权限、系统版本、待重启、还原点、C 盘余量），缺什么直接给修法。
+    结尾按档位汇总发现项，并自动反推用户画像（家庭/开发者/AI/游戏/笔记本）。
 
 .PARAMETER Quick
     跳过最耗时的两项（T2 非系统盘、T4 安装目录递归统计），用于 CI 或快速体检。
@@ -18,7 +18,7 @@
 
 .NOTES
     作者：windows-cleanup-optimize 团队
-    版本：v2.0.0（2026-11：UTF-8 BOM、管理员检测、开机耗时实测、报告移到 %TEMP%）
+    版本：v2.0.1
     依赖：Windows 10/11 + PowerShell 5.1+ + 标准命令行工具（powercfg）
 #>
 
@@ -34,6 +34,7 @@ $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
 $report = Join-Path $OutDir "full_scan_$ts.txt"
 $script:lines  = @()
 $script:findings = @()
+$script:startTime = Get-Date
 
 function Log($s) { $script:lines += $s; Write-Host $s }
 function Get-DirSize($p) {
@@ -63,9 +64,26 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if ($isAdmin) {
     Log "权限: 管理员（完整扫描）"
 } else {
-    Log "权限: 普通用户 —— 以下几项数据可能不全：系统目录体积、服务配置、WMI 订阅、开机耗时日志。需要完整结果请右键“以管理员身份运行”。"
+    Log "权限: 普通用户 —— 以下几项数据可能不全：系统目录体积、服务配置、WMI 订阅、开机耗时日志。需要完整结果请右键「以管理员身份运行」。"
 }
 if ($os.Version -like '10.0.1*') { Log "提示: 这是 Windows 10（微软已于 2025-10-14 停止常规支持）。不要关闭 Windows 更新与 Defender。" }
+Log ""
+
+# ===== 运行前检查（只读；只提示，不阻断扫描）=====
+Log "=== 运行前检查 ==="
+$pre = @()
+if (-not $isAdmin) { $pre += "非管理员：部分数据不全。修法：开始菜单搜 PowerShell → 右键「以管理员身份运行」，再执行本脚本。" }
+if ($PSVersionTable.PSVersion.Major -lt 5) { $pre += "PowerShell 版本过低（$($PSVersionTable.PSVersion)）。修法：安装 Windows Management Framework 5.1。" }
+$pendingReboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+                 (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
+if ($pendingReboot) { $pre += "系统有待完成的更新重启。修法：先重启一次再清理，否则更新缓存删不动、DISM 也会报错。" }
+$srDisabled = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore' -EA SilentlyContinue).DisableSR -eq 1
+$srInterval = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore' -EA SilentlyContinue).RPSessionInterval
+if ($srDisabled -or $srInterval -eq 0) { $pre += "系统还原可能未开启，改服务或驱动前建不了还原点。修法：Win+R 输入 sysdm.cpl → 系统保护 → 选 C 盘 → 配置 → 启用。" }
+$cFree = (Get-PSDrive C -EA SilentlyContinue).Free
+if ($cFree -and $cFree -lt 5GB) { $pre += ("C 盘只剩 {0:N1} GB，建还原点和 DISM 可能失败。先做第一档的缓存清理，腾出空间再做其他。" -f ($cFree / 1GB)) }
+if ($pre.Count -eq 0) { Log "  ✅ 全部就绪" } else { $pre | ForEach-Object { Log "  ⚠️  $_" } }
+Log "  扫描只读，可以照常用电脑；通常几分钟，盘越大越久（-Quick 更快）。"
 Log ""
 
 # ===== [T0] 开机耗时实测（Diagnostics-Performance 事件 100，需管理员） =====
@@ -80,7 +98,7 @@ try {
     $script:bootSeconds = [math]::Round((($boots | ForEach-Object { [double](([xml]$_.ToXml()).Event.EventData.Data | Where-Object { $_.Name -eq 'BootTime' }).'#text' }) | Measure-Object -Average).Average / 1000, 1)
     Log "  平均: $($script:bootSeconds) 秒（优化后再跑一次，对比这个数）"
 } catch {
-    Log "  读不到（需要管理员，或该日志被禁用）。用户说开机慢时，改用任务管理器“启动应用”页的“启动影响”列。"
+    Log "  读不到（需要管理员，或该日志被禁用）。用户说开机慢时，改用任务管理器「启动应用」页的「启动影响」列。"
 }
 Log ""
 
@@ -465,7 +483,7 @@ foreach ($dir in $lnkDirs) {
                     Add-Finding 'T19' 'LNK参数劫持' '🟡' $_.FullName 0 'n/a' "参数: $($sc.Arguments)"
                     $hijackedLnks++
                 }
-            } catch {}
+            } catch { Write-Verbose "读不了快捷方式：$($_.Exception.Message)" }
         }
     }
 }
@@ -507,9 +525,12 @@ $personas = @()
 # 家庭：WPS / 360 / 2345 / 腾讯管家
 $wpsFamily = $findings | Where-Object { $_.Path -match 'WPS|Kingsoft|360|2345|QQPCMgr' }
 if ($wpsFamily) { $personas += '🏠 家庭用户（装了 WPS/360/2345/腾讯管家等）' }
-# 开发者：Docker / WSL / VS Code / JetBrains / AI IDE
-$devPaths = $findings | Where-Object { $_.Path -match 'JetBrains|Programs\\Python|Programs\\OpenCode|Programs\\antigravity|\\.codex|\\.gemini|Programs\\HanaAgent' }
-if ($devPaths) { $personas += '👨‍💻 开发者（装了 JetBrains/Python/AI IDE）' }
+# 开发者：直接看常见开发工具目录是否存在（不只看残留列表）
+$devMarkers = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code", "$env:USERPROFILE\.vscode", "$env:LOCALAPPDATA\JetBrains",
+                "$env:LOCALAPPDATA\Programs\Python", "$env:APPDATA\npm", "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.gradle",
+                "$env:ProgramFiles\Docker", "$env:USERPROFILE\.codex", "$env:USERPROFILE\.gemini")
+$devPaths = $devMarkers | Where-Object { Test-Path $_ }
+if ($devPaths) { $personas += '👨‍💻 开发者（装了 VS Code/JetBrains/Python 等开发工具）' }
 # AI 创作者 / 虚拟化用户：本地大模型、WSL2、Docker、AVD 镜像
 $aiPaths = $findings | Where-Object { $_.Type -eq 'AI与虚拟化缓存' -or $_.Path -match 'ollama|huggingface|modelscope|\.android\\avd|\.vhdx' }
 if ($aiPaths) { $personas += '🤖 AI创作者/虚拟化用户（存在本地大模型/WSL/Docker/AVD虚拟磁盘）' }
@@ -524,10 +545,24 @@ if ($personas.Count -gt 0) {
     Log "  你的画像："
     $personas | ForEach-Object { Log "    $_" }
 } else {
-    Log "  未识别出明显画像"
+    Log "  未识别出明显画像，按通用用户处理"
 }
 Log ""
-Log "  针对你画像的专项建议见后续报告"
+
+# ===== 发现汇总（按档位）=====
+Log "===== 发现汇总（按档位）====="
+if ($findings.Count -eq 0) {
+    Log "  未发现需要处理的项"
+} else {
+    $findings | Group-Object Level | Sort-Object Name | ForEach-Object {
+        $sum = ($_.Group | Measure-Object SizeMB -Sum).Sum
+        Log ("  {0} {1} 项，合计 {2:N1} MB" -f $_.Name, $_.Count, $sum)
+        $_.Group | Sort-Object SizeMB -Descending | Select-Object -First 5 | ForEach-Object {
+            Log ("      [{0}] {1}  {2} MB  {3}" -f $_.Template, $_.Type, $_.SizeMB, $_.Path)
+        }
+    }
+}
+Log ("  扫描耗时 {0:N0} 秒" -f ((Get-Date) - $script:startTime).TotalSeconds)
 Log ""
 
 # ===== 写盘 =====
