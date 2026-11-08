@@ -199,7 +199,7 @@ Get-PhysicalDisk | Select-Object FriendlyName, MediaType
 | **mpssvc** | Windows Firewall | ❌ | **绝对不动** |
 | **SecurityHealthService** | Windows Security Health Service | ⚠️ | 安全中心 UI，不用可禁用（不影响 Defender） |
 
-**替代优化**：用 Defender Exclusion（排除列表）让 Defender 跳过 IDE 缓存、构建输出等——详见 `performance-tuning.md`。
+**替代优化**：开发目录放 Dev Drive，Defender 自动用性能模式——详见 `performance-tuning.md` 第七节。
 
 ---
 
@@ -255,6 +255,20 @@ foreach ($p in $thirdPartyUpdates) {
 | **小组件（Widgets）进程链** | `Widgets.exe` 与 4~6 个 `msedgewebview2.exe` | ✅ | **彻底释放 300MB~800MB 物理内存**。官方策略禁用：<br>`reg add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f`<br>回退：`reg delete "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /f` |
 | **Windows 聚焦（Spotlight）静默壁纸拉取** | 锁屏后台网络与遥测 | ✅ | 停止后台静默拉取 4K 商业广告壁纸与遥测：<br>`reg add "HKCU\Software\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsSpotlightFeatures /t REG_DWORD /d 1 /f` |
 | **跨设备连接平台（CDPUserSvc）** | 跨设备剪贴板流转 | ⚠️ | 不使用跨设备协同/手机连接的单机用户，可在服务中将其设为手动（Manual） |
+
+## 十四、Copilot / Recall 等 AI 组件（v2.0 新增，用户主动提出才做）
+
+只在用户明确说"不想要 Copilot / Recall / AI 功能"时处理，全部走系统自带开关，不删系统文件：
+
+| 组件 | 做法（以当前系统界面为准） | 风险 | 回退 |
+|---|---|---|---|
+| **Copilot 应用** | 设置 › 应用 › 已安装的应用 → Microsoft Copilot → 卸载；或 `winget uninstall --name "Copilot"` | 🟢 LOW | 从 Microsoft Store 重新安装 |
+| **Recall（回顾）**（仅 Copilot+ PC） | 设置 › 隐私和安全性 › Recall 和快照：关闭"保存快照"，并删除已有快照 | 🟢 LOW | 同一页面重新打开 |
+| **任务栏 Copilot 按钮** | 设置 › 个性化 › 任务栏 → 关闭 Copilot | 🟢 LOW | 同一页面打开 |
+| **画图 / 记事本 / Edge 里的 AI 功能** | 在各应用自己的设置里关闭 | 🟢 LOW | 同一位置打开 |
+
+- 用组策略或注册表批量关的做法（Win11Debloat 等工具有）版本差异大，本技能不默认使用；用户坚持时按 🟡 MEDIUM 处理，改前用 `Set-WcoRegistryValue` 备份。
+- 不要卸载 `Microsoft Edge WebView2`：很多普通软件依赖它，卸了会打不开。
 
 ---
 
@@ -325,11 +339,19 @@ foreach ($p in $thirdPartyUpdates) {
 
 ### Step 1：备份当前状态
 
+直接运行模板 12（v2.0 起会多导出一列 `ScStart`，恢复时用）：
+
 ```powershell
-# 导出所有服务状态到 CSV（备份）
-Get-Service | Select-Object Name, DisplayName, StartType, Status |
-    Export-Csv "$env:USERPROFILE\services_backup_$(Get-Date -Format 'yyyyMMdd').csv" -NoTypeInformation
-Write-Host "已备份服务状态到: $env:USERPROFILE\services_backup_*.csv"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\templates\t12-snapshot-services.ps1
+```
+
+之后改服务一律用 `Set-WcoServiceStartType`（公共模块），它会再记一次原值并生成 undo.ps1：
+
+```powershell
+Import-Module .\scripts\lib\Wco.Common.psm1
+Set-WcoServiceStartType -Name DiagTrack -StartType disabled          # 演练，看原值
+Set-WcoServiceStartType -Name DiagTrack -StartType disabled -Apply   # 执行
+Export-WcoUndo                                                       # 生成 undo.ps1
 ```
 
 ### Step 2：建系统还原点
@@ -372,21 +394,26 @@ Get-Service | Where-Object { $_.StartType -eq 'Disabled' } | Select-Object Name,
 
 ### 单个服务恢复
 
+**v2.0：恢复成改之前的启动类型，而不是一律 auto。** 很多服务原本是"手动"(demand) 或"自动(延迟启动)"(delayed-auto)，恢复成 auto 反而拖慢开机。用 `scripts/lib/Wco.Common.psm1` 的 `Set-WcoServiceStartType` 改服务，会自动记下原值并写进 undo.ps1。
+
 ```cmd
-sc config <服务名> start= auto
+sc config <服务名> start= <原值：auto / delayed-auto / demand>
 sc start <服务名>
 ```
 
-或者用 GUI：`services.msc` → 找到服务 → 右键 → 属性 → 启动类型改为"自动" → 启动。
+或者用 GUI：`services.msc` → 找到服务 → 右键 → 属性 → 启动类型改回原来的值（自动 / 自动(延迟启动) / 手动）→ 启动。
 
 ### 批量恢复
 
 从之前备份的 CSV 恢复：
 ```powershell
-$backup = Import-Csv "$env:USERPROFILE\services_backup_20260819.csv"
+# v2.0：用模板 12 导出的 ScStart 列。v1.x 用 StartType（Automatic/Manual），sc.exe 不认，恢复会静默失败。
+$backup = Import-Csv (Get-ChildItem "$env:TEMP\wco\services_backup_*.csv" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
 foreach ($svc in $backup) {
-    if ($svc.StartType -ne 'Disabled') {
-        sc.exe config $svc.Name start= $svc.StartType | Out-Null
+    $now = (Get-CimInstance Win32_Service -Filter "Name='$($svc.Name)'")
+    if ($now -and $svc.ScStart) {
+        & sc.exe config $svc.Name start= $svc.ScStart | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Host "[FAIL] $($svc.Name) -> $($svc.ScStart)" }
     }
 }
 ```

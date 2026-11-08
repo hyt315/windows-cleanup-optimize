@@ -137,6 +137,21 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 | **Git for Windows** | `HOME` 环境变量 | 设用户环境变量 `HOME=D:\git-home` | [git-config 官方](https://git-scm.com/docs/git-config) |
 | **JetBrains IDE** | `idea.properties` 重定位 | 复制 `<IDE>\bin\idea.properties`，改 `idea.config.path` / `idea.system.path` / `idea.plugins.path` 到 D 盘 | [Tuning the IDE](https://www.jetbrains.com/help/idea/tuning-the-ide.html) |
 
+### 3.3b 开发者优先：包缓存放 Dev Drive（v2.0，微软官方推荐）
+
+有 D 盘空余（≥50 GB）、Windows 11 22621.2338 及以上的开发者，比 mklink 和逐个改配置更好的做法是建一个 Dev Drive，把代码和包缓存都放进去：
+
+1. 创建：设置 › 系统 › 存储 › 高级存储设置 › 磁盘和卷 › 创建 Dev Drive（推荐"新建 VHD"、VHDX、动态扩展）。**已有分区不能原地转换，格式化会清空该分区**。
+2. 按微软文档设系统环境变量（管理员）并把旧缓存挪过去，例如：
+   - npm：`setx /M npm_config_cache D:\packages\npm`，旧内容在 `%AppData%\npm-cache`（部分机器在 `%LocalAppData%\npm-cache`）
+   - pip：`setx /M PIP_CACHE_DIR D:\packages\pip`，旧内容在 `%LocalAppData%\pip\Cache`
+   - NuGet：`setx /M NUGET_PACKAGES D:\<用户名>\.nuget\packages`（或在 NuGet.Config 里设 `globalPackagesFolder`，微软更推荐）
+   - Cargo：`setx /M CARGO_HOME D:\packages\cargo`；Gradle：`setx /M GRADLE_USER_HOME D:\packages\gradle`；vcpkg：`setx /M VCPKG_DEFAULT_BINARY_CACHE D:\packages\vcpkg`
+3. 关掉所有终端或重启后生效。环境变量改动要写进变更记录，回退是 `setx /M 变量名 ""` 或在"系统属性 › 环境变量"里删除。
+4. 不要放进 Dev Drive 的：Visual Studio、SDK 等开发工具本体（微软明确建议留在 C 盘）；需要 Linux 权限位的 WSL 文件（ReFS 不支持 WSL 的 metadata 挂载选项）。
+
+依据：Microsoft Learn《Set up a Dev Drive on Windows 11》。
+
 ### 3.4 浏览器
 
 | 浏览器 | 官方方式 | 操作 | 官方来源 |
@@ -187,5 +202,5 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 
 - mklink 兜底方案与失败案例 → `mklink-migration.md`
 - 微信/QQ/钉钉 专项 → `chat-apps-migration.md`
-- mklink 迁移实战案例（TRAE/VS Code） → `case-study.md`
+- mklink 迁移实战案例（TRAE/VS Code） → `migration-cases.md`
 - 迁移踩坑库 → `pitfalls.md`

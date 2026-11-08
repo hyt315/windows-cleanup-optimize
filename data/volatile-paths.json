@@ -1,0 +1,86 @@
+{
+  "_说明": "变化快的软件数据路径。软件升级常改目录，每条带核实日期；selftest 对超过 max_age_days 的条目给出复核提醒（不报错）。核实后把 verified_at 改成当天。",
+  "max_age_days": 90,
+  "items": [
+    {
+      "app": "微信 4.x",
+      "kind": "聊天记录与文件",
+      "path": "%USERPROFILE%\\xwechat_files 或 Documents\\xwechat_files",
+      "official_move": "设置 › 账号和存储 › 存储位置",
+      "doc": "references/chat-apps-migration.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "微信 4.x",
+      "kind": "程序数据与小程序缓存",
+      "path": "%APPDATA%\\Tencent\\xwechat",
+      "official_move": "无，只能应用内清理",
+      "doc": "references/chat-apps-migration.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "微信 3.x（旧）",
+      "kind": "孤岛数据",
+      "path": "Documents\\WeChat Files 与 %APPDATA%\\Tencent\\WeChat",
+      "official_move": "确认已迁到 4.x 后再清",
+      "doc": "references/chat-apps-migration.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "企业微信",
+      "kind": "文件与缓存",
+      "path": "Documents\\WXWork 与 %APPDATA%\\Tencent\\WXWork",
+      "official_move": "设置 › 文档/文件管理 › 更改文件存储位置",
+      "doc": "references/chat-apps-migration.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "QQ NT",
+      "kind": "聊天记录与文件",
+      "path": "Documents\\Tencent Files\\<QQ号>",
+      "official_move": "设置 › 存储管理（聊天记录）；设置 › 文件管理（接收文件）",
+      "doc": "references/chat-apps-migration.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "钉钉",
+      "kind": "程序与缓存",
+      "path": "%LOCALAPPDATA%\\DingTalk_91",
+      "official_move": "设置 › 通用 › 文件存储",
+      "doc": "references/chat-apps-migration.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "TRAE SOLO CN",
+      "kind": "IDE 用户数据",
+      "path": "%APPDATA%\\TRAE SOLO CN 与 %USERPROFILE%\\.trae-cn",
+      "official_move": "无，mklink 兜底",
+      "doc": "references/migration-cases.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "Ollama",
+      "kind": "本地模型",
+      "path": "默认模型目录（以 Ollama 官方 FAQ 为准）",
+      "official_move": "环境变量 OLLAMA_MODELS",
+      "doc": "references/drive-migration-official.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "Hugging Face",
+      "kind": "模型与数据集缓存",
+      "path": "%USERPROFILE%\\.cache\\huggingface",
+      "official_move": "环境变量 HF_HOME",
+      "doc": "references/drive-migration-official.md",
+      "verified_at": "2026-09-06"
+    },
+    {
+      "app": "npm / pip / NuGet / Cargo / Gradle",
+      "kind": "包缓存",
+      "path": "见文档",
+      "official_move": "Dev Drive + 环境变量（微软官方）",
+      "doc": "references/drive-migration-official.md",
+      "verified_at": "2026-11-08"
+    }
+  ]
+}

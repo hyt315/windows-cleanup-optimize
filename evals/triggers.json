@@ -1,0 +1,93 @@
+{
+  "_说明": "触发评测：把每条 prompt 发给装了全部技能的 Agent，记录是否选中本技能。目标：should_trigger=true 的召回 ≥90%，false 的误触发 ≤10%。",
+  "items": [
+    {
+      "prompt": "C盘红了，怎么办",
+      "should_trigger": true
+    },
+    {
+      "prompt": "电脑开机要两分钟，太慢了",
+      "should_trigger": true
+    },
+    {
+      "prompt": "右下角老弹广告，不知道哪个软件弹的",
+      "should_trigger": true
+    },
+    {
+      "prompt": "微信占了 80G，能挪到 D 盘吗",
+      "should_trigger": true
+    },
+    {
+      "prompt": "360 卸不干净",
+      "should_trigger": true
+    },
+    {
+      "prompt": "帮我把电脑优化一下",
+      "should_trigger": true
+    },
+    {
+      "prompt": "WinSxS 文件夹好大能删吗",
+      "should_trigger": true
+    },
+    {
+      "prompt": "npm 和 pip 缓存太大",
+      "should_trigger": true
+    },
+    {
+      "prompt": "关了自启它还是自己启动",
+      "should_trigger": true
+    },
+    {
+      "prompt": "任务管理器里一堆 msedgewebview2 是什么",
+      "should_trigger": true
+    },
+    {
+      "prompt": "我不想要 Copilot",
+      "should_trigger": true
+    },
+    {
+      "prompt": "disk is full on my laptop",
+      "should_trigger": true
+    },
+    {
+      "prompt": "Windows.old 能删吗",
+      "should_trigger": true
+    },
+    {
+      "prompt": "TRAE 占用 C 盘太多",
+      "should_trigger": true
+    },
+    {
+      "prompt": "后台进程太多电脑卡",
+      "should_trigger": true
+    },
+    {
+      "prompt": "我的 Mac 越来越慢",
+      "should_trigger": false
+    },
+    {
+      "prompt": "电脑蓝屏 0x0000007E",
+      "should_trigger": false
+    },
+    {
+      "prompt": "中了勒索病毒怎么办",
+      "should_trigger": false
+    },
+    {
+      "prompt": "帮我重装 Windows 11",
+      "should_trigger": false
+    },
+    {
+      "prompt": "显卡风扇噪音很大",
+      "should_trigger": false
+    },
+    {
+      "prompt": "Linux 磁盘满了",
+      "should_trigger": false
+    },
+    {
+      "prompt": "帮我写个 Python 爬虫",
+      "should_trigger": false
+    }
+  ]
+}

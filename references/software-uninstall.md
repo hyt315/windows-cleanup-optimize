@@ -53,6 +53,17 @@ Step 5：计划任务 / 服务残留清理（提权）
 Win+R → appwiz.cpl → Enter → 找到目标 → 右键 → 卸载
 ```
 
+**winget（v2.0 新增；Windows 11 自带，Windows 10 1809+ 需先从商店装"应用安装程序"）**：批量盘点比翻注册表更可靠，卸载走软件自己的卸载程序。
+
+```powershell
+winget list                                  # 盘点已装软件（含非商店来源）
+winget list --name "2345"                    # 按名字找
+winget uninstall --id <软件ID> --interactive # 卸载；--interactive 让卸载界面出来，用户能看到"保留数据"等选项
+```
+
+- 一次只卸一个，卸完确认再下一个；**不要用 `--silent` 批量卸**，捆绑软件的卸载器常有"保留数据/修复"之类的选项要用户选。
+- `winget list` 里 Source 为空的条目同样能卸，ID 以列表里显示的为准。
+
 ---
 
 ## Step 2：专用卸载工具（BCUninstaller / Geek / Revo）
@@ -181,7 +192,8 @@ foreach ($kw in $keywords) {
         if (Test-Path $p) {
             Write-Host "命中: $p"
             # 备份
-            $backup = "$env:USERPROFILE\reg_backup_$kw_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
+            New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null   # v2.0：备份不往用户目录丢（踩坑 64）
+            $backup = "$env:TEMP\wco\reg\reg_backup_$($kw)_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
             reg export $p.Replace('HKCU:\', 'HKCU\').Replace('HKLM:\', 'HKLM\') $backup /y 2>$null
             # 删除
             Remove-Item $p -Recurse -Force -EA SilentlyContinue
@@ -259,6 +271,8 @@ foreach ($p in $servicePatterns) {
 # Chrome 首页劫持修复
 $chromePolicyKey = "HKCU:\Software\Policies\Google\Chrome"
 if (Test-Path $chromePolicyKey) {
+    New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
+    reg export "HKCU\Software\Policies\Google\Chrome" "$env:TEMP\wco\reg\chrome_policy.reg" /y   # 先备份（v2.0）
     Remove-Item $chromePolicyKey -Recurse -Force
     Write-Host "[OK] 清除 Chrome 策略"
 }
@@ -266,6 +280,7 @@ if (Test-Path $chromePolicyKey) {
 # Edge 首页劫持修复
 $edgePolicyKey = "HKCU:\Software\Policies\Microsoft\Edge"
 if (Test-Path $edgePolicyKey) {
+    reg export "HKCU\Software\Policies\Microsoft\Edge" "$env:TEMP\wco\reg\edge_policy.reg" /y   # 先备份（v2.0）
     Remove-Item $edgePolicyKey -Recurse -Force
     Write-Host "[OK] 清除 Edge 策略"
 }
@@ -337,7 +352,8 @@ if (Test-Path $edgePolicyKey) {
 
 7. 清理注册表（备份后删）：
    ```powershell
-   reg export "HKCU\Software\Kingsoft" "$env:USERPROFILE\kingsoft_backup.reg" /y
+   New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
+   reg export "HKCU\Software\Kingsoft" "$env:TEMP\wco\reg\kingsoft_backup.reg" /y
    Remove-Item "HKCU:\Software\Kingsoft" -Recurse -Force -EA SilentlyContinue
    ```
 
@@ -364,8 +380,9 @@ if (Test-Path $edgePolicyKey) {
 
 ```powershell
 # === 前置：备份注册表整键 ===
+New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
 reg export "HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo" `
-    "$env:USERPROFILE\wps_update_backup.reg" /y 2>&1 | Out-Null
+    "$env:TEMP\wco\reg\wps_update_backup.reg" /y 2>&1 | Out-Null
 
 # === 第 1 层（治本）===
 $k = 'HKCU:\Software\Kingsoft\Office\6.0\Common\updateinfo'
@@ -418,7 +435,14 @@ if (Test-Path $k) {
        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AlibabaProtect",
        "HKLM:\SYSTEM\CurrentControlSet\Services\alibabaprotect"
    )
-   foreach ($k in $keys) { if (Test-Path $k) { Remove-Item $k -Recurse -Force } }
+   New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
+   foreach ($k in $keys) {
+       if (Test-Path $k) {
+           $native = $k -replace '^HKLM:\\', 'HKLM\' -replace '^HKCU:\\', 'HKCU\'
+           reg export $native "$env:TEMP\wco\reg\$(Split-Path $k -Leaf).reg" /y   # 先备份（v2.0）
+           Remove-Item $k -Recurse -Force
+       }
+   }
    ```
 5. 删除服务（提权）：
    ```powershell
@@ -432,22 +456,15 @@ if (Test-Path $k) {
 
 360 自我保护最严——**普通标准卸载基本无效**，需要专用工具。
 
-### 推荐工具
+### 推荐顺序（v2.0 改：官方卸载优先，第三方强卸脚本降为 🔴 CRITICAL 的最后手段）
 
-**GitHub 项目 `force-uninstall-360`**（[ROWENxAI/force-uninstall-360](https://github.com/ROWENxAI/force-uninstall-360)）：
-- 提供 PowerShell 脚本，自动化处理 360 内核驱动
-- 维护了完整的 360 内核驱动名列表：`360AvFlt`、`360Box`、`360FsFlt`、`360SelfProtection` 等
-- 处理 `PendingFileRenameOperations`（被锁文件的删除机制）
+1. **先关 360 的自我保护**：打开 360 安全卫士 → 设置 → 安全防护中心里关闭"自我保护"（各版本位置略有不同，以界面为准）。不关的话卸载程序常常卡住。
+2. **走官方卸载**：设置 › 应用 › 已安装的应用 → 360 安全卫士 / 360 杀毒 → 卸载；或 `winget uninstall --name "360"` 先看匹配到哪些（加 `--interactive` 让卸载界面出来，不要静默）。卸载过程中出现"保留隔离区/保留配置"之类选项，问用户。
+3. **重启**，再跑下面的"360 残留检测"。内核驱动通常在重启后才真正卸掉，**不要重启前就去删驱动文件**。
+4. **还有残留**：先建还原点（`Checkpoint-Computer -Description "Before360Cleanup"`），再进安全模式处理：设置 › 系统 › 恢复 › 高级启动 › 立即重新启动 → 疑难解答 › 高级选项 › 启动设置 → 4。Windows 10/11 默认**按 F8 进不了安全模式**，v1.x 写错了。
+5. **第三方强卸脚本**（如 GitHub `ROWENxAI/force-uninstall-360`）：🔴 CRITICAL，默认不推荐。只有前四步都失败、用户明确要求时才提，并且必须先让用户（或你逐行）读完脚本内容、建好还原点。不要从网上直接 `irm | iex` 运行。
 
-### 手工流程（不推荐，复杂）
-
-1. 进安全模式（开机按 F8 → 安全模式）
-2. 删除 360 安装目录（多个：`C:\Program Files (x86)\360safe`、`C:\Program Files (x86)\360\360safe`）
-3. 用 `sc.exe delete` 删除所有 360 服务
-4. 删除内核驱动（用 `PendingFileRenameOperations`）
-5. 重启后清理注册表
-
-**⚠️ 风险警告**：360 内核驱动修改系统底层，**错误的删除可能导致系统无法启动**。强烈建议使用专用工具（GitHub 项目脚本）而不是手工操作。
+**⚠️ 风险警告**：360 内核驱动修改系统底层，**错误的删除可能导致系统无法启动**。任何删除驱动的动作都要先有还原点。
 
 ### 360 残留检测
 
@@ -485,7 +502,8 @@ Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" |
 3. 清理计划任务与 AppData 残留：
    ```powershell
    Disable-ScheduledTask -TaskName "BaiduNetdiskUpdateTask*" -EA SilentlyContinue
-   Remove-Item "$env:APPDATA\Baidu\BaiduNetdisk" -Recurse -Force -EA SilentlyContinue
+   # v2.0：文件走回收站（可恢复），先演练再 -Apply
+   .\scripts\templates\t07-safe-recycle.ps1 -Path "$env:APPDATA\Baidu\BaiduNetdisk" -Label "百度网盘残留"
    ```
 
 ---
@@ -503,8 +521,8 @@ Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" |
    ```
 2. 清理 AppData 缓存与下载引擎残留：
    ```powershell
-   Remove-Item "$env:LOCALAPPDATA\Thunder Network" -Recurse -Force -EA SilentlyContinue
-   Remove-Item "$env:APPDATA\Thunder Network" -Recurse -Force -EA SilentlyContinue
+   # v2.0：文件走回收站（可恢复），先演练再 -Apply
+   .\scripts\templates\t07-safe-recycle.ps1 -Path "$env:LOCALAPPDATA\Thunder Network","$env:APPDATA\Thunder Network" -Label "迅雷残留"
    ```
 
 ---

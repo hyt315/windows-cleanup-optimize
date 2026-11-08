@@ -161,7 +161,7 @@ Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 20 |
 
 **自动化脚本**：
 ```powershell
-$logFile = "$env:USERPROFILE\memory_monitor_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+$logFile = "$env:TEMP\wco\memory_monitor_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
 
 # 记录基线
 Get-Process | Select-Object Name, Id, @{N='WS_MB';E={[math]::Round($_.WorkingSet/1MB,1)}}, @{N='Time';E={Get-Date -Format 'HH:mm:ss'}} |
@@ -174,7 +174,7 @@ Write-Host "请等待 30 分钟后再次运行对比脚本。"
 **对比脚本**（第二次运行时）：
 ```powershell
 # 读取基线 + 当前值
-$baseline = Import-Csv "$env:USERPROFILE\memory_monitor_20260819_120000.csv"
+$baseline = Import-Csv "$env:TEMP\wco\memory_monitor_20260819_120000.csv"
 $current = Get-Process | Select-Object Name, Id, @{N='WS_MB';E={[math]::Round($_.WorkingSet/1MB,1)}}
 
 # 找出疑似泄漏

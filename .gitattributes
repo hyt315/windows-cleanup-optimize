@@ -7,6 +7,7 @@
 
 # PowerShell 脚本明确 utf-8 with BOM (Windows 原生)
 *.ps1 text eol=crlf
+*.psm1 text eol=crlf
 
 # Python 脚本
 *.py text eol=lf

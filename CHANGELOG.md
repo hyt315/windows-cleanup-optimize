@@ -5,6 +5,70 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [2.0.0] - 2026-11-08
+
+这一版不加花哨功能，主要把"可回退、不误删"从文档承诺落到代码上，并修掉几处会伤到用户的 bug。
+
+### 修复（会伤到用户的）
+- **脚本编码**：`full_scan.ps1` 含 800 多个汉字却没有 UTF-8 BOM，Windows PowerShell 5.1 会按系统 ANSI（中文系统为 GBK）读取，可能乱码或解析失败。现在所有 `.ps1` / `.psm1` 都带 BOM，selftest 会检查。
+- **"移入回收站"可能变成永久删除**：以下三种情况会被拒绝执行，并报给用户：
+  - 卷没有回收站（U 盘、网络盘）；
+  - 回收站设为"直接删除"；
+  - 体积超过回收站上限。
+- **服务批量恢复其实不生效**：旧备份记的是 `Get-Service` 的 `Automatic/Manual`，`sc.exe` 不认这种写法。现在模板 12 多导出一列 `ScStart`，恢复时用它；单项回退恢复原来的启动类型，不再一律改成 `auto`。
+- **模板 5 是伪代码**：原来大括号里只有注释，跑不起来。已改为可运行的只读脚本。
+- **原则自相矛盾**：原则写"所有写操作须授权"，风险表第一档却写"默认自动执行"。统一为"第一档列清单、确认一次后批量执行"。
+- **selftest 在没装 PowerShell 的机器上必然失败**：现在缺 pwsh 时跳过语法检查，并标 SKIP。
+- **其他文件写到用户根目录**：报告、注册表备份、服务和内存基线原来写在用户根目录，和踩坑 64 冲突。现在统一写到 `%TEMP%\wco`。
+- **永久删除残留**：百度网盘、迅雷残留原来直接 `Remove-Item -Recurse -Force`，现在改走回收站；删注册表键之前先 `reg export`。
+- **安全降级**：
+  - Defender 排除列表原来写"安全不受影响"，这是错的。现降为 🟠 HIGH，并撤回"排除 Code.exe 等 IDE 进程"的建议；改为优先推荐 Dev Drive（Defender 在其上自动用性能模式）。
+  - 第三方强卸 360 脚本降为 🔴 CRITICAL 最后手段。
+  - 删掉"按 F8 进安全模式"，Win10/11 默认已不支持这个按键。
+
+### 新增
+- `scripts/lib/Wco.Common.psm1`：
+  - 函数：`Invoke-WcoRecycle`、`Set-WcoServiceStartType`、`Set-WcoRegistryValue`、`Add-WcoChange`、`Export-WcoUndo`、`Test-WcoAdmin`。
+  - 写操作默认只演练，加 `-Apply` 才执行。
+  - 执行后写 `changes.json`，并按逆序生成 `undo.ps1`。
+- `full_scan.ps1`：
+  - 管理员检测：普通权限运行时，报告里写明哪些数据不全。
+  - `[T0]` 开机耗时实测：读事件 100，取最近 5 次的平均值。
+  - Windows 10 停止支持提示。
+  - 自动识别所有盘。
+  - `-Quick` 真正生效。
+  - 修复 `$profile` 覆盖 PowerShell 自动变量的问题。
+- 内容补充：
+  - 官方入口优先：设置里的清理建议、存储感知。2026 年起"Windows 更新清理"只剩 cleanmgr 里有；打开存储设置可能弹 UAC。
+  - Windows.old（🟠 HIGH）。
+  - Dev Drive 放包缓存（npm / pip / NuGet / Cargo / Gradle / vcpkg）。
+  - winget 盘点与卸载。
+  - Copilot / Recall 等 AI 组件开关。
+- `data/volatile-paths.json`：微信、QQ、钉钉、TRAE 等易变路径，每条带核实日期；超过 90 天由 selftest 提醒复核。
+- `evals/`：
+  - 22 条触发评测，其中 7 条是不应触发的反例；
+  - 10 个行为场景，每个都有 must / must_not 判定条件。
+- `tests/Wco.Common.Tests.ps1`：12 个 Pester 单元测试。
+- CI 加 Windows job：
+  - 用 5.1 解析全部脚本；
+  - 跑 Pester；
+  - 真跑 `full_scan.ps1 -Quick`，并对比运行前后的服务、Run 键、电源计划，证明扫描是只读的。
+
+### 精简
+- `SKILL.md` 改成"安全底线 7 条 + 六阶段流程 + 按用户问题找手册的路由表"。去掉开场的 A/B 二选一，改为直接只读扫描、自动反推画像；新增三档预设（只清缓存 / 标准 / 深度）。
+- 22 个模板从 `scan-scripts.md` 移到 `scripts/templates/tNN-*.ps1`，手册从 769 行降到 200 行左右，读手册时不用把代码装进上下文。
+- 手册从 16 份合并为 14 份：
+  - `windows-cleanup-optimize-pitfalls.md` 并入 `pitfalls.md`；
+  - `case-study.md` 和 `trae-guide.md` 合并为 `migration-cases.md`。
+- description 改为中英双语，写进用户的原话，并写明不适用的场景。
+- selftest 自动核对文档里写的模板数量，防止数字和实际不一致。
+- README 删掉不存在的文件（`validate_repo.py`、`agents/`、`SUPPORT.md`）和"绝不会误删"这类绝对化承诺。
+
+### 已知未做
+- 服务、流氓软件清单还没有改成 JSON 数据驱动，仍在 markdown 表里。
+- `evals/` 只提供了用例，还没有跑出基线结果。
+- 新内容涉及的设置页路径以 2026-11 的微软文档为准，未在真机逐项点验。
+
 ## [1.9.0] - 2026-09-06
 
 ### 新增

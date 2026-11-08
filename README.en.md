@@ -2,19 +2,16 @@
   <img src="assets/banner.svg" alt="Windows Cleanup & Optimize Banner" width="100%" />
 </p>
 
-# 🧹 Windows Cleanup & Optimization Assistant / windows-cleanup-optimize
+# Windows Cleanup & Optimization Assistant
 
 <div align="center">
 
-**Zero-harm Windows deep cleanup & performance tuning with 15 reference manuals, bloatware eradication, native AI weight migration, and full rollback protection.**
-
-**零伤害 Windows 深度清理与系统优化：15 本参考手册、流氓软件彻底根治、大模型原生换盘、每项操作可回退。**
+**An Agent Skill for Windows 10/11: read-only diagnosis first, then a tiered plan. Every change is previewed, applied only after you confirm, logged, and reversible through a generated undo script.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/hyt315/windows-cleanup-optimize?sort=semver)](CHANGELOG.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-compatible-1f6feb)](SKILL.md)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20%7C%2024H2-blue)](SKILL.md)
-[![GitHub Stars](https://img.shields.io/github/stars/hyt315/windows-cleanup-optimize?style=social)](https://github.com/hyt315/windows-cleanup-optimize/stargazers)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-blue)](SKILL.md)
 
 [English](./README.en.md) | [中文](./README.md)
 
@@ -22,176 +19,84 @@
 
 ---
 
-## 📖 What is this?
+## What it does
 
-Drive C full red alert, slow boot times, persistent popups, background lag — **Windows Cleanup & Optimization Assistant** is a professional-grade Windows maintenance skill designed for AI Agents and system administrators.
+When your C drive is full, boot is slow, pop-up ads keep coming back, or chat apps and dev caches have eaten tens of GB, an agent following this skill does not start deleting, and it does not turn off Defender or Windows Update.
 
-It completely abandons dangerous "one-click brute-force deletion" practices, adhering to strict zero-harm principles: **User Profiling First, Recycle Bin Deletion (`SendToRecycleBin`), Official Native Data Migration, and 4-Level Risk Tagging with Rollback Commands**.
+## Why it is safe to use
 
----
+| Mechanism | How |
+|---|---|
+| Read-only diagnosis | `scripts/full_scan.ps1` writes nothing but its report (to `%TEMP%\wco`) and states whether it ran with full rights |
+| Dry run by default | Every write operation prints what it would do and how much it would free; `-Apply` actually does it |
+| Truly recoverable deletes | Items go to the Recycle Bin only. Deletion is refused on volumes without a Recycle Bin (USB, network), when the bin is set to delete immediately, or when the item exceeds the bin's size limit, because Windows would otherwise delete permanently in those cases |
+| Change log and undo | Service, registry and IFEO changes record the original value in `changes.json` and generate `undo.ps1`; services go back to their original start type, not always `auto` |
+| Official paths first | Windows Cleanup recommendations and Storage Sense, in-app "change storage location", Dev Drive for package caches; `mklink` is the last resort |
+| Four risk tiers | 🟢 one confirmation for the batch, 🟡 per group, 🟠 per item with the trade-off stated, 🔴 not done by default |
 
-## ✨ Key Features
+## Coverage
 
-| Core Module | Capabilities | Value Delivered |
-|---|---|---|
-| **🛡️ Zero-Harm Safety Net** | Recycle Bin deletion by default, restore point creation, rollback commands attached | 100% protection against accidental system corruption |
-| **🤖 Native AI & Dev Environment Migration** | Official environment variables for Ollama, Hugging Face, ModelScope, Python uv, Android AVD, and WSL2 sparse VHDX auto-shrink | Frees dozens to hundreds of GBs from Drive C natively |
-| **🔍 Two Scan Modes** | 🅰️ Full Scan (all 20 templates + AI/VHDX & WMI/LNK hijacking audit) + 🅱️ Profile Scan (Home/Gamer/Developer/AI/Laptop) | User freedom; non-tech users aren't blocked, power users get tailored advice |
-| **🧹 Bloatware & Popup Eradication** | IFEO Image Hijacking popup muting SOP, 3-sec active popup locator, WMI persistence & LNK hijacking audit, 4-layer bloatware blocker | Completely silences popups and cleans root-level persistence |
-| **⚡ Win11 Modern & Network Tuning** | Per-adapter GUID TCP Nagle optimization, Win11 Widgets & WebView2 suppression, Delivery Optimization purge, 50+ services, TRIM | Millisecond-level network latency drop and smoother responsiveness |
-| **🔄 Official Data Migration** | Native in-app migration优先, WeChat 4.x(and legacy 3.x island cleanup) / WeCom / QQ NT / DingTalk, mklink fallback | Highly stable and fully compliant with app auto-updates |
-| **📋 15 Reference Manuals** | Comprehensive coverage from disk cleanup to software uninstall, startup, and 86-item pitfall library | Deep knowledge base ensuring flawless AI agent decision making |
+- **Disk**: system caches, update leftovers, Windows.old, WinSxS analysis, dev and AI model caches, official migration for WeChat 4.x / WeCom / QQ NT / DingTalk
+- **Software**: winget inventory and uninstall, deep leftovers, IFEO pop-up silencing, 3-second pop-up locator, 360 / 2345 / WPS playbooks
+- **Startup**: 20+ startup points, Edge/Chrome startup boost and background mode, WMI persistence and shortcut hijack audit, measured boot time
+- **Performance**: 50+ services by user profile, Copilot / Recall switches, memory-leak detection, a skeptical take on "RAM cleaners"
+- **Pitfalls**: 86 field notes plus deep-water baselines (DISM, Installer, VSS, cloud files)
 
----
+## Install
 
-## 📊 6-Stage Complete Architecture
+Tell your agent:
 
-```
-[Input: User reports Drive C Full / Slow Boot / Popups / Stutter]
-                            │
-         [Stage 1: User Profile Identification]
-         Home / Developer / Gamer / Laptop Profile
-                            │
-         [Stage 2: Deep Safe Disk Cleanup]
-         Large files / System cache / AI model migration / Recycle bin
-                            │
-         [Stage 3: Complete Startup Governance]
-         20+ startup locations / Edge policy lock / AutoRuns
-                            │
-         [Stage 4: Software Uninstall & Residue Cleanup]
-         4-layer bloatware blocker / Registry & service cleanup
-                            │
-         [Stage 5: Safe Service Streamlining]
-         50+ service tuning with rollback scripts attached
-                            │
-         [Stage 6: Performance Tuning & Verification]
-         Power plans / Working set / SSD TRIM / Restore points
-```
-
----
-
-## 🚀 Quick Start
-
-This is an AI Agent Skill — install it into your AI assistant and you're ready.
-
-### Option A: Paste one sentence into any Agent (recommended, most universal)
-
-Send this to your AI assistant and it will detect the platform and clone to the right skills directory:
-
-> Please install the windows-cleanup-optimize skill: clone `https://github.com/hyt315/windows-cleanup-optimize` into your skills directory (e.g. `~/.claude/skills/windows-cleanup-optimize` or `~/.agents/skills/windows-cleanup-optimize`) and confirm it works. When I report disk full, slow boot, or popups, guide me through the 6-stage workflow with zero-harm rollback safety.
-
-### Option B: GitHub CLI 2.90+ (one command)
-
-```bash
-gh skill install hyt315/windows-cleanup-optimize windows-cleanup-optimize --agent claude-code --scope user
-```
-
-### Option C: Manual per-platform install
+> Install the windows-cleanup-optimize skill: clone `https://github.com/hyt315/windows-cleanup-optimize` into your skills directory (e.g. `~/.claude/skills/windows-cleanup-optimize` or `~/.agents/skills/windows-cleanup-optimize`).
 
 | Platform | Command |
 |---|---|
-| **Claude Code** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.claude/skills/windows-cleanup-optimize` |
-| **Codex** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.agents/skills/windows-cleanup-optimize` |
-| **Cursor** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.cursor/skills/windows-cleanup-optimize` |
-| **General Agents** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.agents/skills/windows-cleanup-optimize` |
+| Claude Code | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.claude/skills/windows-cleanup-optimize` |
+| Codex / generic | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.agents/skills/windows-cleanup-optimize` |
+| Cursor | `git clone https://github.com/hyt315/windows-cleanup-optimize.git ~/.cursor/skills/windows-cleanup-optimize` |
+| GitHub CLI 2.90+ | `gh skill install hyt315/windows-cleanup-optimize windows-cleanup-optimize --agent claude-code --scope user` |
 
-### Option D: Run local regression selftest
+## Run the scan yourself
 
 ```powershell
-python scripts/selftest.py
+# In an elevated PowerShell, from the repo folder
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\full_scan.ps1
 ```
 
----
-
-## 🔒 Zero-Harm Principles
-
-1. **Recoverability Rule**: All file deletions go to Recycle Bin (`SendToRecycleBin`) by default;
-2. **Official Migration First**: In-app settings and environment variables (e.g. `HF_HOME`) must be prioritized before `mklink /J`;
-3. **Preflight System Protection**: Automatic creation of Windows System Restore Points before registry operations;
-4. **Rollback Commands Attached**: Every service disable and registry tweak includes corresponding PowerShell rollback scripts.
-
----
-
-## 📥 Download
-
-| Method | Command / Link |
-|---|---|
-| **HTTPS** | `git clone https://github.com/hyt315/windows-cleanup-optimize.git` |
-| **SSH** | `git clone git@github.com:hyt315/windows-cleanup-optimize.git` |
-| **GitHub CLI** | `gh repo clone hyt315/windows-cleanup-optimize` |
-| **ZIP** | [Download ZIP](https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.zip) |
-| **Tarball** | [Download Tar](https://github.com/hyt315/windows-cleanup-optimize/archive/refs/heads/main.tar.gz) |
-| **Single file (SKILL.md)** | `curl -O https://raw.githubusercontent.com/hyt315/windows-cleanup-optimize/main/SKILL.md` |
-
----
-
-## 📖 15 In-Depth Reference Manuals
-
-| Reference Guide | Core Focus | When to Read | Estimated Time |
-|---|---|---|---|
-| 📑 [**Scan Scripts Library (`scan-scripts.md`)**](references/scan-scripts.md) | 15 standard PowerShell execution scripts | When executing scans & cleanup | 4 mins |
-| 🛡️ [**Pitfalls & Edge Cases (`pitfalls.md`)**](references/pitfalls.md) | 30+ edge cases and false-positive prevention | Before formulating cleanup plan | 4 mins |
-| 🚀 [**Startup Audit (`startup-audit.md`)**](references/startup-audit.md) | Complete startup audit & Edge/Chrome policy lock | When diagnosing slow boot times | 3 mins |
-| 🧩 [**Startup Mechanisms (`startup-mechanisms.md`)**](references/startup-mechanisms.md) | 20+ Windows startup locations & AutoRuns guide | When investigating stubborn updaters | 3 mins |
-| 🧹 [**Bloatware Catalog (`bloatware-catalog.md`)**](references/bloatware-catalog.md) | Process signatures for intrusive popup suites | When eradicating popup adware | 3 mins |
-| 🗑️ [**Software Uninstall (`software-uninstall.md`)**](references/software-uninstall.md) | Clean software uninstallation & deep registry sweeps | When removing stubborn apps | 3 mins |
-| 💾 [**System Deep Cleanup (`system-cleanup.md`)**](references/system-cleanup.md) | Deep system cleanup (updates, driver store, hibernation) | When reclaiming C drive space | 4 mins |
-| ⚙️ [**Services Streamlining (`services-optimization.md`)**](references/services-optimization.md) | 50+ Windows services tuning across 4 user profiles | When reducing CPU/RAM footprint | 4 mins |
-| 🧠 [**Memory Optimization (`memory-optimization.md`)**](references/memory-optimization.md) | Working set optimization & memory leak diagnostics | When troubleshooting high RAM usage | 3 mins |
-| ⚡ [**Performance Tuning (`performance-tuning.md`)**](references/performance-tuning.md) | Power plans, visual effects, SSD TRIM, IRQ tuning | When boosting frame rates/responsiveness | 3 mins |
-| 🤖 [**AI IDE Cleanup (`trae-guide.md`)**](references/trae-guide.md) | Trae / VS Code AI IDE cache cleanup & migration | When developer IDE caches bloat | 3 mins |
-| 📂 [**Official Directory Migration (`drive-migration-official.md`)**](references/drive-migration-official.md) | Large directory migration tree & AI weights | When moving large directories | 4 mins |
-| 💬 [**Chat Apps Migration (`chat-apps-migration.md`)**](references/chat-apps-migration.md) | WeChat 4.x / QQ NT / DingTalk official migration | When moving chat history databases | 3 mins |
-| 🔗 [**Directory Junction Fallback (`mklink-migration.md`)**](references/mklink-migration.md) | `mklink /J` junction migration safeguards | When hard junctions are necessary | 3 mins |
-| 📚 [**Real-World Case Studies (`case-study.md`)**](references/case-study.md) | End-to-end case studies from red alert to healthy | When reviewing complete workflows | 3 mins |
-
----
-
-## 📁 File Structure
+## Layout
 
 ```
 windows-cleanup-optimize/
-├── SKILL.md                          # Core skill definition and 6-stage workflow
-├── README.md                         # Chinese documentation
-├── README.en.md                      # English documentation
-├── CHANGELOG.md                      # Version history
-├── LICENSE                           # MIT License
-├── .gitignore                        # Git ignore rules
-├── CONTRIBUTING.md                   # Contribution guide
-├── CODE_OF_CONDUCT.md                # Code of conduct
-├── SECURITY.md                       # Security policy
-├── SUPPORT.md                        # Support channels
-├── manifest.json                     # Skill manifest
-├── agents/                           # Multi-agent metadata
+├── SKILL.md                 # workflow, safety rules, symptom-to-manual routing
+├── references/              # 14 manuals, read on demand
 ├── scripts/
-│   ├── validate_repo.py              # Validator
-│   └── selftest.py                   # Automated regression test runner
-└── references/                       # 15 Reference Manuals
+│   ├── full_scan.ps1        # one-shot read-only scan
+│   ├── templates/           # 22 templates (tNN-*.ps1)
+│   ├── lib/Wco.Common.psm1  # recycle-bin checks, change log, undo
+│   └── selftest.py          # structure / counts / BOM / syntax checks
+├── data/volatile-paths.json # fast-changing app paths with review dates
+├── evals/                   # trigger and behavior evals
+└── tests/                   # Pester unit tests
 ```
 
----
+## Tests
 
-## ❓ FAQ
+```powershell
+python scripts/selftest.py   # no dependencies; PowerShell syntax check is SKIPped if PowerShell is missing
+Invoke-Pester ./tests        # Pester 5+
+```
 
-- **Q: Will cleaning delete my personal files or break Windows?**  
-  A: Never. All file removals go to the Recycle Bin (`SendToRecycleBin`), restore points are created beforehand, and 30+ pitfalls are actively checked.
-- **Q: How are WeChat 4.x and QQ NT databases safely moved?**  
-  A: Using official in-app storage path settings and native configuration keys, ensuring 100% database integrity.
-- **Q: Why use official environment variables for Ollama/HuggingFace models?**  
-  A: Native environment variables (`OLLAMA_MODELS`, `HF_HOME`) are natively supported by the AI engines, avoiding file-lock and permission bugs common with symlinks.
+CI runs on Ubuntu and Windows; the Windows job actually runs `full_scan.ps1` and compares service state before and after to prove the scan changed nothing.
 
----
+## FAQ
 
-## 🤝 Contributing
+- **Can it delete something by mistake?** Deletes go to the Recycle Bin, and the three cases where that would silently become permanent are refused. Still, look before you empty the bin.
+- **Why won't it disable Defender or updates?** Near-zero gain, large risk. Developers get speed from Dev Drive, where Defender switches to performance mode automatically.
+- **Windows 10?** Supported, but Windows 10 reached end of regular support on 2025-10-14, which is one more reason not to turn off updates.
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md). If this skill helped you, please give it a [Star ⭐](https://github.com/hyt315/windows-cleanup-optimize/stargazers)!
+## Contributing
 
----
+Issues and PRs welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). If you change path-related knowledge, update its review date in `data/volatile-paths.json`.
 
-## 📄 License
+## License
 
-Licensed under the [MIT License](LICENSE).
-
----
-
-> 🌏 **中文版: [README.md](./README.md)**
+[MIT](LICENSE)

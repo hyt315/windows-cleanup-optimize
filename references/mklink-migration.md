@@ -371,9 +371,9 @@ rmdir "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>"
 
 ## 完整实战案例
 
-- TRAE AppData（含稀疏文件陷阱）→ 见 `case-study.md` Case A
-- VS Code 用户数据（最常见 IDE 场景）→ 见 `case-study.md` Case B
-- 任意软件通用迁移模式 → 见 `case-study.md` Case C
+- TRAE AppData（含稀疏文件陷阱）→ 见 `migration-cases.md` Case A
+- VS Code 用户数据（最常见 IDE 场景）→ 见 `migration-cases.md` Case B
+- 任意软件通用迁移模式 → 见 `migration-cases.md` Case C
 
 ---
 
@@ -390,4 +390,4 @@ rmdir "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>"
 
 - 官方优先迁移决策树 + 系统级/软件级全部官方能力 → `drive-migration-official.md`
 - 微信/QQ/钉钉专项 → `chat-apps-migration.md`
-- mklink 实战案例（TRAE/VS Code/通用） → `case-study.md`
+- mklink 实战案例（TRAE/VS Code/通用） → `migration-cases.md`

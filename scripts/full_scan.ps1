@@ -1,31 +1,35 @@
-<#
+﻿<#
 .SYNOPSIS
     windows-cleanup-optimize 一键全量扫描脚本
 .DESCRIPTION
-    按 SKILL.md 阶段 0-A "全量扫描模式" 执行，一次性跑完所有 20 个模板。
+    按 SKILL.md 阶段 0-A "全量扫描模式" 执行，一次性跑完 scripts/templates 下的全部只读扫描模板。
     输出三段式报告：按档位 + 按类型 + 按来源模板。
     自动反推用户画像（家庭/开发者/游戏玩家/笔记本/OEM）。
 
+.PARAMETER Quick
+    跳过最耗时的两项（T2 非系统盘、T4 安装目录递归统计），用于 CI 或快速体检。
+
 .PARAMETER OutDir
-    报告输出目录，默认 $env:USERPROFILE
+    报告输出目录，默认 $env:TEMP\wco（不往用户目录里丢文件，见踩坑 64）
 
 .EXAMPLE
     .\full_scan.ps1
-    # 输出：C:\Users\<user>\full_scan_<timestamp>.txt
+    # 输出：%TEMP%\wco\full_scan_<timestamp>.txt
 
 .NOTES
     作者：windows-cleanup-optimize 团队
-    版本：v1.7.0（2026-09 增加 WMI 常驻与快捷方式劫持审计、弹窗定位与现代 Win11 优化）
+    版本：v2.0.0（2026-11：UTF-8 BOM、管理员检测、开机耗时实测、报告移到 %TEMP%）
     依赖：Windows 10/11 + PowerShell 5.1+ + 标准命令行工具（powercfg）
 #>
 
 param(
-    [string]$OutDir = "$env:USERPROFILE",
+    [string]$OutDir = (Join-Path $env:TEMP 'wco'),
     [switch]$Quick
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
 $report = Join-Path $OutDir "full_scan_$ts.txt"
 $script:lines  = @()
@@ -53,12 +57,36 @@ function Add-Finding($tpl, $type, $level, $path, $size, $lastWrite, $note) {
 Log "===== windows-cleanup-optimize 全量扫描 ====="
 Log "时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Log "机器: $env:COMPUTERNAME / $env:USERNAME"
-Log "系统: $((Get-CimInstance Win32_OperatingSystem).Caption) $((Get-CimInstance Win32_OperatingSystem).Version)"
+$os = Get-CimInstance Win32_OperatingSystem
+Log "系统: $($os.Caption) $($os.Version)"
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($isAdmin) {
+    Log "权限: 管理员（完整扫描）"
+} else {
+    Log "权限: 普通用户 —— 以下几项数据可能不全：系统目录体积、服务配置、WMI 订阅、开机耗时日志。需要完整结果请右键“以管理员身份运行”。"
+}
+if ($os.Version -like '10.0.1*') { Log "提示: 这是 Windows 10（微软已于 2025-10-14 停止常规支持）。不要关闭 Windows 更新与 Defender。" }
+Log ""
+
+# ===== [T0] 开机耗时实测（Diagnostics-Performance 事件 100，需管理员） =====
+Log "=== [T0] 开机耗时（系统自记，最近 5 次）==="
+try {
+    $boots = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 5 -ErrorAction Stop
+    foreach ($b in $boots) {
+        $xml = [xml]$b.ToXml()
+        $ms = ($xml.Event.EventData.Data | Where-Object { $_.Name -eq 'BootTime' }).'#text'
+        Log ("  {0}  开机 {1:N1} 秒" -f $b.TimeCreated.ToString('yyyy-MM-dd HH:mm'), ([double]$ms / 1000))
+    }
+    $script:bootSeconds = [math]::Round((($boots | ForEach-Object { [double](([xml]$_.ToXml()).Event.EventData.Data | Where-Object { $_.Name -eq 'BootTime' }).'#text' }) | Measure-Object -Average).Average / 1000, 1)
+    Log "  平均: $($script:bootSeconds) 秒（优化后再跑一次，对比这个数）"
+} catch {
+    Log "  读不到（需要管理员，或该日志被禁用）。用户说开机慢时，改用任务管理器“启动应用”页的“启动影响”列。"
+}
 Log ""
 
 # ===== [T9] 磁盘基准 =====
 Log "=== [T9] 磁盘基准 ==="
-Get-PSDrive C,D,E -EA SilentlyContinue | ForEach-Object {
+Get-PSDrive -PSProvider FileSystem -EA SilentlyContinue | Where-Object { $_.Used -ne $null -and ($_.Used + $_.Free) -gt 0 } | ForEach-Object {
     $u=[math]::Round($_.Used/1GB,2); $f=[math]::Round($_.Free/1GB,2)
     $t=$u+$f; $p=if($t -gt 0){[math]::Round($u/$t*100,1)}else{0}
     Log ("  {0}盘: {1} GB 已用 / {2} GB 剩余 / {3}% ({4} GB 总)" -f $_.Name,$u,$f,$p,$t)
@@ -89,6 +117,7 @@ foreach ($layer in $layers) {
     Log ""
 }
 
+if ($Quick) { Log "=== [T2] 已跳过（-Quick：不递归统计非系统盘和安装目录）==="; Log "" } else {
 # ===== [T2] 非系统盘 =====
 Log "=== [T2] 非系统盘根目录 ==="
 foreach ($letter in @('D','E','F')) {
@@ -108,6 +137,8 @@ foreach ($letter in @('D','E','F')) {
     }
 }
 Log ""
+
+}
 
 # ===== [T5] 更新包残留（A/B/C/D 四项必跑）=====
 Log "=== [T5] 更新包残留（4 项必跑）==="
@@ -227,6 +258,7 @@ Get-ChildItem $env:APPDATA -Directory -Force -EA SilentlyContinue | ForEach-Obje
 }
 Log ""
 
+if ($Quick) { Log "=== [T4] 已跳过（-Quick：不递归统计非系统盘和安装目录）==="; Log "" } else {
 # ===== [T4] 安装目录残留 =====
 Log "=== [T4] 安装目录残留 (C:/D:/Program Files) ==="
 $knownSys = @('common files','windows nt','internet explorer','windows defender','microsoft shared','windows media player','reference assemblies','msbuild','dotnet','windows kits','windowsapps','modifiablewindowsapps','windows powershell')
@@ -248,6 +280,8 @@ foreach ($pb in $progBases2) {
     }
 }
 Log ""
+
+}
 
 # ===== [T17] 本地 AI 框架缓存 =====
 Log "=== [T17] 本地 AI / 开发框架缓存 ==="
@@ -469,26 +503,26 @@ Log ""
 
 # ===== 自动画像反推 =====
 Log "===== 画像自动反推 ====="
-$profile = @()
+$personas = @()
 # 家庭：WPS / 360 / 2345 / 腾讯管家
 $wpsFamily = $findings | Where-Object { $_.Path -match 'WPS|Kingsoft|360|2345|QQPCMgr' }
-if ($wpsFamily) { $profile += '🏠 家庭用户（装了 WPS/360/2345/腾讯管家等）' }
+if ($wpsFamily) { $personas += '🏠 家庭用户（装了 WPS/360/2345/腾讯管家等）' }
 # 开发者：Docker / WSL / VS Code / JetBrains / AI IDE
 $devPaths = $findings | Where-Object { $_.Path -match 'JetBrains|Programs\\Python|Programs\\OpenCode|Programs\\antigravity|\\.codex|\\.gemini|Programs\\HanaAgent' }
-if ($devPaths) { $profile += '👨‍💻 开发者（装了 JetBrains/Python/AI IDE）' }
+if ($devPaths) { $personas += '👨‍💻 开发者（装了 JetBrains/Python/AI IDE）' }
 # AI 创作者 / 虚拟化用户：本地大模型、WSL2、Docker、AVD 镜像
 $aiPaths = $findings | Where-Object { $_.Type -eq 'AI与虚拟化缓存' -or $_.Path -match 'ollama|huggingface|modelscope|\.android\\avd|\.vhdx' }
-if ($aiPaths) { $profile += '🤖 AI创作者/虚拟化用户（存在本地大模型/WSL/Docker/AVD虚拟磁盘）' }
+if ($aiPaths) { $personas += '🤖 AI创作者/虚拟化用户（存在本地大模型/WSL/Docker/AVD虚拟磁盘）' }
 # 游戏玩家
 $steamProc = Get-Process Steam -EA SilentlyContinue
-if ($steamProc) { $profile += '🎮 游戏玩家（Steam 在跑）' }
+if ($steamProc) { $personas += '🎮 游戏玩家（Steam 在跑）' }
 # OEM 笔记本
 if ($ps -match 'Acer|Lenovo|Dell|ASUS|HP|Huawei') {
-    $profile += '💻 笔记本/OEM（厂商电源方案）'
+    $personas += '💻 笔记本/OEM（厂商电源方案）'
 }
-if ($profile.Count -gt 0) {
+if ($personas.Count -gt 0) {
     Log "  你的画像："
-    $profile | ForEach-Object { Log "    $_" }
+    $personas | ForEach-Object { Log "    $_" }
 } else {
     Log "  未识别出明显画像"
 }

@@ -13,7 +13,7 @@
 - [四、网络性能优化](#四网络性能优化)
 - [五、文件系统优化](#五文件系统优化)
 - [六、搜索/索引优化](#六搜索索引优化)
-- [七、Defender 排除列表（开发者的好帮手）](#七defender-排除列表开发者的好帮手)
+- [七、Defender 与开发目录（Dev Drive 优先）](#七defender-与开发目录v20-重写dev-drive-优先排除列表降为--high)
 - [常见误区辟谣](#常见误区辟谣)
 - [快速操作清单](#快速操作清单)
 
@@ -302,44 +302,35 @@ NTFS 日志 (`$LogFile`) 默认 64 MB。增大可减少大事务的元数据写�
 
 ---
 
-## 七、Defender 排除列表（开发者的好帮手）
+## 七、Defender 与开发目录（v2.0 重写：Dev Drive 优先，排除列表降为 🟠 HIGH）
 
-### 7.1 为什么用排除列表而不是禁用 Defender
+### 7.1 先用 Dev Drive，不要先加排除
 
-- **禁用 Defender**：安全风险极高（⛔ CRITICAL）
-- **加排除列表**：Defender 不扫描指定路径 → 性能更好，**安全不受影响**
+- **Defender 排除 = 这个目录不再被实时扫描**。旧版本说"安全不受影响"是错的：恶意 npm/pip 包、下载到 `D:\code` 的样本都不会被拦截。
+- 微软给开发者的官方方案是 **Dev Drive**（ReFS 卷，Windows 11 22621.2338 及以上，至少 50 GB）：受信任的 Dev Drive 上 Defender 自动用"性能模式"（异步扫描），速度接近排除，但仍在扫描。
+- 创建：设置 › 系统 › 存储 › 高级存储设置 › 磁盘和卷 › 创建 Dev Drive（推荐"新建 VHD"，动态扩展）。已有分区不能原地转换，格式化会清空数据。
+- 查看是否受信任：`fsutil devdrv query D:`。
+- 包缓存迁过去的做法见 `drive-migration-official.md` 的 Dev Drive 一节。
 
-### 7.2 适合加排除的路径
+依据：Microsoft Learn《Set up a Dev Drive on Windows 11》。
 
-| 类型 | 例子 |
+### 7.2 实在要加排除时（🟠 HIGH，逐项确认）
+
+只排除**可再生成的构建产物和包缓存**，不排除源码根目录、下载目录、整个用户目录：
+
+| 可以考虑 | 不要排除 |
 |------|------|
-| **IDE 缓存** | `%LOCALAPPDATA%\JetBrains\*`, `%USERPROFILE%\.cache\*` |
-| **构建输出** | `D:\code\projects\**\node_modules`, `**\dist`, `**\build`, `**\.next`, `**\target` |
-| **开发工具数据** | `%LOCALAPPDATA%\Trae CN\*`, `%APPDATA%\Code\*` |
-| **大文件目录** | 虚拟磁盘镜像、ISO 文件目录 |
-
-### 7.3 添加排除（PowerShell 提权）
+| 某个项目的 `node_modules`、`target`、`build` 输出 | `D:\code` 整盘、`%USERPROFILE%`、`Downloads` |
+| JetBrains / Gradle 的缓存目录 | 任何会放下载来的 exe / 脚本的目录 |
 
 ```powershell
-# 管理员
+# 管理员。每加一条都写进变更记录，回退命令是 Remove-MpPreference
 Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\JetBrains"
-Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cache"
-Add-MpPreference -ExclusionPath "D:\code"
-
-# 查看当前排除列表
-(Get-MpPreference).ExclusionPath
+# 回退：Remove-MpPreference -ExclusionPath "$env:LOCALAPPDATA\JetBrains"
+(Get-MpPreference).ExclusionPath   # 查看当前排除列表
 ```
 
-### 7.4 排除进程（性能关键）
-
-```powershell
-# 排除 IDE 进程
-Add-MpPreference -ExclusionProcess "Code.exe"
-Add-MpPreference -ExclusionProcess "idea64.exe"
-Add-MpPreference -ExclusionProcess "devenv.exe"
-```
-
----
+向用户说明代价：**这个目录里的文件不再被 Defender 实时拦截**。用户没说"我接受"，就不加。
 
 ## 常见误区辟谣
 
@@ -366,7 +357,7 @@ Add-MpPreference -ExclusionProcess "devenv.exe"
 - 安全风险 ⛔ CRITICAL（无恶意软件防护）
 - 性能收益 **< 1%**
 
-**正确做法**：用排除列表（见七、Defender 排除列表）。
+**正确做法**：开发目录放到 Dev Drive，让 Defender 用性能模式（见第七节）；排除列表是 🟠 HIGH 的最后手段。
 
 ### ❌ 误区 4："xx 优化大师 / xx 清理王能提速"
 
@@ -397,10 +388,7 @@ Add-MpPreference -ExclusionProcess "devenv.exe"
 2. **视觉效果**改"最佳性能"（保留字体平滑）
    GUI：系统属性 → 高级 → 性能设置 → "调整为最佳性能" → 勾字体平滑
 
-3. **Defender 排除**加 IDE 缓存路径（管理员 PowerShell）
-   ```powershell
-   Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\JetBrains"
-   ```
+3. **开发者**：代码和包缓存放 Dev Drive（第七节）。Defender 排除不在"快速清单"里，属 🟠 HIGH，须逐项确认。
 
 4. **自启项清理**（HKCU Run + 计划任务）
    ```powershell

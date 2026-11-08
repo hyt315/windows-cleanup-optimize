@@ -9,12 +9,75 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  linux:
+    name: selftest + Pester (Ubuntu, PowerShell 7)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Regression tests
+      - name: selftest
         run: python scripts/selftest.py
+      - name: Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser
+          $c = New-PesterConfiguration
+          $c.Run.Path = './tests'
+          $c.Run.Exit = $true
+          $c.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $c
+
+  windows:
+    name: Windows (PowerShell 5.1 + 7) read-only proof
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: selftest
+        run: python scripts/selftest.py
+      - name: Parse every script with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $bad = 0
+          Get-ChildItem scripts, tests -Recurse -Include *.ps1, *.psm1 | ForEach-Object {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs)
+            if ($errs) { Write-Host "::error file=$($_.FullName)::$($errs[0].Message)"; $bad++ }
+          }
+          if ($bad) { exit 1 }
+      - name: Pester (PowerShell 7)
+        shell: pwsh
+        run: |
+          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser
+          $c = New-PesterConfiguration
+          $c.Run.Path = './tests'
+          $c.Run.Exit = $true
+          Invoke-Pester -Configuration $c
+      - name: full_scan.ps1 is read-only (Windows PowerShell 5.1, -Quick)
+        shell: powershell
+        run: |
+          function Snap {
+            [pscustomobject]@{
+              Services = (Get-CimInstance Win32_Service | Sort-Object Name | ForEach-Object { "$($_.Name)|$($_.StartMode)" }) -join "`n"
+              RunHKCU  = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue | Out-String)
+              RunHKLM  = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue | Out-String)
+              Power    = (powercfg /getactivescheme)
+            }
+          }
+          $before = Snap
+          $out = Join-Path $env:RUNNER_TEMP 'wco-ci'
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\full_scan.ps1 -Quick -OutDir $out
+          $after = Snap
+          $changed = @('Services', 'RunHKCU', 'RunHKLM', 'Power') | Where-Object { $before.$_ -ne $after.$_ }
+          if ($changed) { Write-Host "::error::full_scan.ps1 changed: $($changed -join ', ')"; exit 1 }
+          $report = Get-ChildItem $out -Filter 'full_scan_*.txt' | Select-Object -First 1
+          if (-not $report) { Write-Host '::error::no report written'; exit 1 }
+          $text = Get-Content $report.FullName -Raw -Encoding UTF8
+          foreach ($marker in '[T0]', '[T9]', '[T5]', '[T10]') {
+            if (-not $text.Contains($marker)) { Write-Host "::error::report missing $marker"; exit 1 }
+          }
+          Write-Host "OK: read-only, report $($report.Length) bytes"
