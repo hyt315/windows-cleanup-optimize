@@ -82,6 +82,9 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\full_scan.ps1 -Quick -OutDir $out
           $after = Snap
           $changed = @('Services', 'RunHKCU', 'RunHKLM', 'Power') | Where-Object { $before.$_ -ne $after.$_ }
+          foreach ($k in $changed) {
+            Compare-Object ($before.$k -split "`n") ($after.$k -split "`n") | ForEach-Object { Write-Host "  $k $($_.SideIndicator) $($_.InputObject)" }
+          }
           if ($changed) { Write-Host "::error::full_scan.ps1 changed: $($changed -join ', ')"; exit 1 }
           $report = Get-ChildItem $out -Filter 'full_scan_*.txt' | Select-Object -First 1
           if (-not $report) { Write-Host '::error::no report written'; exit 1 }
