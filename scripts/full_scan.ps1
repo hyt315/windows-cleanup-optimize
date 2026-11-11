@@ -28,31 +28,48 @@ param(
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# 保存原控制台编码，脚本结尾还原，不给用户的会话留副作用。
+# 注意：主体不包 try/finally —— 在 try 里任何一条语句级错误都会中止整次扫描，而现在是"某段失败就跳过、继续下一段"。
+$script:origOutputEncoding = $null
+try { $script:origOutputEncoding = [Console]::OutputEncoding; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { Write-Verbose "无法设置控制台编码：$($_.Exception.Message)" }
+function Restore-ConsoleEncoding {
+    if ($null -ne $script:origOutputEncoding) {
+        try { [Console]::OutputEncoding = $script:origOutputEncoding } catch { Write-Verbose "无法还原控制台编码：$($_.Exception.Message)" }
+    }
+}
+try {
+    Import-Module (Join-Path $PSScriptRoot 'lib\Wco.Common.psm1') -Force -ErrorAction Stop
+} catch {
+    Restore-ConsoleEncoding
+    throw "加载 scripts\lib\Wco.Common.psm1 失败：$($_.Exception.Message)"
+}
+# 只读保证：除了 %TEMP%\wco 下的这份报告，不写任何文件
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
 $report = Join-Path $OutDir "full_scan_$ts.txt"
-$script:lines  = @()
-$script:findings = @()
+$script:lines  = New-Object 'System.Collections.Generic.List[string]'
+$script:findings = New-Object 'System.Collections.Generic.List[object]'
 $script:startTime = Get-Date
+# 体积缓存（完整路径 → 字节）：AppData 只遍历一次，后面各段直接复用
+$script:sizeCache = @{}
 
-function Log($s) { $script:lines += $s; Write-Host $s }
+function Log($s) { $script:lines.Add([string]$s); Write-Host $s }
 function Get-DirSize($p) {
-    if (-not (Test-Path $p)) { return 0 }
-    $s = (Get-ChildItem $p -Recurse -Force -EA SilentlyContinue |
-          Where-Object { -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) } |
-          Measure-Object Length -Sum -EA SilentlyContinue).Sum
-    if ($null -eq $s) { 0 } else { $s }
+    # Measure-WcoDirectory：不进 junction/符号链接（5.1 下 Get-ChildItem -Recurse 会跟随），路径按字面处理（[ ] 不当通配符）
+    if (-not $p) { return 0 }
+    $r = Measure-WcoDirectory -Path $p -Cache $script:sizeCache
+    if (-not $r.Exists) { return 0 }
+    return [int64]$r.Bytes
 }
 function MB($b) { if ($null -eq $b -or $b -eq 0) { '0 MB' } else { '{0:N1} MB' -f ($b/1MB) } }
 function GB($b) { if ($null -eq $b -or $b -eq 0) { '0 MB' } else { '{0:N2} GB' -f ($b/1GB) } }
 
 function Add-Finding($tpl, $type, $level, $path, $size, $lastWrite, $note) {
-    $script:findings += [PSCustomObject]@{
+    $script:findings.Add([PSCustomObject]@{
         Template = $tpl; Type = $type; Level = $level
         Path = $path; SizeMB = [math]::Round($size/1MB, 1)
         LastWrite = $lastWrite; Note = $note
-    }
+    })
 }
 
 Log "===== windows-cleanup-optimize 全量扫描 ====="
@@ -60,7 +77,7 @@ Log "时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Log "机器: $env:COMPUTERNAME / $env:USERNAME"
 $os = Get-CimInstance Win32_OperatingSystem
 Log "系统: $($os.Caption) $($os.Version)"
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$isAdmin = Test-WcoAdmin
 if ($isAdmin) {
     Log "权限: 管理员（完整扫描）"
 } else {
@@ -118,16 +135,22 @@ $layers = @(
     @{L='AppData\Roaming';P=$env:APPDATA;ThresholdMB=30;Tpl='T1c'},
     @{L='AppData\Local\Programs';P="$env:LOCALAPPDATA\Programs";ThresholdMB=30;Tpl='T1d'}
 )
+# 由深到浅预先量一遍各层子目录（Local\Programs → Local → Roaming → USERPROFILE），
+# 结果进缓存：外层遇到已量过的子目录直接取值，AppData 不会被重复遍历。T3/T5A 也复用这些结果。
+$layerRows = @{}
+foreach ($layer in @($layers[3], $layers[1], $layers[2], $layers[0])) {
+    $rows = @()
+    if ($layer.P -and (Test-Path -LiteralPath $layer.P)) {
+        $rows = @(Get-ChildItem -LiteralPath $layer.P -Directory -Force -EA SilentlyContinue | ForEach-Object {
+            [PSCustomObject]@{ N=$_.Name; S=(Get-DirSize $_.FullName); LW=$_.LastWriteTime }
+        })
+    }
+    $layerRows[$layer.Tpl] = $rows
+}
 foreach ($layer in $layers) {
     Log "=== [$($layer.Tpl)] $($layer.L) Top 20 ==="
-    if (Test-Path $layer.P) {
-        $rows = @()
-        Get-ChildItem $layer.P -Directory -Force -EA SilentlyContinue | ForEach-Object {
-            $s = Get-DirSize $_.FullName
-            if ($s -ge ($layer.ThresholdMB * 1MB)) {
-                $rows += [PSCustomObject]@{ N=$_.Name; S=$s; LW=$_.LastWriteTime }
-            }
-        }
+    if ($layer.P -and (Test-Path -LiteralPath $layer.P)) {
+        $rows = @($layerRows[$layer.Tpl] | Where-Object { $_.S -ge ($layer.ThresholdMB * 1MB) })
         $rows | Sort-Object S -Descending | Select-Object -First 20 | ForEach-Object {
             Log ("  {0,-8}  {1,-50}  写 {2:yyyy-MM-dd}" -f (MB $_.S), $_.N, $_.LW)
         }
@@ -140,10 +163,10 @@ if ($Quick) { Log "=== [T2] 已跳过（-Quick：不递归统计非系统盘和�
 Log "=== [T2] 非系统盘根目录 ==="
 foreach ($letter in @('D','E','F')) {
     $root = "${letter}:\"
-    if (-not (Test-Path $root)) { continue }
+    if (-not (Test-Path -LiteralPath $root)) { continue }
     Log "  --- ${letter} 盘 ---"
     $rows = @()
-    Get-ChildItem $root -Directory -Force -EA SilentlyContinue | ForEach-Object {
+    Get-ChildItem -LiteralPath $root -Directory -Force -EA SilentlyContinue | ForEach-Object {
         $s = Get-DirSize $_.FullName
         if ($s -ge 100MB) {
             $hidden = if ($_.Attributes -match 'Hidden') { ' [H]' } else { '' }
@@ -163,7 +186,8 @@ Log "=== [T5] 更新包残留（4 项必跑）==="
 
 # T5A: AppData 下 update/updater 类
 foreach ($base in @($env:LOCALAPPDATA, $env:APPDATA)) {
-    Get-ChildItem $base -Directory -Force -EA SilentlyContinue |
+    if (-not $base) { continue }
+    Get-ChildItem -LiteralPath $base -Directory -Force -EA SilentlyContinue |
         Where-Object { $_.Name -match 'update|updater|patch|installer|pending' } | ForEach-Object {
             $s = Get-DirSize $_.FullName
             if ($s -ge 30MB) {
@@ -176,12 +200,13 @@ foreach ($base in @($env:LOCALAPPDATA, $env:APPDATA)) {
 # T5B: 安装目录下 update/updater 子目录
 $progBases = @("C:\Program Files", "C:\Program Files (x86)", "$env:LOCALAPPDATA\Programs")
 foreach ($pb in $progBases) {
-    if (-not (Test-Path $pb)) { continue }
-    Get-ChildItem $pb -Directory -Force -EA SilentlyContinue | ForEach-Object {
+    if (-not (Test-Path -LiteralPath $pb)) { continue }
+    Get-ChildItem -LiteralPath $pb -Directory -Force -EA SilentlyContinue | ForEach-Object {
         foreach ($sub in @('Update','updater','pending','updateTemp')) {
             $p = Join-Path $_.FullName $sub
-            if ((Test-Path $p) -and ((Get-DirSize $p) -gt 20MB)) {
-                $s = Get-DirSize $p
+            if (-not (Test-Path -LiteralPath $p)) { continue }
+            $s = Get-DirSize $p
+            if ($s -gt 20MB) {
                 Log ("  [T5B] {0,-8}  {1}\{2}" -f (MB $s), $_.Name, $sub)
             }
         }
@@ -197,7 +222,7 @@ $sysDirs = @(
     @{N='Intel';P='C:\Intel'}
 )
 foreach ($d in $sysDirs) {
-    if (Test-Path $d.P) {
+    if (Test-Path -LiteralPath $d.P) {
         $s = Get-DirSize $d.P
         if ($s -gt 50MB) { Log "  [T5C] $($d.N): $(GB $s)" }
     }
@@ -205,15 +230,15 @@ foreach ($d in $sysDirs) {
 
 # T5D: Downloads / Temp 中 >50MB 安装包
 $dl = "$env:USERPROFILE\Downloads"
-if (Test-Path $dl) {
-    Get-ChildItem $dl -File -Force -EA SilentlyContinue | Where-Object { $_.Length -gt 50MB } |
+if (Test-Path -LiteralPath $dl) {
+    Get-ChildItem -LiteralPath $dl -File -Force -EA SilentlyContinue | Where-Object { $_.Length -gt 50MB } |
         Sort-Object Length -Descending | Select-Object -First 20 | ForEach-Object {
             Log ("  [T5D-Downloads] {0,-8}  {1}" -f (MB $_.Length), $_.Name)
         }
 }
 $tempPath = "$env:LOCALAPPDATA\Temp"
-if (Test-Path $tempPath) {
-    Get-ChildItem $tempPath -File -Force -EA SilentlyContinue | Where-Object { $_.Length -gt 50MB } |
+if (Test-Path -LiteralPath $tempPath) {
+    Get-ChildItem -LiteralPath $tempPath -File -Force -EA SilentlyContinue | Where-Object { $_.Length -gt 50MB } |
         Sort-Object Length -Descending | Select-Object -First 10 | ForEach-Object {
             Log ("  [T5D-Temp] {0,-8}  {1}" -f (MB $_.Length), $_.Name)
         }
@@ -231,18 +256,19 @@ $aiTargets = @(
     @{N='Android AVD Emulators'; P="$env:USERPROFILE\.android\avd"; Note='安卓虚拟设备镜像，可通过ANDROID_AVD_HOME官方迁移D盘'}
 )
 foreach ($item in $aiTargets) {
-    if (Test-Path $item.P) {
+    if (Test-Path -LiteralPath $item.P) {
         $s = Get-DirSize $item.P
         if ($s -ge 50MB) {
-            Log ("  [T5E-AI] {0,-8}  {1}  (写 {2:yyyy-MM-dd})" -f (MB $s), $item.N, (Get-Item $item.P).LastWriteTime)
-            Add-Finding 'T5E' 'AI与虚拟化缓存' '🟡' $item.P $s (Get-Item $item.P).LastWriteTime.ToString('yyyy-MM-dd') $item.Note
+            $lw = (Get-Item -LiteralPath $item.P -Force).LastWriteTime
+            Log ("  [T5E-AI] {0,-8}  {1}  (写 {2:yyyy-MM-dd})" -f (MB $s), $item.N, $lw)
+            Add-Finding 'T5E' 'AI与虚拟化缓存' '🟡' $item.P $s $lw.ToString('yyyy-MM-dd') $item.Note
         }
     }
 }
 # VHDX 虚拟磁盘扫描（WSL2 / Docker）
 $pkgDir = "$env:LOCALAPPDATA\Packages"
-if (Test-Path $pkgDir) {
-    Get-ChildItem $pkgDir -Filter "*.vhdx" -Recurse -Force -EA SilentlyContinue | ForEach-Object {
+if (Test-Path -LiteralPath $pkgDir) {
+    Get-ChildItem -LiteralPath $pkgDir -Filter "*.vhdx" -Recurse -Force -EA SilentlyContinue | ForEach-Object {
         if ($_.Length -ge 100MB) {
             Log ("  [T5E-VHDX] {0,-8}  {1}" -f (GB $_.Length), $_.FullName)
             Add-Finding 'T5E' 'AI与虚拟化缓存' '🟡' $_.FullName $_.Length $_.LastWriteTime.ToString('yyyy-MM-dd') 'WSL2/Docker虚拟磁盘，可通过wsl --manage --set-sparse true启用自动缩容或compact压缩'
@@ -262,8 +288,8 @@ Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -
     Where-Object { $_.DisplayName } | ForEach-Object { $installed += $_.DisplayName }
 $installedLower = ($installed | ForEach-Object { $_.ToLower() } | Select-Object -Unique)
 
-Get-ChildItem $env:APPDATA -Directory -Force -EA SilentlyContinue | ForEach-Object {
-    $s = Get-DirSize $_.FullName
+Get-ChildItem -LiteralPath $env:APPDATA -Directory -Force -EA SilentlyContinue | ForEach-Object {
+    $s = Get-DirSize $_.FullName   # 命中 T1c 缓存，不再遍历 Roaming
     if ($s -lt 10MB) { return }
     $dL = $_.Name.ToLower()
     $m = $installedLower | Where-Object { $_ -match [regex]::Escape($dL) -or $dL -match [regex]::Escape($_) } | Select-Object -First 1
@@ -282,8 +308,8 @@ Log "=== [T4] 安装目录残留 (C:/D:/Program Files) ==="
 $knownSys = @('common files','windows nt','internet explorer','windows defender','microsoft shared','windows media player','reference assemblies','msbuild','dotnet','windows kits','windowsapps','modifiablewindowsapps','windows powershell')
 $progBases2 = @("C:\Program Files", "C:\Program Files (x86)", "D:\Program Files", "D:\Program Files (x86)", "$env:LOCALAPPDATA\Programs")
 foreach ($pb in $progBases2) {
-    if (-not (Test-Path $pb)) { continue }
-    Get-ChildItem $pb -Directory -Force -EA SilentlyContinue | ForEach-Object {
+    if (-not (Test-Path -LiteralPath $pb)) { continue }
+    Get-ChildItem -LiteralPath $pb -Directory -Force -EA SilentlyContinue | ForEach-Object {
         $dL = $_.Name.ToLower()
         if ($knownSys -contains $dL) { return }
         $s = Get-DirSize $_.FullName
@@ -327,7 +353,7 @@ $aiTargets = @(
     @{L='本地 Python';P="$env:LOCALAPPDATA\Programs\Python"}
 )
 foreach ($t in $aiTargets) {
-    if (Test-Path $t.P) {
+    if (Test-Path -LiteralPath $t.P) {
         $s = Get-DirSize $t.P
         if ($s -ge 5MB) {
             Log ("  [T17] {0,-8}  {1,-30}  {2}" -f (MB $s), $t.L, $t.P)
@@ -362,26 +388,34 @@ Log ""
 
 # ===== [T10] 自启动项 =====
 Log "=== [T10] 自启动项 ==="
-foreach ($key in @(
-    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
-    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"
-)) {
-    if (Test-Path $key) {
-        Log "  [Run] $key"
-        Get-ItemProperty $key -EA SilentlyContinue | ForEach-Object {
-            $_.PSObject.Properties |
-                Where-Object { $_.Name -notin @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider') } |
-                ForEach-Object { Log ("    {0,-35} = {1}" -f $_.Name, $_.Value) }
+# Run / RunOnce / RunOnceEx / Policies\Explorer\Run / 启动文件夹，并对上 StartupApproved（任务管理器「启动应用」开关）
+$approvedLabel = @{ Enabled = '启用'; Disabled = '已禁用'; Absent = '启用(默认)'; Unknown = '未知'; 'n/a' = '无开关' }
+$startupItems = @(Get-WcoStartupItem)
+if ($startupItems.Count -eq 0) {
+    Log "  （未读到任何登录自启项）"
+} else {
+    $startupItems | Group-Object Source | ForEach-Object {
+        Log "  [$($_.Name)] $($_.Group[0].Location)"
+        foreach ($it in $_.Group) {
+            $st = $approvedLabel[[string]$it.Approved]
+            if (-not $st) { $st = [string]$it.Approved }
+            if ($it.DisabledAt) { $st = "$st @ $($it.DisabledAt.ToString('yyyy-MM-dd'))" }
+            Log ("    {0,-14} {1,-35} = {2}" -f "[$st]", $it.Name, $it.Command)
         }
     }
+    $activeCnt = @($startupItems | Where-Object { $_.Approved -ne 'Disabled' }).Count
+    Log ("  合计 {0} 项，其中生效 {1} 项（已在任务管理器禁用的 {2} 项不算生效）" -f $startupItems.Count, $activeCnt, ($startupItems.Count - $activeCnt))
 }
 Log "  --- 计划任务（前 20 最近运行）---"
-Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.State -ne 'Disabled' } | ForEach-Object {
+@(Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.State -ne 'Disabled' } | ForEach-Object {
     $info = $_ | Get-ScheduledTaskInfo -EA SilentlyContinue
-    $last = if ($info.LastRunTime) { $info.LastRunTime.ToString('MM-dd HH:mm') } else { '从未' }
-    [PSCustomObject]@{ Name=$_.TaskName; State=$_.State; Last=$last }
-} | Sort-Object @{E={ if ($_.Last -eq '从未') { '9999' } else { $_.Last } }} | Select-Object -First 20 |
+    $lrt = $null
+    if ($info -and $info.LastRunTime -and ([datetime]$info.LastRunTime).Year -ge 2000) { $lrt = [datetime]$info.LastRunTime }
+    $last = if ($lrt) { $lrt.ToString('yyyy-MM-dd HH:mm') } else { '从未' }
+    # 从未运行的任务 LastRunTime 常为 1999-11-30，按"从未"处理并排在最后
+    $sortKey = if ($lrt) { $lrt } else { [datetime]::MinValue }
+    [PSCustomObject]@{ Name=$_.TaskName; State=$_.State; Last=$last; SortKey=$sortKey }
+}) | Sort-Object SortKey -Descending | Select-Object -First 20 |
     ForEach-Object { Log ("    {0,-12} {1,-50} 上次 {2}" -f $_.State, $_.Name, $_.Last) }
 Log ""
 
@@ -455,14 +489,20 @@ Log ""
 
 # ===== [T19] WMI 持久化与快捷方式劫持审计 =====
 Log "=== [T19] WMI 持久化与快捷方式劫持审计 ==="
-# 1. WMI 命令行事件消费者
-$wmiConsumers = Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -EA SilentlyContinue
-if ($wmiConsumers) {
-    foreach ($c in $wmiConsumers) {
-        Log ("  ⚠️  [WMI常驻] 名称: {0} | 命令行: {1}" -f $c.Name, $c.CommandLineTemplate)
-        Add-Finding 'T19' 'WMI持久化常驻' '🔴' "root\subscription:$($c.Name)" 0 'n/a' "命令行: $($c.CommandLineTemplate)"
-    }
-} else { Log "  ✅ 未检测到 WMI CommandLineEventConsumer 常驻" }
+# 1. WMI 永久事件订阅（__EventFilter / CommandLine / ActiveScript 消费者 / 绑定）；查询失败绝不报"干净"
+$wmi = Get-WcoWmiSubscription
+if ($wmi.Status -ne 'OK') {
+    Log ("  ⚠️  [WMI] 查询失败（需管理员）—— 未检查，不代表干净。{0}" -f $wmi.Message)
+} else {
+    $wmiSuspect = @($wmi.Items | Where-Object { -not $_.KnownDefault })
+    if ($wmiSuspect.Count -gt 0) {
+        foreach ($c in $wmiSuspect) {
+            Log ("  ⚠️  [WMI常驻] {0} | 名称: {1} | {2}" -f $c.Class, $c.Name, $c.Detail)
+            $lvl = if ($c.Class -match 'Consumer') { '🔴' } else { '🟡' }
+            Add-Finding 'T19' 'WMI持久化常驻' $lvl "root\subscription:$($c.Class):$($c.Name)" 0 'n/a' "待核实：$($c.Detail)"
+        }
+    } else { Log ("  ✅ 未检测到第三方 WMI 永久事件订阅（系统自带 {0} 项已忽略）" -f @($wmi.Items).Count) }
+}
 
 # 2. 桌面与开始菜单 LNK 快捷方式参数审计（检测劫持推广参数）
 $shell = New-Object -ComObject WScript.Shell
@@ -474,8 +514,8 @@ $lnkDirs = @(
 )
 $hijackedLnks = 0
 foreach ($dir in $lnkDirs) {
-    if (Test-Path $dir) {
-        Get-ChildItem -Path $dir -Filter *.lnk -Recurse -EA SilentlyContinue | ForEach-Object {
+    if ($dir -and (Test-Path -LiteralPath $dir)) {
+        Get-ChildItem -LiteralPath $dir -Filter *.lnk -Recurse -EA SilentlyContinue | ForEach-Object {
             try {
                 $sc = $shell.CreateShortcut($_.FullName)
                 if ($sc.Arguments -match 'http|www\.|\.com|\.cn|channel=|tn=|--flag') {
@@ -519,6 +559,33 @@ if ($compactQuery) {
 }
 Log ""
 
+# ===== [EXT] 扩展审计模板（t23/t24/t25，存在才跑）=====
+Log "=== [EXT] 扩展审计模板 ==="
+$extTemplates = @(
+    @{ L='T23 浏览器劫持审计'; F='t23-audit-browser-hijack.ps1' },
+    @{ L='T24 扩展自启动审计'; F='t24-audit-autostart-extended.ps1' },
+    @{ L='T25 已安装程序清单'; F='t25-inventory-programs.ps1' }
+)
+$extFound = 0
+foreach ($et in $extTemplates) {
+    $tp = Join-Path $PSScriptRoot (Join-Path 'templates' $et.F)
+    if (-not (Test-Path -LiteralPath $tp)) { continue }
+    $extFound++
+    Log "  --- $($et.L) ($($et.F)) ---"
+    $t0 = Get-Date
+    try {
+        $out = @(& $tp)
+        Log ("    完成（屏幕明细见上方）：返回 {0} 个结果对象，用时 {1:N1} 秒" -f $out.Count, ((Get-Date) - $t0).TotalSeconds)
+        $preview = @($out | Select-Object -First 3 | ForEach-Object { if ($_ -is [string]) { $_ } else { ($_ | Out-String -Width 160).Trim() } })
+        foreach ($pl in $preview) { foreach ($ln in ($pl -split "`r?`n" | Select-Object -First 4)) { Log "    $ln" } }
+        if ($out.Count -gt 3) { Log "    …（其余 $($out.Count - 3) 条见该模板单独运行的输出）" }
+    } catch {
+        Log "    ⚠️  运行失败：$($_.Exception.Message)"
+    }
+}
+if ($extFound -eq 0) { Log "  未找到模板，跳过" }
+Log ""
+
 # ===== 自动画像反推 =====
 Log "===== 画像自动反推 ====="
 $personas = @()
@@ -529,7 +596,7 @@ if ($wpsFamily) { $personas += '🏠 家庭用户（装了 WPS/360/2345/腾讯�
 $devMarkers = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code", "$env:USERPROFILE\.vscode", "$env:LOCALAPPDATA\JetBrains",
                 "$env:LOCALAPPDATA\Programs\Python", "$env:APPDATA\npm", "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.gradle",
                 "$env:ProgramFiles\Docker", "$env:USERPROFILE\.codex", "$env:USERPROFILE\.gemini")
-$devPaths = $devMarkers | Where-Object { Test-Path $_ }
+$devPaths = $devMarkers | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 if ($devPaths) { $personas += '👨‍💻 开发者（装了 VS Code/JetBrains/Python 等开发工具）' }
 # AI 创作者 / 虚拟化用户：本地大模型、WSL2、Docker、AVD 镜像
 $aiPaths = $findings | Where-Object { $_.Type -eq 'AI与虚拟化缓存' -or $_.Path -match 'ollama|huggingface|modelscope|\.android\\avd|\.vhdx' }
@@ -566,8 +633,11 @@ Log ("  扫描耗时 {0:N0} 秒" -f ((Get-Date) - $script:startTime).TotalSecond
 Log ""
 
 # ===== 写盘 =====
-$script:lines | Out-File $report -Encoding UTF8
+$script:lines | Out-File -LiteralPath $report -Encoding UTF8
 Write-Host ""
 Write-Host "===== 报告已生成 ====="
 Write-Host "路径: $report"
 Write-Host "发现数: $($findings.Count) 项"
+
+# 还原控制台编码
+Restore-ConsoleEncoding

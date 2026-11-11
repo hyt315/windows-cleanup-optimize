@@ -27,7 +27,7 @@
 
 | 场景 | 正确做法 | 依据 |
 |------|---------|------|
-| 微信 / QQ | 应用内"文件管理 → 更改保存位置" | `chat-apps-migration.md` |
+| 微信 / QQ | 应用内存储位置设置（微信 4.x：主界面右下角「设置」→「账号和存储」→「存储位置」；QQ 菜单路径「存疑」） | `chat-apps-migration.md` |
 | 游戏（Steam/Epic/Xbox） | 平台自带"库文件夹/移动游戏" | 本文 §3.1 |
 | 浏览器 | `--user-data-dir` / 官方策略 / about:profiles | 本文 §3.4 |
 | 开发工具（npm/pnpm/IDE/Docker/WSL） | 官方配置项 / 官方命令 | 本文 §3.3、§3.5 |
@@ -68,14 +68,16 @@
 
 1. `Win+R` → `sysdm.cpl` → 高级 → 性能:设置 → 高级 → 虚拟内存:更改。
 2. 取消勾选"自动管理所有驱动器分页文件大小"；
-3. C 盘设为"无分页文件"（或保留"系统管理"小文件防止崩溃）；
-4. D 盘"自定义大小"，初始/最大 = 物理内存 1~1.5 倍 → 确定 → **重启生效**（重启后 `C:\pagefile.sys` 消失）。
+3. D 盘选 **"系统管理的大小"** → 设置；
+4. C 盘建议**保留一个较小的页面文件或系统管理**（崩溃转储需要），不建议"无分页文件"；→ 确定 → **重启生效**。
+
+> 页面文件的大小规则和崩溃转储要求以 **`system-cleanup.md` 的"页面文件（pagefile.sys）"一节**为准（本仓库唯一权威说明）。"内存 1~1.5 倍"是旧经验，微软说明大小"无法一概而论"，默认建议系统管理。
 
 > **官方依据**（微软 Learn，均可访问）：
 > - [Introduction to page files](https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/introduction-to-the-page-file)（页面文件用途=崩溃转储 + 扩展提交上限；默认建议保持"系统管理"）
 > - [How to determine the appropriate page file size for 64-bit versions of Windows](https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/how-to-determine-the-appropriate-page-file-size-for-64-bit-versions-of-windows)（官方大小判定规则）
 >
-> 除了省空间，还能显著降低 C 盘磁盘压力。**页面文件不要设为 0**（`pitfalls.md` 34：崩溃转储需要）。
+> **页面文件不要设为 0**（内存吃紧时程序会崩溃，且可能写不出崩溃转储）。
 
 ### 2.5 休眠文件 hiberfil.sys
 
@@ -84,7 +86,8 @@
 
 ```powershell
 powercfg /h off              # 删除 C:\hiberfil.sys，禁用休眠与快速启动
-powercfg /h /type reduced    # 想保留“快速启动”但缩小文件
+powercfg /h /size 0          # 仅当以前自定义过大小时先执行：恢复由系统管理
+powercfg /h /type reduced    # 想保留“快速启动”但缩小文件（约小 30%，“休眠”选项会消失）
 powercfg /h on               # 恢复
 ```
 
@@ -116,7 +119,7 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 
 ### 3.2 聊天 / 通讯
 
-- **微信 / QQ**：应用内"文件管理 → 更改保存位置"（官方迁移通道）。完整步骤、目录结构、排坑 → `chat-apps-migration.md`。**不要对微信/QQ 用 mklink**（硬编码路径会损坏数据，`pitfalls.md` 58）。
+- **微信 / QQ**：应用内存储位置设置（微信 4.x 按腾讯客服 FAQ：主界面右下角「设置」→「账号和存储」→「存储位置」；QQ 的菜单路径未找到腾讯官方页面，「存疑」以当前版本界面为准）。完整步骤、目录结构、排坑 → `chat-apps-migration.md`。**不要对微信/QQ 用 mklink**（硬编码路径会损坏数据，`pitfalls.md` 58）。
 - **Discord**：安装器自带目录选择页，装到 D 盘即可；缓存（`%AppData%\Discord\Cache`）**官方无改路径功能**（社区共识），不折腾。
 - **Telegram Desktop**：官方就有 **Windows 便携版**，解压到 D 盘后数据随所在目录走。官方直达：https://telegram.org/dl/desktop/win64_portable （重定向到官方 CDN，实测可访问）。
 
@@ -141,16 +144,19 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 
 有 D 盘空余（≥50 GB）、Windows 11 22621.2338 及以上的开发者，比 mklink 和逐个改配置更好的做法是建一个 Dev Drive，把代码和包缓存都放进去：
 
-1. 创建：设置 › 系统 › 存储 › 高级存储设置 › 磁盘和卷 › 创建 Dev Drive（推荐"新建 VHD"、VHDX、动态扩展）。**已有分区不能原地转换，格式化会清空该分区**。
+1. 创建：设置 › 系统 › 存储 › 高级存储设置 › 磁盘和卷 › 创建 Dev Drive（"新建 VHD"、VHDX、动态扩展更灵活；微软说明独立分区性能更好）。**已有分区不能原地转换，格式化会清空该分区**。
+   - Defender 性能模式要两个条件同时满足：Dev Drive **受信任**，且 **Defender 实时保护处于打开状态**。
+   - VHD 被移动/复制/重新挂载后会变成不受信任：先 `fsutil devdrv query D:` 查看，确认是自己创建的盘再用管理员 `fsutil devdrv trust D:` 重新信任。
 2. 按微软文档设系统环境变量（管理员）并把旧缓存挪过去，例如：
    - npm：`setx /M npm_config_cache D:\packages\npm`，旧内容在 `%AppData%\npm-cache`（部分机器在 `%LocalAppData%\npm-cache`）
    - pip：`setx /M PIP_CACHE_DIR D:\packages\pip`，旧内容在 `%LocalAppData%\pip\Cache`
    - NuGet：`setx /M NUGET_PACKAGES D:\<用户名>\.nuget\packages`（或在 NuGet.Config 里设 `globalPackagesFolder`，微软更推荐）
    - Cargo：`setx /M CARGO_HOME D:\packages\cargo`；Gradle：`setx /M GRADLE_USER_HOME D:\packages\gradle`；vcpkg：`setx /M VCPKG_DEFAULT_BINARY_CACHE D:\packages\vcpkg`
+   - Maven：`setx /M MAVEN_OPTS "-Dmaven.repo.local=D:\packages\maven"`（微软文档列出的方式；若已有 MAVEN_OPTS 要合并而不是覆盖）
 3. 关掉所有终端或重启后生效。环境变量改动要写进变更记录，回退是 `setx /M 变量名 ""` 或在"系统属性 › 环境变量"里删除。
 4. 不要放进 Dev Drive 的：Visual Studio、SDK 等开发工具本体（微软明确建议留在 C 盘）；需要 Linux 权限位的 WSL 文件（ReFS 不支持 WSL 的 metadata 挂载选项）。
 
-依据：Microsoft Learn《Set up a Dev Drive on Windows 11》。
+依据：Microsoft Learn《Set up a Dev Drive on Windows 11》https://learn.microsoft.com/en-us/windows/dev-drive/ （访问于 2026-11-11）。
 
 ### 3.4 浏览器
 
@@ -167,7 +173,7 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 | 工具 | 官方方式 | 操作 | 官方来源 |
 |------|---------|------|---------|
 | **Docker Desktop** | 设置里改 Disk image location | 设置→Resources→Advanced→**Disk image location** 改 D 盘（**仅 Hyper-V 后端**）；WSL2 后端用下方 WSL2 迁移；CLI 原生清理 `docker system prune -a --volumes` | [Docker 设置文档](https://docs.docker.com/desktop/settings-and-maintenance/settings/)、[Docker + WSL](https://docs.docker.com/desktop/wsl/) |
-| **WSL2（稀疏压缩 / 搬盘）** | 官方原生稀疏压缩（Win11 WSL 2.0+）或 export/import | **原生稀疏缩容**：`wsl --shutdown` → `wsl --manage <发行版> --set-sparse true`（自动缩容）；<br>**搬盘重定向**：`wsl --shutdown` → `wsl --export <发行版> D:\backup\my.tar` → `wsl --unregister <发行版>` → `wsl --import <发行版> D:\wsl\<发行版> D:\backup\my.tar --version 2`；<br>**离线 compact 压缩**：`wsl --shutdown` → `diskpart` → `select vdisk file="<ext4.vhdx路径>"` → `compact vdisk` | [WSL 基础命令与管理](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)、[WSL 自定义发行版](https://learn.microsoft.com/en-us/windows/wsl/use-custom-distro) |
+| **WSL2（缩容 / 搬盘）** | 先压缩、再考虑搬盘（export/import） | **缩容前**：WSL 里先 `sudo fstrim -av`，再 `wsl --version` 看版本，`wsl --shutdown`。<br>**新版 WSL（2.9.8 及以后，含 `--compact` 的版本）**：`wsl --manage <发行版> --compact`；<br>**旧版 WSL**：管理员 `diskpart` → `select vdisk file="<ext4.vhdx路径>"` → `attach vdisk readonly` → `compact vdisk` → `detach vdisk` → `exit`；<br>**搬盘重定向**：`wsl --shutdown` → `wsl --export <发行版> D:\backup\my.tar` → `wsl --unregister <发行版>`（**会删除原发行版，确认 tar 完整后再执行**）→ `wsl --import <发行版> D:\wsl\<发行版> D:\backup\my.tar --version 2`。<br>🔴 **不推荐 `--set-sparse true`**：WSL 2.5.6 起它因潜在数据损坏被放到 `--allow-unsafe` 之后，有用户报告 ext4 和宿主 NTFS 同时损坏。<br>ext4.vhdx 位置不一定在 `%LOCALAPPDATA%\Packages`：Docker Desktop 在 `%LOCALAPPDATA%\Docker\wsl\…`，导入的发行版看 `HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss\*` 的 `BasePath` | [WSL 磁盘空间管理](https://learn.microsoft.com/en-us/windows/wsl/disk-space)、[WSL 基础命令](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)；`--compact`：https://github.com/microsoft/WSL/pull/40481 （2026-08-12 合并，首见 2.9.8 预发布）、https://github.com/microsoft/WSL/releases/tag/3.0.5 ；set-sparse 风险：https://github.com/microsoft/WSL/issues/13075 （访问于 2026-11-11） |
 | **VirtualBox** | 默认机器文件夹 | 文件→全局设置→General→**Default Machine Folder** 改 D 盘；已有 VM 用菜单"复制/移动"迁移 | [VirtualBox Manual](https://www.virtualbox.org/manual/ch03.html) |
 | **VMware Workstation** | 默认虚拟机位置 | 编辑→首选项→工作区→默认虚拟机位置改 D 盘；旧 VM 直接搬目录后"打开" | [官方文档:Configuring the Default Locations for Virtual Machine Files](https://techdocs.broadcom.com/us/en/vmware-cis/desktop-hypervisors/workstation-pro/17-0/using-vmware-workstation-pro/changing-workstation-pro-preference-settings/configuring-workspace-preference-settings/configuring-the-default-locations-for-virtual-machine-files-and-screenshots.html)（VMware 文档已并入 Broadcom techdocs） |
 

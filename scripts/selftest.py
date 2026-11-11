@@ -4,7 +4,7 @@
 覆盖项：
 1. SKILL.md frontmatter 合法、正文 < 500 行、description ≤ 1024 字符
 2. references 手册齐全，SKILL.md 引用的每个 references/*.md 都存在
-3. 22 个模板脚本齐全，scan-scripts.md 里的模板链接都能找到文件
+3. 25 个模板脚本齐全，scan-scripts.md 里的模板链接都能找到文件
 4. 文档里手写的"N 个模板"必须等于实际数量（防止数字漂移）
 5. 所有 .ps1 / .psm1 必须带 UTF-8 BOM（Windows PowerShell 5.1 读中文必需）
 6. 内容级深度断言（防止误删关键知识点）
@@ -42,8 +42,11 @@ REQUIRED_TEMPLATES = (
     "Get-PSDrive",           # 模板 9 验证汇报
     "Get-CompactOSState",       # 模板 21
     "Measure-WinSxS",        # 模板 22
+    "NativeMessagingHosts",  # 模板 23 浏览器劫持
+    "SilentProcessExit",     # 模板 24 扩展自启动
+    "Get-WcoInstalledProgram",  # 模板 25 程序盘点
 )
-EXPECTED_TEMPLATE_COUNT = 22
+EXPECTED_TEMPLATE_COUNT = 25
 
 # 必须存在且被 SKILL.md 引用的参考文件（v2.0：并入 pitfalls / migration-cases 后共 14 份）
 REQUIRED_REFS = (
@@ -138,9 +141,9 @@ def validate(root: Path) -> str:
     full_scan = root / "scripts" / "full_scan.ps1"
     if full_scan.is_file():
         fs_text = full_scan.read_text(encoding="utf-8-sig")
-        if "ReparsePoint" not in fs_text or "compactos:query" not in fs_text:
-            return "full_scan.ps1 缺少 ReparsePoint 属性过滤或 CompactOS 探测"
-        if "IsInRole" not in fs_text:
+        if ("ReparsePoint" not in fs_text and "Measure-WcoDirectory" not in fs_text) or "compactos:query" not in fs_text:
+            return "full_scan.ps1 缺少不跟随 junction 的测量（ReparsePoint 过滤或 Measure-WcoDirectory）或 CompactOS 探测"
+        if "IsInRole" not in fs_text and "Test-WcoAdmin" not in fs_text:
             return "full_scan.ps1 缺管理员权限检测"
         if "USERPROFILE\"" in fs_text and "OutDir = \"$env:USERPROFILE" in fs_text:
             return "full_scan.ps1 报告不应默认写到用户目录"
@@ -173,8 +176,9 @@ def validate(root: Path) -> str:
     pitfalls = root / "references" / "pitfalls.md"
     if pitfalls.is_file():
         pit_text = pitfalls.read_text(encoding="utf-8")
-        if "1." not in pit_text or "86." not in pit_text:
-            return "pitfalls.md 缺陷阱条目（应含 1-86 以上的优化主题踩坑）"
+        nums = [int(n) for n in re.findall(r"(?m)^(\d+)\. \*\*", pit_text)]
+        if not nums or max(nums) < 70:
+            return "pitfalls.md 踩坑条目不足（v2.1 按主题重排后应至少 70 条）"
     else:
         return "references/pitfalls.md 不存在"
 
@@ -196,8 +200,8 @@ def validate(root: Path) -> str:
         d_text = drive_mig.read_text(encoding="utf-8")
         if "决策树" not in d_text:
             return "drive-migration-official.md 缺少迁移决策树"
-        if "UV_CACHE_DIR" not in d_text or "ANDROID_AVD_HOME" not in d_text or "set-sparse" not in d_text:
-            return "drive-migration-official.md 缺少 uv / AVD / WSL 稀疏压缩核心依据"
+        if "UV_CACHE_DIR" not in d_text or "ANDROID_AVD_HOME" not in d_text or "--compact" not in d_text:
+            return "drive-migration-official.md 缺少 uv / AVD / WSL --compact 压缩依据"
 
     mklink_mig = root / "references" / "mklink-migration.md"
     if mklink_mig.is_file():
@@ -208,7 +212,7 @@ def validate(root: Path) -> str:
     sys_clean = root / "references" / "system-cleanup.md"
     if sys_clean.is_file():
         s_text = sys_clean.read_text(encoding="utf-8")
-        if "Clear-DeliveryOptimizationCache" not in s_text or "pnputil /delete-driver" not in s_text:
+        if "Delete-DeliveryOptimizationCache" not in s_text or "pnputil /delete-driver" not in s_text:
             return "system-cleanup.md 缺少原生传递优化或现代 pnputil /delete-driver 语法"
 
     soft_uninst = root / "references" / "software-uninstall.md"
@@ -244,6 +248,27 @@ def validate(root: Path) -> str:
     if pitfalls.is_file():
         if "ResetBase" not in pit_text or "C:\\Windows\\Installer" not in pit_text:
             return "pitfalls.md 缺少 ResetBase / Installer 深水区避坑（v2.0 并入）"
+
+    # 5. 流氓软件特征库（v2.1）
+    cat = root / "data" / "bloatware-catalog.json"
+    if not cat.is_file():
+        return "data/bloatware-catalog.json 不存在"
+    try:
+        catd = json.loads(cat.read_text(encoding="utf-8"))
+    except ValueError as e:
+        return f"bloatware-catalog.json 不是合法 JSON：{e}"
+    if catd.get("schema") != 1 or not catd.get("families"):
+        return "bloatware-catalog.json 缺 schema=1 或 families"
+    ids = set()
+    for fam in catd["families"]:
+        for k in ("id", "name", "confidence", "sources"):
+            if k not in fam:
+                return f"bloatware-catalog.json 家族 {fam.get('id', '?')} 缺字段 {k}"
+        if fam["confidence"] not in ("high", "medium", "low"):
+            return f"bloatware-catalog.json 家族 {fam['id']} confidence 非法"
+        if fam["id"] in ids:
+            return f"bloatware-catalog.json 家族 id 重复：{fam['id']}"
+        ids.add(fam["id"])
 
     return ""
 

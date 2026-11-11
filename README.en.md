@@ -6,7 +6,7 @@
 
 <div align="center">
 
-**A Windows cleanup skill that runs a read-only diagnosis first, then proposes a tiered plan. It ships 14 reference manuals and 22 script templates. Every change is previewed first, applied only after you confirm, logged, and reversible through a generated undo script.**
+**A Windows cleanup skill that runs a read-only diagnosis first, then proposes a tiered plan. It ships 14 reference manuals and 25 script templates. Every change is previewed first, applied only after you confirm, logged, and reversible through a generated undo script.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/hyt315/windows-cleanup-optimize?sort=semver)](CHANGELOG.md)
@@ -32,6 +32,14 @@ It avoids "one-click cleanup" and follows these principles:
 - **Use official migration paths first.**
 - **Give every change a risk tier.** Preview it first, apply it only after you confirm, and keep an undo script.
 
+## 🆕 Latest release v2.1.0 (2026-11-11)
+
+- **Bloatware detection**: a new catalog `data/bloatware-catalog.json` (matched by publisher, signer, process, service, scheduled task and Store package, each family with a confidence level and sources) plus the T25 program inventory. Name-only matches are flagged as "suspected" with no action suggested.
+- **Uninstall that finishes the job**: new module functions such as `Invoke-WcoUninstall`, `Remove-WcoAppxPackage` and `Find-WcoLeftover`. The flow is inventory → vendor uninstaller → reboot and rescan → leftover scoring → cleanup after you confirm. Services, scheduled tasks and registry keys are exported before removal and restorable via `undo.ps1`.
+- **Startup coverage**: new T24 enumerates the Autoruns categories read-only (RunOnceEx, Winlogon, IFEO/SilentProcessExit, AppInit, Active Setup, LSA, print monitors, Winsock, hidden scheduled tasks, WMI, non-Microsoft drivers, Win11 "restart apps", and more). Items are turned off through the StartupApproved switch first; deletion needs explicit confirmation.
+- **Browser hijacks**: new T23 checks browser policies (homepage, search, force-installed extensions), Native Messaging hosts, shortcut arguments, proxy/PAC, hosts, DNS and recently added root certificates.
+- **Fixes**: reversed StartupApproved bytes, Delivery Optimization cmdlet and policy names, three service names, Spotlight policy editions, WSL `--compact`, and more; T14 is now read-only and T15/T16 logic is fixed. See [CHANGELOG.md](CHANGELOG.md).
+
 ---
 
 ## ✨ Key Features
@@ -41,11 +49,11 @@ It avoids "one-click cleanup" and follows these principles:
 | **🛡️ Reversible by design** | Write operations dry-run by default and apply only with `-Apply`. Changes are logged to `changes.json`, and an `undo.ps1` is generated. Services are restored to their original start type | Every step is visible and can be undone |
 | **🗑️ Truly recoverable deletes** | Deletes go to the Recycle Bin only. Deletion is refused on volumes without a bin (USB, network), when the bin is set to delete immediately, or when the item exceeds the bin's size limit | Nothing is "sent to the bin" and silently gone for good |
 | **🔍 One scan entry point** | `full_scan.ps1` runs every read-only template in one pass. It infers the user profile automatically (home / developer / AI / gamer / laptop), checks admin rights, and measures boot time | No questionnaire first; the health card comes straight from the scan |
-| **🧹 Bloatware & pop-up eradication** | winget inventory and uninstall, IFEO pop-up silencing, a 3-second pop-up locator, and a WMI persistence / shortcut-hijack audit. 360 / 2345 / WPS playbooks use the official uninstaller first | Fixes the cause, not just the symptom |
-| **🤖 Dev & AI environment migration** | Dev Drive for package caches (npm / pip / NuGet / Cargo / Gradle). Environment variables for Ollama, Hugging Face, ModelScope, uv and Android AVD. WSL2 sparse-disk shrink | Tens of GB freed without turning off Defender |
-| **⚡ Win11 modern tuning** | 50+ services tuned by profile, Widgets and WebView2 suppression, Copilot / Recall switches, per-adapter TCP tuning, SSD TRIM | Only tweaks with a measurable payoff are recommended |
+| **🧹 Bloatware detection & removal** | Catalog matched by publisher / signer / process / service / scheduled task; browser-hijack audit; vendor uninstaller → reboot and rescan → leftover scoring → cleanup after you confirm; IFEO pop-up silencing and a 3-second pop-up locator; 360 / 2345 / WPS playbooks | Every uninstall is checked by a rescan, and leftover cleanup is reversible |
+| **🤖 Dev & AI environment migration** | Dev Drive for package caches (npm / pip / NuGet / Cargo / Gradle). Environment variables for Ollama, Hugging Face, ModelScope, uv and Android AVD. WSL2 virtual disk compaction (`wsl --manage --compact`) | Tens of GB freed without turning off Defender |
+| **⚡ Win11 modern tuning** | 50+ services tuned by profile, Widgets background tuning (WebView2 is kept), Copilot / Recall switches, Balanced power plan by default, SSD TRIM | Each item cites its official source and cost; anything unsourced is marked "unverified" |
 | **🔄 Official data migration** | Windows Cleanup recommendations and Storage Sense first. WeChat 4.x / WeCom / QQ NT / DingTalk move through in-app settings. `mklink` is a last resort | App updates keep working |
-| **📋 14 reference manuals** | Disk cleanup, Windows.old, uninstalling, services, startup mechanisms, chat-app migration, 86 field pitfalls, plus deep-water baselines | The agent reads only the manual the problem needs |
+| **📋 14 reference manuals** | Disk cleanup, Windows.old, uninstalling, services, startup mechanisms, chat-app migration, 76 pitfalls grouped by topic | The agent reads only the manual the problem needs |
 
 ---
 
@@ -64,7 +72,7 @@ It avoids "one-click cleanup" and follows these principles:
          Caches only / Standard / Deep, or pick items yourself
                             │
          [Stage 4: Dry run, then apply on confirmation]
-         Recycle-bin checks / original values recorded / restore point first
+         Recycle-bin checks / backup and original values before removal / restore point recommended
                             │
          [Stage 5: Verify & roll back]
          Before/after space and boot time / undo.ps1
@@ -120,7 +128,7 @@ Invoke-Pester ./tests                                                         # 
    - 🟠 Confirm per item, with the trade-off stated.
    - 🔴 Not done by default.
 3. **Recoverable deletes.** Items go to the Recycle Bin only. The three cases where that would silently become permanent are refused.
-4. **Reversible changes.** Service, registry and IFEO changes record the original value and generate `undo.ps1`. A restore point is created before touching drivers or system components.
+4. **Reversible changes.** Service, registry and IFEO changes record the original value and generate `undo.ps1`. Services, scheduled tasks and registry keys are exported before removal; creating a restore point before touching drivers or system components is recommended.
 5. **Official paths first.**
    - For cleanup, start with Windows Cleanup recommendations.
    - For migration, use in-app settings, environment variables or Dev Drive.
@@ -146,10 +154,10 @@ Invoke-Pester ./tests                                                         # 
 
 | Reference Guide | Core Focus | When to Read | Estimated Time |
 |---|---|---|---|
-| 📑 [**Scan Scripts Index (`scan-scripts.md`)**](references/scan-scripts.md) | What each of the 22 templates does and when to use it; code lives in `scripts/templates/` | When running scans & cleanup | 2 mins |
-| 🛡️ [**Pitfalls (`pitfalls.md`)**](references/pitfalls.md) | 86 field pitfalls plus deep-water baselines (DISM, Installer, VSS, cloud files) | Before making a plan | 5 mins |
+| 📑 [**Scan Scripts Index (`scan-scripts.md`)**](references/scan-scripts.md) | What each of the 25 templates does and when to use it; code lives in `scripts/templates/` | When running scans & cleanup | 2 mins |
+| 🛡️ [**Pitfalls (`pitfalls.md`)**](references/pitfalls.md) | 76 pitfalls grouped by topic (safety baseline, deletion and permissions, false positives, startup, uninstall, migration, performance) | Before making a plan | 5 mins |
 | 🚀 [**Startup Audit (`startup-audit.md`)**](references/startup-audit.md) | Startup audit; policy-level shutdown of Edge / Chrome startup boost and background mode | Slow boot | 3 mins |
-| 🧩 [**Startup Mechanisms (`startup-mechanisms.md`)**](references/startup-mechanisms.md) | How 20+ startup points work, WMI persistence, AutoRuns | Stubborn autostarts | 3 mins |
+| 🧩 [**Startup Mechanisms (`startup-mechanisms.md`)**](references/startup-mechanisms.md) | Startup points mapped to every Autoruns category, the template that checks each, and how to turn it off reversibly | Stubborn autostarts | 3 mins |
 | 🧹 [**Bloatware Catalog (`bloatware-catalog.md`)**](references/bloatware-catalog.md) | Process signatures for 360 / 2345 / Sogou / Baidu suites, IFEO pop-up silencing | Pop-up adware | 3 mins |
 | 🗑️ [**Software Uninstall (`software-uninstall.md`)**](references/software-uninstall.md) | winget inventory, deep leftovers, WPS / 360 / DingTalk playbooks (official uninstaller first) | Removing stubborn apps | 4 mins |
 | 💾 [**System Cleanup (`system-cleanup.md`)**](references/system-cleanup.md) | Windows Cleanup recommendations first, Windows.old, cleanmgr, DISM, driver store, hibernation | Reclaiming C drive | 4 mins |
@@ -179,10 +187,11 @@ windows-cleanup-optimize/
 ├── .github/workflows/ci.yml          # Ubuntu + Windows CI
 ├── scripts/
 │   ├── full_scan.ps1                 # One-shot read-only scan
-│   ├── templates/                    # 22 templates (tNN-*.ps1)
-│   ├── lib/Wco.Common.psm1           # Recycle-bin checks, change log, undo
+│   ├── templates/                    # 25 templates (tNN-*.ps1)
+│   ├── lib/Wco.Common.psm1           # Recycle-bin checks, change log, undo, uninstall and startup switches
 │   └── selftest.py                   # Automated regression test runner
 ├── data/volatile-paths.json          # Fast-changing app paths with review dates
+├── data/bloatware-catalog.json       # Bloatware catalog with sources and confidence
 ├── evals/                            # Trigger and behavior evals
 ├── tests/                            # Pester unit tests
 └── references/                       # 14 reference manuals
@@ -195,13 +204,13 @@ windows-cleanup-optimize/
 - **Q: Can cleaning delete my files by mistake?**
   A: Deletes go to the Recycle Bin. The three cases where that would become permanent (no bin on the volume, bin set to delete immediately, item over the bin's limit) are refused. Still, take a look before emptying the bin.
 - **Q: Why won't it disable Defender or Windows Update?**
-  A: The gain is near zero and the risk is large. Developers get speed from Dev Drive, where Defender switches to performance mode automatically.
+  A: The gain is near zero and the risk is large. Developers get speed from Dev Drive, where Defender switches to performance mode automatically once the drive is trusted and real-time protection is on.
 - **Q: How are WeChat 4.x and QQ NT data moved safely?**
   A: With each app's own storage-location setting, never with mklink. After the move, check that drive C stops growing.
 - **Q: What if a change goes wrong?**
   A: Every run generates `undo.ps1`. It restores services to their original start type and restores the registry from the backup exported before the change.
 - **Q: Windows 10?**
-  A: Supported. But Windows 10 reached end of regular support on 2025-10-14, which is one more reason not to turn off updates or security software.
+  A: Supported. But Windows 10 reached end of regular support on 2025-10-14, and consumer Extended Security Updates (ESU) run until 2027-10-12 (enroll from the Windows Update page). That is one more reason not to turn off updates or security software.
 
 ---
 

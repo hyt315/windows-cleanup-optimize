@@ -13,8 +13,8 @@ jobs:
     name: selftest + Pester (Ubuntu, PowerShell 7)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: selftest
@@ -22,7 +22,8 @@ jobs:
       - name: Pester
         shell: pwsh
         run: |
-          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser
+          Install-Module Pester -RequiredVersion 5.9.1 -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -RequiredVersion 5.9.1
           $c = New-PesterConfiguration
           $c.Run.Path = './tests'
           $c.Run.Exit = $true
@@ -31,7 +32,7 @@ jobs:
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Force -Scope CurrentUser
           $r = Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
           $r | Format-Table -AutoSize
           if ($r) { exit 1 }
@@ -40,8 +41,8 @@ jobs:
     name: Windows (PowerShell 5.1 + 7) read-only proof
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: selftest
@@ -59,7 +60,8 @@ jobs:
       - name: Pester (PowerShell 7)
         shell: pwsh
         run: |
-          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser
+          Install-Module Pester -RequiredVersion 5.9.1 -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -RequiredVersion 5.9.1
           $c = New-PesterConfiguration
           $c.Run.Path = './tests'
           $c.Run.Exit = $true

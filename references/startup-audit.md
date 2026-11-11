@@ -1,17 +1,16 @@
 # 自启动项审计与禁用（Startup Audit）
 
-<!-- skill-doctor: allow-block SEC002（脚本示例路径用 <用户名> 占位，无真实用户路径） -->
-
-> 用户开机慢、后台进程多、想关掉某些软件的自启——本节覆盖**所有 Windows 自启动机制**的审计与禁用方法。**所有禁用操作都可逆**——HKCU/HKLM Run 项可随时加回，计划任务可重新启用。
+> 用户开机慢、后台进程多、想关掉某些软件的自启——本节给出审计方法和**可逆的**禁用方法。默认做法是"关开关、不删东西"：Run 和启动文件夹项改 StartupApproved 状态（和任务管理器、设置 › 应用 › 启动 是同一个开关），计划任务改为禁用，服务改启动类型。每一步先演练、确认后加 `-Apply` 执行，改动记入 `changes.json`，可用 `undo.ps1` 回退。删除 Run 值、删除任务只作为用户确认后的可选第二步。
 >
-> **重点更新（v1.2）**：新增 Edge / Chrome 浏览器"彻底关闭"专项（第三节）。这两款浏览器的自启经常"关不干净"——根因是**只删了注册表 Run 键、没关浏览器自己的后台开关，浏览器一运行/更新就把 Run 键写回**。本节给出官方依据和"先切源头再清 Run 键"的正确顺序。
+> 浏览器（Edge / Chrome）的自启经常"关不干净"——根因是只删了 Run 值、没关浏览器自己的后台开关，浏览器一运行就把它写回。第三节给出官方依据和"先切开关层，再处理执行层"的顺序。
 
 ---
 
 ## 目录
 
-- [Windows 自启动的 N 个机制](#windows-自启动的-n-个机制)
-- [完整审计脚本](#完整审计脚本)
+- [自启动机制概览](#自启动机制概览)
+- [审计：用哪些模板](#审计用哪些模板)
+- [现代 Windows 的启动来源](#现代-windows-的启动来源)
 - [浏览器专项：Edge / Chrome 彻底关闭自启动](#浏览器专项edge--chrome-彻底关闭自启动)
 - [禁用方法（按机制）](#禁用方法按机制)
 - [常见 bloatware 自启项识别](#常见-bloatware-自启项识别)
@@ -19,405 +18,287 @@
 
 ---
 
-## Windows 自启动的 N 个机制
+## 自启动机制概览
 
-Windows 真实的自启动点有 20+ 个（完整清单见 `startup-mechanisms.md`）。审计脚本覆盖**最常用的前三类**，其余做只读提醒：
+Windows 真实的自启动点有 20 多个（完整清单与按 Autoruns 类别的检查/关闭矩阵见 `startup-mechanisms.md`）。日常处理集中在前四类，其余只读检出：
 
-| 机制 | 路径 | 风险 |
-|------|------|------|
-| **1. 注册表 Run / RunOnce** | HKCU + HKLM + WOW6432Node 共 6 键（见 `startup-mechanisms.md` #1） | LOW |
-| **2. 启动文件夹** | 用户 + 系统（`startup-mechanisms.md` #3） | LOW |
-| **3. 计划任务** | 触发器为"登录时/启动时"的任务（`startup-mechanisms.md` #4） | LOW-MEDIUM |
-| **4. 服务** | `services.msc`（`startup-mechanisms.md` #12） | 见 `services-optimization.md` |
-| **5. 隐藏机制** | Winlogon / Active Setup / AppInit / 策略 Run 等 | 🔴 只读检出，转 `startup-mechanisms.md` |
+| 机制 | 路径 | 可逆关闭 | 风险 |
+|------|------|---------|------|
+| **1. 注册表 Run / RunOnce / RunOnceEx** | HKCU + HKLM + WOW6432Node（`startup-mechanisms.md` #1） | `Set-WcoStartupApproved` | LOW |
+| **2. 启动文件夹** | 用户 + 公共（#3） | `Set-WcoStartupApproved -Scope *-StartupFolder` | LOW |
+| **3. 计划任务** | 登录/启动/空闲/解锁触发的任务（#4） | `Disable-WcoScheduledTask` | LOW-MEDIUM |
+| **4. 服务** | `services.msc`（#12） | `Set-WcoServiceStartType`，见 `services-optimization.md` | MEDIUM |
+| **5. 商店应用 StartupTask** | 设置 › 应用 › 启动（#16） | 在设置里关 | LOW |
+| **6. 隐藏机制** | Winlogon / Active Setup / AppInit / 策略 Run / IFEO / WMI 等 | 🔴 只读检出，转 `startup-mechanisms.md` | — |
 
-> 注意：任务管理器「启动」页里"已禁用"的项，实际只是被标记（`StartupApproved\Run`），**Run 键里的值通常还在**。这正是"看起来关了还会自启"和"删了又被某软件写回"的根源之一。
+> **StartupApproved**：任务管理器"启动"页里"已禁用"的项，只是在 `...\Explorer\StartupApproved\Run`（或 `Run32`、`StartupFolder`）里写了状态，**Run 值本身还在**。首字节 **`02` = 启用，`03` = 禁用**（`06`/`07` 为同义变体），禁用时后 8 字节记录禁用时间；没有对应值按启用处理。微软未公开该格式，依据见 `startup-mechanisms.md` §16。审计时要读这个状态，否则会把用户已经关掉的项再报一遍。
 
 ---
 
-## 完整审计脚本
+## 审计：用哪些模板
 
-把以下脚本保存为 `.ps1` 文件执行（不要通过 `-Command` 传，避免 `$` 被 bash 吃掉——参考 `pitfalls.md` 陷阱 1/21）：
+全部是只读模板，不改系统：
+
+| 模板 | 看什么 |
+|------|-------|
+| `scripts/templates/t10-audit-startup.ps1`（T10） | Run / RunOnce / WOW6432Node、启动文件夹，**连同 StartupApproved 启用状态和禁用时间**；计划任务（`TaskPath\TaskName`、首个动作、触发器类型、按最近运行时间排序） |
+| `scripts/templates/t24-audit-autostart-extended.ps1`（T24） | RunOnceEx、Policies\Explorer\Run、Winlogon、IFEO Debugger、SilentProcessExit、AppInit、exefile 等打开命令、Active Setup、BootExecute、LSA、打印监视器、Winsock、隐藏计划任务、WMI 四类订阅、非微软驱动、`RestartApps`、Edge 启动相关策略、商店应用 StartupTask（尽力而为） |
+| `scripts/templates/t23-audit-browser-hijack.ps1`（T23） | 浏览器策略（主页、启动页、搜索、强制扩展）、Native Messaging、代理/PAC、hosts、DNS、近期新增的根证书 |
+| `scripts/templates/t19-audit-wmi-lnk-hijack.ps1`（T19） | 快捷方式参数劫持、WMI 消费者 |
+| `scripts/templates/t11-detect-bloatware-process.ps1` / `t25-inventory-programs.ps1`（T11/T25） | 对照 `data/bloatware-catalog.json` 识别流氓软件 |
+
+运行方式：保存/调用 `.ps1` 文件执行（`powershell -NoProfile -ExecutionPolicy Bypass -File <模板>`），不要把含 `$` 的脚本塞进 `-Command` 字符串。T24 的大部分检查需要管理员；没有管理员时，相关段落会写"需管理员，未检查"，**不能当作"没有问题"**。
+
+**没有模板时的最小只读快查**（解码 StartupApproved 状态）：
 
 ```powershell
-$outFile = "C:\Users\<用户名>\AppData\Local\Temp\startup_audit.txt"
-"===== 自启动项全面审计 =====" | Out-File $outFile
-"生成时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File $outFile -Append
-"" | Out-File $outFile -Append
-
-# === 1. 注册表 Run / RunOnce (HKCU) ===
-"===== [1] HKCU 注册表 Run/RunOnce =====" | Out-File $outFile -Append
-foreach ($key in @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
-                   "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce")) {
-    if (Test-Path $key) {
-        "--- $key ---" | Out-File $outFile -Append
-        Get-ItemProperty $key -EA SilentlyContinue | ForEach-Object {
-            $_.PSObject.Properties |
-                Where-Object { $_.Name -notin @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider') } |
-                ForEach-Object { "$($_.Name) = $($_.Value)" | Out-File $outFile -Append }
-        }
+$pairs = @(
+  @{ Run='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; Approved='HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run' },
+  @{ Run='HKLM:\Software\Microsoft\Windows\CurrentVersion\Run'; Approved='HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run' },
+  @{ Run='HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'; Approved='HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32' }
+)
+$skip = 'PSPath','PSParentPath','PSChildName','PSDrive','PSProvider'
+foreach ($p in $pairs) {
+    if (-not (Test-Path -LiteralPath $p.Run)) { continue }
+    $ap = Get-ItemProperty -LiteralPath $p.Approved -ErrorAction SilentlyContinue
+    (Get-ItemProperty -LiteralPath $p.Run).PSObject.Properties | Where-Object { $_.Name -notin $skip } | ForEach-Object {
+        $b = if ($ap) { $ap.($_.Name) } else { $null }
+        $state = if ($null -eq $b) { '启用(无标记)' } elseif (($b[0] -band 1) -eq 1) { '已禁用' } else { '启用' }
+        '{0} | {1} | {2} | {3}' -f $state, $p.Run, $_.Name, $_.Value
     }
 }
-"" | Out-File $outFile -Append
-
-# === 2. 注册表 Run / RunOnce (HKLM + WOW6432Node) ===
-"===== [2] HKLM 注册表 Run/RunOnce =====" | Out-File $outFile -Append
-foreach ($key in @("HKLM:\Software\Microsoft\Windows\CurrentVersion\Run",
-                   "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce",
-                   "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run",
-                   "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce")) {
-    if (Test-Path $key) {
-        "--- $key ---" | Out-File $outFile -Append
-        Get-ItemProperty $key -EA SilentlyContinue | ForEach-Object {
-            $_.PSObject.Properties |
-                Where-Object { $_.Name -notin @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider') } |
-                ForEach-Object { "$($_.Name) = $($_.Value)" | Out-File $outFile -Append }
-        }
-    }
-}
-"" | Out-File $outFile -Append
-
-# === 3. 启动文件夹 ===
-"===== [3] 启动文件夹 =====" | Out-File $outFile -Append
-foreach ($sp in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
-                  "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup")) {
-    if (Test-Path $sp) {
-        "--- $sp ---" | Out-File $outFile -Append
-        Get-ChildItem $sp -File -EA SilentlyContinue |
-            ForEach-Object { "$($_.Name)  ($($_.Length) bytes)" | Out-File $outFile -Append }
-    }
-}
-"" | Out-File $outFile -Append
-
-# === 4. 计划任务（含状态 + 触发器） ===
-"===== [4] 计划任务 =====" | Out-File $outFile -Append
-$tasks = Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.State -ne 'Disabled' }
-foreach ($t in $tasks) {
-    $info = $t | Get-ScheduledTaskInfo -EA SilentlyContinue
-    $action = ($t.Actions | Select-Object -First 1)
-    $triggers = ($t.Triggers | ForEach-Object CimClass.CimClassName) -join ','
-    $exe = if ($action.Execute) { Split-Path $action.Execute -Leaf } else { '' }
-    "[$(if($triggers -match 'Logon|Boot|Event'){'<登录/开机触发>'}else{$t.State})] $($t.TaskName) | $exe | $triggers" | Out-File $outFile -Append
-}
-
-# === 5. StartupApproved（任务管理器的"已禁用"标记） ===
-"" | Out-File $outFile -Append
-"===== [5] StartupApproved 禁用标记（字典：首字节 03=启用 / 02=禁用）=====" | Out-File $outFile -Append
-reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" | Out-File $outFile -Append
-
-# === 6. 当前后台进程（按软件族归类） ===
-"" | Out-File $outFile -Append
-"===== [6] 当前后台进程 =====" | Out-File $outFile -Append
-$procs = Get-Process -EA SilentlyContinue | Where-Object { $_.SessionId -ne 0 }
-$groups = $procs | Group-Object { $_.ProcessName }
-foreach ($g in $groups | Sort-Object Count -Descending | Select-Object -First 30) {
-    $firstProc = $g.Group | Select-Object -First 1
-    $sz = "{0:N1} MB" -f (($g.Group | Measure-Object WorkingSet -Sum).Sum / 1MB)
-    "($($g.Count)x) $($g.Name) - 内存: $sz - 路径: $($firstProc.Path)" | Out-File $outFile -Append
-}
-
-# === 7. WMI 隐蔽自启动订阅 ===
-"" | Out-File $outFile -Append
-"===== [7] WMI 隐蔽自启动事件消费者 =====" | Out-File $outFile -Append
-Get-CimInstance -Namespace root\subscription -ClassName CommandLineEventConsumer -EA SilentlyContinue | ForEach-Object {
-    "[WMI启动项] $($_.Name) -> 执行: $($_.CommandLineTemplate)" | Out-File $outFile -Append
-}
-
-# === 8. 快捷方式参数劫持审计 ===
-"" | Out-File $outFile -Append
-"===== [8] 快捷方式 (.lnk) 网址参数劫持排查 =====" | Out-File $outFile -Append
-$shell = New-Object -ComObject WScript.Shell
-foreach ($p in @("$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs")) {
-    if (Test-Path $p) {
-        Get-ChildItem $p -Filter "*.lnk" -Recurse -EA SilentlyContinue | ForEach-Object {
-            $lnk = $shell.CreateShortcut($_.FullName)
-            if ($lnk.TargetPath -match 'chrome\.exe|msedge\.exe|firefox\.exe|360se\.exe' -and $lnk.Arguments -match 'http|\.com|\.cn|\.html') {
-                "[劫持警告] $($_.Name) -> 目标: $($lnk.TargetPath) 参数: $($lnk.Arguments)" | Out-File $outFile -Append
-            }
-        }
-    }
-}
-
-Write-Host "审计完成: $outFile"
 ```
 
-**输出解读**：脚本生成 `C:\Users\<用户名>\AppData\Local\Temp\startup_audit.txt`，按 8 节列出所有自启项。**第 6 节的后台进程列表**与 `bloatware-catalog.md` 的进程名库对照，立即可识别流氓软件；**第 7 节与第 8 节**可精准揪出 WMI 隐蔽自启动与快捷方式网址劫持。若脚本查完仍觉得"还有东西在跑"，用 `startup-mechanisms.md` 文末的 **AutoRuns** 官方工具查全类别。
+> 判断规则：首字节为奇数（`03`/`07`）= 禁用，偶数（`02`/`06`）= 启用。
+
+若查完仍觉得"还有东西在跑"，用 `startup-mechanisms.md` 文末的 **Autoruns** 查全类别。
+
+---
+
+## 现代 Windows 的启动来源
+
+| 现象 | 来源 | 处理 |
+|------|------|------|
+| 开机后上次开着的应用（含 Edge）自己打开 | 设置 › 账户 › 登录选项 →"自动保存我的可重启应用，并在我重新登录时重启它们" | 关闭该开关（微软 Edge 支持页列出的方法：[Stop Microsoft Edge from starting automatically](https://support.microsoft.com/en-us/edge/stop-microsoft-edge-from-starting-automatically)） |
+| 设置里能看到但 Run 键里没有 | 商店/MSIX 应用的 StartupTask（新版 Teams、终端、手机连接等，具体机制 存疑） | 设置 › 应用 › 启动 关闭，或应用内设置 |
+| OneDrive 开机启动 | HKCU Run 值 `OneDrive`（存疑，未取官方页） | OneDrive 设置 → 取消"登录 Windows 时自动启动" |
+| 小组件进程常驻 | 任务栏小组件（机制 存疑） | 设置 › 个性化 › 任务栏 → 关闭"小组件" |
+| Edge 后台常驻 / 开机弹窗 | Edge 启动提升、后台模式、`LaunchEdgeOnWindowsStartupEnabled` | 下一节 |
+| 重装系统后厂商助手又回来 | 厂商驱动包附带应用、WPBT（存疑） | 解释原因，按需卸载；不默认改固件相关设置 |
 
 ---
 
 ## 浏览器专项：Edge / Chrome 彻底关闭自启动
 
-**为什么"关了还会自启"**：Edge/Chrome 把自启拆成两层——**开关层**（浏览器内的启动提升/后台运行设置 + 企业策略）和**执行层**（注册表 Run 键 `MicrosoftEdgeAutoLaunch_xxx` / `GoogleChromeAutoLaunch_xxx`）。只删执行层、不动开关层，浏览器一运行/更新就把 Run 键写回（有真实社区实证帖子描述与该现象完全一致）。**正确顺序：先切开关层，再删执行层。**
+**为什么"关了还会自启"**：Edge/Chrome 把自启拆成两层——**开关层**（浏览器内的启动提升/后台运行设置 + 企业策略）和**执行层**（注册表 Run 值 `MicrosoftEdgeAutoLaunch_xxx` / `GoogleChromeAutoLaunch_xxx`）。只删执行层、不动开关层，浏览器一运行/更新就把 Run 值写回（社区实证帖描述的现象与此一致）。**正确顺序：先切开关层，再处理执行层。**
 
-> ⚠️ **纠偏**：**Chrome 没有「启动提升/Startup Boost」，那是 Edge 的功能。** 中文网上很多文章把两者混为一谈。给 Chrome 做"彻底关闭"时不要去找不存在的"启动提升"开关。
+> ⚠️ **纠偏**：**Chrome 没有「启动提升/Startup Boost」，那是 Edge 的功能。** 给 Chrome 做"彻底关闭"时不要去找不存在的开关。
 
-### A. Microsoft Edge 彻底关闭（6 个要点）
+### A. Microsoft Edge（6 个要点）
 
 | # | 机制 | 位置 / 命令 | 管理员 | 官方依据与中文命名映射 |
 |---|------|------------|--------|------------------------|
-| 1 | **内置「启动提升」**（根因，须先关） | UI：`edge://settings/system` → 关闭「启动提升」；注册表：`HKCU\Software\Microsoft\Edge\StartupBoostEnabled = 0` | 用户级否；策略级是 | [官方支持页（启动提升）](https://support.microsoft.com/zh-cn/edge/get-help-with-startup-boost)、[策略 StartupBoostEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/startupboostenabled)（注：官方策略中文名为「启用启动增强」，设置 UI 为「启动提升」） |
-| 2 | **后台运行扩展和应用**（后台模式） | UI：`edge://settings/system` → 关闭后台运行；注册表：`HKCU\Software\Microsoft\Edge\BackgroundModeEnabled = 0` | 用户级否；策略级是 | [策略 BackgroundModeEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/backgroundmodeenabled)（注：官方策略中文名为「允许后台应用继续运行」，设置 UI 为「在关闭后继续运行后台扩展和应用」） |
-| 3 | **执行层 Run 键**（最后清） | `reg query "HKCU\...\Run"` 下删 `MicrosoftEdgeAutoLaunch_<hash>*` | 否 | [实证问题帖（现象与用户反馈一致）](https://superuser.com/questions/1904981/disabling-issue-for-microsoft-edge-at-startup) |
-| 4 | **开机后可见启动**（Edge ≥153 新增策略） | `HKLM\SOFTWARE\Policies\Microsoft\Edge\LaunchEdgeOnWindowsStartupEnabled = 0` | 是 | [策略 LaunchEdgeOnWindowsStartupEnabled](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/launchedgeonwindowsstartupenabled)（**策略页正文无 Deprecated 标注**——索引页摘要里的 "Deprecated." 是相邻章节标题拼接误报，以正文为准） |
-| 5 | **EdgeUpdate 计划任务/服务**（只影响更新，与自启无关，一般不动） | `MicrosoftEdgeUpdateTaskMachineCore/UA`（机器级需管理员）；服务 `edgeupdate`/`edgeupdatem` | 部分 | [EdgeUpdate 更新策略](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies)（这些任务不拉起浏览器窗口） |
-| 6 | **Windows 启动应用开关** | `Win+R` → `ms-settings:startupapps` → 关闭 Microsoft Edge | 否 | Windows 内置界面 |
+| 1 | **内置「启动提升」**（根因，须先关） | UI：`edge://settings/system` → 关闭「启动提升」；策略 `StartupBoostEnabled = 0` | 用户级否；策略级是 | [官方支持页（启动提升）](https://support.microsoft.com/zh-cn/edge/get-help-with-startup-boost)、[策略 StartupBoostEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/startupboostenabled)（策略中文名「启用启动增强」，设置 UI 为「启动提升」） |
+| 2 | **后台运行扩展和应用**（后台模式） | UI：`edge://settings/system` → 关闭后台运行；策略 `BackgroundModeEnabled = 0` | 用户级否；策略级是 | [策略 BackgroundModeEnabled](https://learn.microsoft.com/zh-cn/deployedge/microsoft-edge-policies/backgroundmodeenabled)（策略中文名「允许后台应用继续运行」） |
+| 3 | **执行层 Run 值**（最后处理） | `HKCU\...\Run` 下的 `MicrosoftEdgeAutoLaunch_<hash>` | 否 | [实证问题帖](https://superuser.com/questions/1904981/disabling-issue-for-microsoft-edge-at-startup) |
+| 4 | **开机后打开窗口**（Edge ≥153 策略） | `HKLM\SOFTWARE\Policies\Microsoft\Edge\LaunchEdgeOnWindowsStartupEnabled = 0` | 是 | [策略 LaunchEdgeOnWindowsStartupEnabled](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/launchedgeonwindowsstartupenabled)（策略页正文无 Deprecated 标注，以正文为准） |
+| 5 | **EdgeUpdate 计划任务/服务**（只影响更新，与自启无关，一般不动） | `MicrosoftEdgeUpdateTaskMachineCore/UA`；服务 `edgeupdate`/`edgeupdatem` | 部分 | [EdgeUpdate 更新策略](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-update-policies) |
+| 6 | **Windows 启动应用开关 / 可重启应用** | `ms-settings:startupapps` → 关闭 Microsoft Edge；设置 › 账户 › 登录选项 → 关闭"自动保存我的可重启应用" | 否 | Windows 内置界面；[Edge 支持页](https://support.microsoft.com/en-us/edge/stop-microsoft-edge-from-starting-automatically) |
 
-**Edge 彻底关闭命令（PowerShell，按顺序执行）**：
+**Edge 关闭命令（PowerShell，按顺序；先演练，确认后加 `-Apply`）**：
 
-> 口径说明：权威做法是 `edge://settings/system` 开关或 `HKLM\SOFTWARE\Policies\Microsoft\Edge` 策略（两者均有官方文档）。下方 `HKCU\Software\Microsoft\Edge` 用户级键为**社区实测路径，无微软官方文档**（真实用户级存储是浏览器 profile 内的 Preferences 文件，见 Chromium 源码 `background_mode.enabled`），仅作为命令行化开关的兜底，且**优先推荐官方开关/策略**。
+> 口径：权威做法是 `edge://settings/system` 开关或 `HKLM\SOFTWARE\Policies\Microsoft\Edge` 策略（均有官方文档）。`HKCU\Software\Microsoft\Edge` 下的同名值是社区实测路径、无微软文档（真实用户设置在浏览器 profile 的 Preferences 文件里），只在用户不方便点界面时作兜底。
 
 ```powershell
-# 第 1 步：关用户级开关（无需管理员）
-New-ItemProperty -Path "HKCU:\Software\Microsoft\Edge" -Name "StartupBoostEnabled"   -PropertyType DWord -Value 0 -Force
-New-ItemProperty -Path "HKCU:\Software\Microsoft\Edge" -Name "BackgroundModeEnabled" -PropertyType DWord -Value 0 -Force
+Import-Module .\scripts\lib\Wco.Common.psm1
 
-# 第 2 步【强烈推荐，防复发】：策略级强制（需管理员，弹 UAC）
-New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Force | Out-Null
-New-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "StartupBoostEnabled"   -PropertyType DWord -Value 0 -Force
-New-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "BackgroundModeEnabled" -PropertyType DWord -Value 0 -Force
-New-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "LaunchEdgeOnWindowsStartupEnabled" -PropertyType DWord -Value 0 -Force  # Edge 153+ 可选
+# 第 1 步：浏览器内关闭「启动提升」「后台运行」（首选，无需管理员）。
+#         命令行兜底（社区路径）：
+Set-WcoRegistryValue -Key 'HKCU\Software\Microsoft\Edge' -Name StartupBoostEnabled   -Value 0 -Type DWord
+Set-WcoRegistryValue -Key 'HKCU\Software\Microsoft\Edge' -Name BackgroundModeEnabled -Value 0 -Type DWord
 
-# 第 3 步：删执行层 Run 键（按前缀批量删，hash 因机器而异）
-$runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-Get-ItemProperty $runKey | Get-Member -MemberType NoteProperty |
-    Where-Object { $_.Name -like "MicrosoftEdgeAutoLaunch_*" } | ForEach-Object {
-        Remove-ItemProperty -Path $runKey -Name $_.Name -Force
-        Write-Host "[OK] 已删除 $($_.Name)"
-    }
+# 第 2 步【推荐，防复发】：策略级强制（需管理员）。写入后 Edge 设置里的开关变灰，用户和浏览器都改不回去。
+Set-WcoRegistryValue -Key 'HKLM\SOFTWARE\Policies\Microsoft\Edge' -Name StartupBoostEnabled   -Value 0 -Type DWord
+Set-WcoRegistryValue -Key 'HKLM\SOFTWARE\Policies\Microsoft\Edge' -Name BackgroundModeEnabled -Value 0 -Type DWord
+Set-WcoRegistryValue -Key 'HKLM\SOFTWARE\Policies\Microsoft\Edge' -Name LaunchEdgeOnWindowsStartupEnabled -Value 0 -Type DWord  # Edge 153+ 可选
+
+# 第 3 步：执行层——把 AutoLaunch 项标记为禁用（与任务管理器开关相同，可回退）
+$run = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$run.PSObject.Properties.Name | Where-Object { $_ -like 'MicrosoftEdgeAutoLaunch_*' } | ForEach-Object {
+    Set-WcoStartupApproved -Name $_ -Scope HKCU-Run -Enabled $false
+}
+# 看完演练输出、用户确认后，把上面每行加 -Apply 再跑一遍，最后：
+Export-WcoUndo
 ```
 
-> 防复发原理：第 2 步的 `HKLM\SOFTWARE\Policies\Microsoft\Edge` 策略写入后，Edge 设置里的开关会变灰不可改（官方策略页说明"配置后用户不可改"），从源头杜绝浏览器把自己写回启用。
+> 想连 Run 值也删掉：只在第 1、2 步完成、重启验证不再写回后，作为可选步骤，先 `reg export "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" <会话目录>\run.reg` 再删。
 
-### B. Google Chrome 彻底关闭（4 个要点）
+### B. Google Chrome（4 个要点）
 
 | # | 机制 | 位置 / 命令 | 管理员 | 官方依据 |
 |---|------|------------|--------|----------|
-| 1 | **后台运行应用**（开关层，根因） | UI：`chrome://settings/system` → 关闭「关闭 Google Chrome 后继续运行后台应用」；注册表删 Run 键 `GoogleChromeAutoLaunch_<hash>` | 否 | [官方策略 BackgroundModeEnabled（登录时启动进程）](https://chromeenterprise.google/policies/#BackgroundModeEnabled)、[Chromium 源码 auto_launch_util.cc](https://raw.githubusercontent.com/chromium/chromium/main/chrome/installer/util/auto_launch_util.cc) |
-| 2 | **策略层强制**（防用户/后台改写） | `HKLM\SOFTWARE\Policies\Google\Chrome\BackgroundModeEnabled = 0` 或删该值 | 是 | 官方策略列表同上 |
-| 3 | **GoogleUpdate 计划任务**（只影响更新，非自启） | `GoogleUpdateTaskMachineCore/UA`（机器级）、`GoogleUpdateTaskUserS-<SID>Core/UA`（用户级） | 机器级是 | [Google 官方「Manage Chrome updates」](https://support.google.com/chrome/a/answer/6350036)；任务命名源自 Google Update（Omaha）开源组件[设计文档](https://github.com/google/omaha/blob/main/omaha/doc/GoogleUpdateOnAScheduleOverview.html)（Google 帮助页未逐名公开） |
-| 4 | **gupdate / gupdatem 服务**（只影响更新） | `sc config gupdate start= disabled`（一般不建议动） | 是 | Google 官方确认 Google Update 组件存在（同上） |
+| 1 | **后台运行应用**（开关层，根因） | UI：`chrome://settings/system` → 关闭「关闭 Google Chrome 后继续运行后台应用」 | 否 | [官方策略 BackgroundModeEnabled](https://chromeenterprise.google/policies/#BackgroundModeEnabled)、[Chromium 源码 auto_launch_util.cc](https://raw.githubusercontent.com/chromium/chromium/main/chrome/installer/util/auto_launch_util.cc) |
+| 2 | **策略层强制**（防写回） | `HKLM\SOFTWARE\Policies\Google\Chrome\BackgroundModeEnabled = 0`（设为 0 才是强制关闭；删除该值 = 恢复由用户控制） | 是 | 同上 |
+| 3 | **GoogleUpdate 计划任务**（只影响更新，非自启） | `GoogleUpdateTaskMachineCore/UA`、`GoogleUpdateTaskUserS-<SID>Core/UA` | 机器级是 | [Manage Chrome updates](https://support.google.com/chrome/a/answer/6350036)；任务命名见 [Omaha 设计文档](https://github.com/google/omaha/blob/main/omaha/doc/GoogleUpdateOnAScheduleOverview.html) |
+| 4 | **gupdate / gupdatem 服务**（只影响更新） | 一般不建议动 | 是 | 同上 |
 
-**Chrome 彻底关闭命令**：
+**Chrome 关闭命令（先演练，确认后加 `-Apply`）**：
 
 ```powershell
-# 第 1、2 步：切开关层 + 策略层强制（第 2 步需管理员）
-Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Google\Chrome" -Name "BackgroundModeEnabled" -Force -ErrorAction SilentlyContinue
-
-# 第 3 步：删执行层 Run 键
-$runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-Get-ItemProperty $runKey | Get-Member -MemberType NoteProperty |
-    Where-Object { $_.Name -like "GoogleChromeAutoLaunch_*" } | ForEach-Object {
-        Remove-ItemProperty -Path $runKey -Name $_.Name -Force
-        Write-Host "[OK] 已删除 $($_.Name)"
-    }
+Import-Module .\scripts\lib\Wco.Common.psm1
+# 第 1 步：浏览器内关闭后台运行（UI）
+# 第 2 步：策略强制关闭（需管理员）。undo 会删除该值，恢复为"未配置"
+Set-WcoRegistryValue -Key 'HKLM\SOFTWARE\Policies\Google\Chrome' -Name BackgroundModeEnabled -Value 0 -Type DWord
+# 第 3 步：执行层标记为禁用
+$run = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$run.PSObject.Properties.Name | Where-Object { $_ -like 'GoogleChromeAutoLaunch_*' } | ForEach-Object {
+    Set-WcoStartupApproved -Name $_ -Scope HKCU-Run -Enabled $false
+}
 ```
 
-> **GoogleUpdate 任务建议保留**：禁用 Google 自动更新会挡安全补丁，官方不推荐（Google 官方文档有明确警告）。只有当用户确需"零后台"时才动，且要先告知风险。**这些任务不会拉起 chrome.exe 窗口，禁用它们解决不了"开机自启"问题。**
+> **GoogleUpdate / EdgeUpdate 任务建议保留**：禁用自动更新会挡安全补丁。这些任务不会拉起浏览器窗口，禁用它们解决不了"开机自启"。
 
 ### 验证（重启后，未手动打开浏览器）
 
 ```powershell
 tasklist | findstr /i "msedge.exe"        # Edge：应无输出（msedgewebview2.exe 出现属正常）
 tasklist /fi "imagename eq chrome.exe"    # Chrome：应"无任务在运行"
-reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"   # 两边都无 AutoLaunch_*
+.\scripts\templates\t10-audit-startup.ps1 # AutoLaunch_* 显示为"已禁用"或已不存在
 ```
 
-> 注意：Edge 的 `msedgewebview2.exe` 是网页内容渲染组件（很多应用用它跑界面），**不算** Edge 浏览器自启，看到它不要误判为失败。
+> Edge 的 `msedgewebview2.exe` 是网页渲染组件（很多应用用它跑界面），**不算** Edge 自启。
 
 ---
 
 ## 禁用方法（按机制）
 
-### 方法 1：禁用 HKCU/HKLM 注册表 Run 项
+所有命令先 `Import-Module .\scripts\lib\Wco.Common.psm1`；不带 `-Apply` 只打印计划，带 `-Apply` 才执行；结束后 `Export-WcoUndo` 生成回退脚本。HKLM、服务、根目录任务需要管理员，模块在非管理员下会直接拒绝并说明原因——这时把同样的命令放进管理员 PowerShell 再跑。
 
-**普通权限**（删除 HKCU 项，不需要管理员）：
+### 方法 1：Run 项（HKCU / HKLM / WOW6432Node）
+
 ```powershell
-Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "<项名>" -Force
+Set-WcoStartupApproved -Name 'QianwenUpdaterTaskUser1.0.0.7' -Scope HKCU-Run -Enabled $false          # 演练
+Set-WcoStartupApproved -Name 'QianwenUpdaterTaskUser1.0.0.7' -Scope HKCU-Run -Enabled $false -Apply   # 执行
+# HKLM\...\Run 用 -Scope HKLM-Run；HKLM\SOFTWARE\WOW6432Node\...\Run 用 -Scope HKLM-Run32（需管理员）
 ```
 
-**管理员权限**（删除 HKLM 项，需提权）：
+- 效果与任务管理器"禁用"相同，Run 值保留，随时可在设置里重新打开。
+- 用户明确要"删掉"时：先确认软件不会再写回（关掉它自己的开机启动选项），再 `reg export` 整个 Run 键后删除该值。删除不是默认动作。
+- RunOnce / RunOnceEx 只执行一次，通常无需禁用；出现可疑项交给 `startup-mechanisms.md` 的只读流程判断来源。
+
+### 方法 2：启动文件夹
+
 ```powershell
-# 先检测
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host "需管理员权限，将弹 UAC..."
-    Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\path\to\your_script.ps1'
-    return
-}
-Remove-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "<项名>" -Force
+# 值名就是文件名
+Set-WcoStartupApproved -Name 'SomeTool.lnk' -Scope HKCU-StartupFolder -Enabled $false          # 用户启动文件夹
+Set-WcoStartupApproved -Name 'SomeTool.lnk' -Scope HKLM-StartupFolder -Enabled $false          # 公共启动文件夹（管理员）
 ```
 
-> 提示：`Remove-ItemProperty` 删除值不会进入回收站。**备份方式**：先 `reg export` 备份整个注册表项。
+用户确认不再需要这个快捷方式时，再走回收站（可恢复、先演练）：
 
-**批量禁用示例**（来自实战，2026-08-19）：
 ```powershell
-$itemsToDisable = @(
-    @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"; Name = "QianwenUpdaterTaskUser1.0.0.7" },
-    @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"; Name = "MicrosoftEdgeAutoLaunch_73DFD279AF967847B683ABB01AFB8244" }
-    # 注释：保留 DeskGo（用户主动选择）和 WallpaperEngine（在用）
-)
-foreach ($item in $itemsToDisable) {
-    if (Test-Path $item.Path) {
-        Remove-ItemProperty -Path $item.Path -Name $item.Name -Force -EA Stop
-        Write-Host "[OK] 删除: $($item.Path)\$($item.Name)"
-    }
-}
+$f = Join-Path ([Environment]::GetFolderPath('Startup')) 'SomeTool.lnk'
+.\scripts\templates\t07-safe-recycle.ps1 -Path $f -Label '启动项快捷方式'          # 演练
+.\scripts\templates\t07-safe-recycle.ps1 -Path $f -Label '启动项快捷方式' -Apply   # 执行
 ```
 
-### 方法 2：清空启动文件夹
+### 方法 3：计划任务
 
-**用户级启动文件夹**：
 ```powershell
-$userStartup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
-Get-ChildItem $userStartup -File -EA SilentlyContinue | ForEach-Object {
-    # 移到回收站（不直接删除）
-    [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($_.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin')
-}
+# 先查出完整路径：任务可能在子文件夹里，不带 -TaskPath 只会匹配根目录 "\"
+Get-ScheduledTask | Where-Object { $_.TaskName -like 'WpsUpdate*' } | Select-Object TaskPath, TaskName, State
+
+Disable-WcoScheduledTask -TaskPath '\' -TaskName 'WpsUpdateLogonTask_20919'          # 演练
+Disable-WcoScheduledTask -TaskPath '\' -TaskName 'WpsUpdateLogonTask_20919' -Apply   # 执行（根目录任务常需管理员）
 ```
 
-**系统级启动文件夹**（需管理员）：
+**按模式批量**（逐个列出、确认后再执行）：
+
 ```powershell
-$sysStartup = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
-# 同样走回收站
+$patterns = 'WpsUpdate*', '*QianwenUpdater*', '*AlibabaProtect*'
+$hits = Get-ScheduledTask | Where-Object { $t = $_; $patterns | Where-Object { $t.TaskName -like $_ } }
+$hits | Select-Object TaskPath, TaskName, State          # 先给用户看
+foreach ($t in $hits) { Disable-WcoScheduledTask -TaskPath $t.TaskPath -TaskName $t.TaskName }   # 演练；确认后加 -Apply
 ```
 
-### 方法 3：禁用计划任务
+> 删除任务（`Remove-WcoScheduledTask`，先导出 XML、拒绝 `\Microsoft\` 下的任务）只用于卸载后的残留清理，见 `software-uninstall.md`。
 
-**普通权限**（普通用户的任务可禁用）：
-```powershell
-Disable-ScheduledTask -TaskName "WpsUpdateLogonTask_20919"
-Disable-ScheduledTask -TaskName "WpsUpdateTask_20919"
-```
+### 方法 4：服务
 
-**管理员权限**（系统级任务，需要提权）：
-```powershell
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','C:\path\to\script.ps1'
-    return
-}
-Disable-ScheduledTask -TaskName "<系统任务名>"
-```
-
-**按模式禁用**（一次禁用多个）：
-```powershell
-$taskPatterns = @(
-    "WpsUpdate*",
-    "*QianwenUpdater*",
-    "*AlibabaProtect*"
-)
-foreach ($pattern in $taskPatterns) {
-    $tasks = Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.TaskName -like $pattern }
-    foreach ($t in $tasks) {
-        Disable-ScheduledTask -InputObject $t | Out-Null
-        Write-Host "[OK] 禁用: $($t.TaskName)"
-    }
-}
-```
-
-> **陷阱提醒**（详见 `pitfalls.md`）：根目录（`\`）下的计划任务禁用通常需要管理员；`schtasks /change` 失败时 stderr 可能被 PowerShell 吞掉，务必用 `Start-Process` 抓真错误。
+见 `services-optimization.md`：`Set-WcoServiceStartType -Name <服务> -StartType disabled`（记录原启动类型，含"自动(延迟启动)"）。
 
 ---
 
 ## 常见 bloatware 自启项识别
 
-下表列出常见 bloatware 的自启项模式。**审计脚本输出后，按这些关键词匹配**：
+识别以 T11/T25 对照 `data/bloatware-catalog.json` 的结果为准；下表是常见名字的速查：
 
 | 软件 | 自启项名 / 模式 | 进程名 |
 |------|-----------------|--------|
-| **WPS Office** | `WpsUpdateLogonTask_<用户名>`、`WpsUpdateTask_<用户名>` | `ksolaunch.exe`（**会反复重写任务**，三层防护见 `pitfalls.md` 61） |
-| **夸克 / 千问浏览器** | `QianwenUpdaterTaskUser<版本>` | `updater.exe` |
-| **腾讯桌面整理** | `DeskGo` | `DesktopMgr64.exe`（**保留**——用户主动选择） |
-| **Microsoft Edge** | `MicrosoftEdgeAutoLaunch_<hash>`（Run 键） | `msedge.exe`（彻底关闭见上文） |
-| **Google Chrome** | `GoogleChromeAutoLaunch_<hash>`（Run 键） | `chrome.exe`（彻底关闭见上文） |
+| **WPS Office** | 任务 `WpsUpdateLogonTask_<用户名>`、`WpsUpdateTask_<用户名>`、`WpsWakeWnsLogonTask` | `ksolaunch.exe`（**会反复重写任务**，三层修复见 `software-uninstall.md` WPS 专项） |
+| **夸克 / 千问** | `QianwenUpdaterTaskUser<版本>` | `updater.exe` |
+| **腾讯桌面整理** | `DeskGo` | `DesktopMgr64.exe`（用户主动选择的，**保留**） |
+| **Microsoft Edge** | `MicrosoftEdgeAutoLaunch_<hash>`（Run） | `msedge.exe`（见上文） |
+| **Google Chrome** | `GoogleChromeAutoLaunch_<hash>`（Run） | `chrome.exe`（见上文） |
 | **Adobe** | `AdobeAAMUpdater-*`、`AdobeARM` | `AcroRd32.exe` 等 |
 | **Java** | `SunJavaUpdateSched`、`jusched.exe` | `jucheck.exe` |
 | **NVIDIA** | `NvBackend` | `nvbackend.exe` |
-| **Steam** | `Steam` | `steam.exe`（**保留**——游戏玩家） |
-| **Wallpaper Engine** | `WallpaperEngine` | `wallpaper32.exe`（**保留**——用户主动选择） |
+| **Steam** | `Steam` | `steam.exe`（游戏玩家，**保留**） |
+| **Wallpaper Engine** | `WallpaperEngine` | `wallpaper32.exe`（用户主动选择，**保留**） |
 
-**审计脚本输出后，按下表分四档处理**：
+**分四档处理**：
 
 | 档位 | 处理 |
 |------|------|
-| 🟢 明确无用（如 QianwenUpdater） | 直接禁用 |
+| 🟢 明确无用（如 QianwenUpdater） | 列给用户后可逆禁用 |
 | 🟡 用户可能想保留（如 Adobe、Java 更新） | **询问用户** |
 | 🟠 用户主动选择保留（如 DeskGo、Wallpaper Engine、Steam） | **不动** |
-| 🔴 系统核心（如 Windows Defender、SecurityHealth） | **绝对不动** |
+| 🔴 系统核心（如 Windows 安全中心 `SecurityHealth`） | **绝对不动** |
 
 ---
 
 ## 回退与验证
 
-### 回退注册表 Run 项
+### 回退
 
-```powershell
-# 恢复单个值
-Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "<项名>" -Value "<原值>"
-```
-
-**预防**：删除前先备份：
-```powershell
-$backupFile = "$env:USERPROFILE\run_backup_$(Get-Date -Format 'yyyyMMdd').reg"
-reg export "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" $backupFile /y
-```
-
-### 回退计划任务
-
-```powershell
-Enable-ScheduledTask -TaskName "WpsUpdateLogonTask_20919"
-```
-
-### 回退浏览器策略（恢复可改）——删除即可回到"未配置"
-
-```powershell
-Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "StartupBoostEnabled" -Force -ErrorAction SilentlyContinue
-Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "BackgroundModeEnabled" -Force -ErrorAction SilentlyContinue
-```
+- **本次会话的全部改动**：运行会话目录（`%TEMP%\wco\session_<时间>\`）里的 `undo.ps1`，按相反顺序恢复（StartupApproved 恢复原字节或删除新加的值，任务重新启用，策略值删除或恢复，服务恢复原启动类型）。
+- **单项手动**：在 设置 › 应用 › 启动 里重新打开开关；`Enable-ScheduledTask -TaskPath '\' -TaskName '<名称>'`。
+- **浏览器策略**：删除 `HKLM\SOFTWARE\Policies\Microsoft\Edge`（或 `...\Google\Chrome`）下**对应的那个值**即回到"未配置"，不要删整个策略键（里面可能有单位/用户自己的策略）。
 
 ### 验证
 
 ```powershell
-# 验证注册表 Run 已清理
-Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" |
-    Select-Object -Property * -ExcludeProperty PSPath,PSParentPath,PSChildName,PSDrive,PSProvider
-
-# 验证计划任务已禁用
-Get-ScheduledTask | Where-Object { $_.State -eq 'Disabled' } | Select-Object TaskName
-
-# 验证浏览器开关层已关（策略生效后开关变灰）
-reg query "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v StartupBoostEnabled   # Edge
-reg query "HKLM\SOFTWARE\Policies\Google\Chrome" /v BackgroundModeEnabled  # Chrome
+.\scripts\templates\t10-audit-startup.ps1      # 目标项显示"已禁用"；任务状态为 Disabled
+reg query "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v StartupBoostEnabled    # Edge 策略
+reg query "HKLM\SOFTWARE\Policies\Google\Chrome" /v BackgroundModeEnabled   # Chrome 策略
 ```
+
+重启（建议完整重启而非关机再开，后者在开启快速启动时不是完整启动）后再看一次，确认没有被写回。
 
 ### 最终汇报示例
 
 ```
 === 自启动清理报告 ===
 
-✅ 已禁用（5 项）
-  - WpsUpdateLogonTask_20919（计划任务）
-  - WpsUpdateTask_20919（计划任务）
-  - QianwenUpdaterTaskUser1.0.0.7（HKCU Run + 计划任务）
-  - Microsoft Edge（启动提升 + 后台模式 + AutoLaunch Run 键，策略级强制）
-  - （其他）
+✅ 已禁用（可回退）
+  - WpsUpdateLogonTask_20919、WpsUpdateTask_20919（计划任务，已禁用）
+  - QianwenUpdaterTaskUser1.0.0.7（Run 项，已在启动开关中关闭）
+  - Microsoft Edge（启动提升 + 后台模式策略 = 0；AutoLaunch 启动开关已关）
 
 🟡 已保留（按用户要求）
-  - DeskGo（腾讯桌面整理）
-  - WallpaperEngine（动态壁纸）
-  - Google 自动更新任务（保留，挡安全补丁有风险）
+  - DeskGo（腾讯桌面整理）、WallpaperEngine
+  - Google 自动更新任务（保留，关掉会挡安全补丁）
 
 🔄 回退方法
-  - 恢复注册表项：编辑备份文件 run_backup_YYYYMMDD.reg 双击导入
-  - 启用计划任务：Enable-ScheduledTask -TaskName <名称>
-  - 恢复浏览器策略：删除 HKLM\SOFTWARE\Policies\Microsoft\Edge 下对应值即可
+  - 运行 %TEMP%\wco\session_<时间>\undo.ps1
+  - 或在 设置 › 应用 › 启动 里把对应开关打开
 ```
 
 ---
 
 ## 相关文档
 
-- 其他 20+ 启动机制（Winlogon / Active Setup / AppInit 等）与 AutoRuns 工具 → `startup-mechanisms.md`
+- 全部启动机制、Autoruns 类别矩阵、WMI/IFEO 只读检查 → `startup-mechanisms.md`
 - 服务类自启治理 → `services-optimization.md`
-- 流氓软件识别 → `bloatware-catalog.md`
-- 自启反复复活的坑（WPS 三层防护、浏览器写回 Run 键）→ `pitfalls.md`
+- 流氓软件识别与广告载体 → `bloatware-catalog.md`
+- 自启反复复活的坑 → `pitfalls.md`"自启动"一节

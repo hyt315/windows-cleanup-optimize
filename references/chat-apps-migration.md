@@ -2,9 +2,11 @@
 
 <!-- skill-doctor: allow-block SEC002（路径示例用 <用户名> / 占位，无真实用户账户路径） -->
 
-> 聊天软件是 C 盘最大"隐形户"之一，而且**官方迁移按钮就在应用里**。用户说"微信/QQ 占了 40G"或"改了保存位置还是占 C 盘"——读本文。
+> 聊天软件是 C 盘最大"隐形户"之一，而且**迁移按钮就在应用里**。用户说"微信/QQ 占了 40G"或"改了保存位置还是占 C 盘"——读本文。
 >
-> **前提共识（有依据）**：微信/QQ 用硬编码路径，**不支持 mklink/junction 迁移**（实测会损坏数据，`pitfalls.md` 58）。正确做法是**应用内官方"更改保存位置"** + 清理遗留目录。
+> **来源标注约定（v2.1）**：只有能找到腾讯/钉钉官方页面的菜单路径才写"官方"；其余菜单路径来自社区或实测，标「存疑」，**以当前版本界面为准**，不要照搬给用户当成确定步骤。
+>
+> **前提共识（有依据）**：微信/QQ 用硬编码路径，**不支持 mklink/junction 迁移**（实测会损坏数据，`pitfalls.md` 58）。正确做法是**应用内的存储位置设置** + 清理遗留目录。
 
 ---
 
@@ -34,11 +36,12 @@
 
 **微信 4.x（官方入口是「账号和存储」，不是「文件管理」）**：
 
-1. **完全退出微信**（托盘图标 → 退出，确认无进程`WeChat.exe`）。
-2. 打开微信 → 左下角"≡"菜单 → **设置 → 账号和存储 → 存储位置 / 更改聊天记录位置**（腾讯客服官方 FAQ 原文用词）。
-3. 选择 D 盘新目录（如 `D:\WeChatData`）→ 微信自动复制数据并切换；官方建议将新版本存储位置修改到旧版本 `WeChat Files` 的同级目录。
-4. 完成后用**设置 → 通用 → 存储空间管理**清理缓存（先确认聊天记录已备份）。
-5. **重启微信**验证登录正常、历史聊天记录可打开。
+1. 打开微信 → **主界面右下角「设置」→「账号和存储」→「存储位置」**（腾讯客服 FAQ 原文）。
+2. 选择 D 盘新目录（如 `D:\WeChatData`）→ 按提示完成迁移并重启微信。
+3. **重启后验证**：登录正常、历史聊天记录可打开；任务管理器里微信进程名可能是 `Weixin.exe`（4.x，「存疑」需在实机确认）或 `WeChat.exe`，两个都查。
+4. 缓存清理优先用微信自带的存储空间管理功能（「存疑」菜单名随版本变化，以当前界面为准；先确认聊天记录已备份）。
+
+> 腾讯 FAQ 里"把新版本存储位置改到旧版本 `WeChat Files` 的同级目录"这句话，**只适用于"重装系统后打开 4.x 没有触发聊天记录导入"的情况**，不是通用迁移步骤。
 
 **微信 3.x 及更早（官方用词是「通用设置」）**：
 
@@ -47,7 +50,7 @@
 3. 选 D 盘目录 → 确定 → 重启微信验证。
 
 > **官方来源**：
-> - [微信Windows版更新至4.0及以上版本常见问题](https://kf.qq.com/faq/250710MraIZj250710QniyAr.html)：4.x "设置→账号和存储→存储位置/更改聊天记录位置"，`xwechat_files` 目录
+> - [微信Windows版更新至4.0及以上版本常见问题](https://kf.qq.com/faq/250710MraIZj250710QniyAr.html)：4.x "主界面右下角「设置」-「账号和存储」-「存储位置」"，`xwechat_files` 目录，旧记录自动导入、优先用硬连接迁移
 > - [微信Windows版如何从旧电脑迁移聊天记录到新电脑](https://kf.qq.com/faq/190425ZFBzqa190425ZNNzQv.html)：3.x"设置–通用设置"，"建议微信文件默认保存位置更改至非系统盘"
 > - 腾讯客服微信专区（可检索全部微信 FAQ）：https://kf.qq.com/product/weixin.html
 
@@ -55,34 +58,38 @@
 
 | 内容 | 位置 | 清理方式 |
 |------|------|---------|
-| 4.x 图片/视频/文件缓存 | `xwechat_files\wxid_*\cache`、`temp` | 应用内"存储空间管理"；或**退出微信后**删这两个子目录 |
-| 4.x 全局缓存/日志 | `%APPDATA%\Tencent\xwechat\{log,crashinfo,dump}` | **安全可删**：完全退出微信后清理日志/崩溃转储；**严禁动 `config`（配置）**，`xplugin`（插件沙箱）手删后会触发重新下载 |
-| 4.x 小程序运行时缓存 | `%APPDATA%\Tencent\xwechat\radium\Applet` | 建议在微信内「发现 → 小程序」长按删除，或通过存储空间管理清理 |
+| 4.x 图片/视频/文件缓存 | `xwechat_files\wxid_*\cache`、`temp` | 应用内存储空间管理优先；或**完全退出微信后**用模板 7（`t07-safe-recycle.ps1 -Path … [-Apply]`）把这两个子目录移入回收站 |
+| 4.x 全局缓存/日志 | `%APPDATA%\Tencent\xwechat\{log,crashinfo,dump}` | 社区实测可清：完全退出微信后用模板 7 移入回收站；**严禁动 `config`（配置）**，`xplugin`（插件沙箱）删后会重新下载 |
+| 4.x 小程序运行时缓存 | `%APPDATA%\Tencent\xwechat\radium\Applet` | 在微信内删除不用的小程序，或通过存储空间管理清理（「存疑」菜单路径以当前版本为准） |
 | 旧版缓存 | `WeChat Files\<wxid>\FileStorage\{Cache,Image,Video}` | 应用内清理优先；直接删会丢原图/缩略图 |
 
 > 按 `pitfalls.md` 8：微信缓存格式私有，**优先应用内清理**，直接删文件夹可能损坏聊天记录。
 
-### 微信 4.0 升级后旧版 3.x 孤岛残留处置（真实高频痛点）
+### 微信 4.x 升级后旧版 `WeChat Files` 的处置
 
-- **产生根因**：微信 4.x 采用新架构，数据目录变更为 `xwechat_files`。用户升级 4.0 并在客户端内将存储位置迁到 D 盘后，微信 4.x **只会迁移新结构数据**。旧版 3.x 积攒在 `Documents\WeChat Files` 中的旧缓存、旧附件（动辄 30GB~80GB）**不会被 4.0 自动清除，也不会在 4.0 界面中显示**，成为永久占满 C 盘的"幽灵孤岛"。
-- **安全处置 SOP（借鉴 CleanMyWechat 最佳实践）**：
-  1. **只读核验**：确认微信 4.x 已在新目录（如 `D:\WeChatData\xwechat_files`）正常运行，聊天记录与最近联系人均正常加载。
-  2. **冷备缓冲（二选一）**：
-     - *方案 A（推荐）*：将 `Documents\WeChat Files` 临时重命名为 `WeChat Files_old`，观察使用微信 3~7 天。
-     - *方案 B*：使用 `SafeRecycle` 脚本移入 Windows 回收站（保留可随时一键放回的原样撤回能力）。
-  3. **彻底释放**：经用户确认无重要未另存的历史离线文档后，清空回收站彻底释放空间。
+- **先弄清楚它是不是"孤岛"**：按腾讯 FAQ，4.0 及以上版本**会自动导入当前登录账户的旧版本聊天记录**，并且"**优先使用硬连接技术来迁移数据，大部分文件、图片和视频等不会占用双份空间**"。
+  - 所以旧 `WeChat Files` 和新 `xwechat_files` 里很多文件是**同一份数据的两个硬链接**。资源管理器"属性"和本技能的递归统计都会**重复计算**，C 盘总量看起来比实际大。
+  - **删除旧 `WeChat Files` 释放的空间可能远小于它显示的大小**（只有没被硬链接到新目录的那部分才会真正释放）。
+  - 仍然可能有真正的残留：多账号里**没在 4.x 登录过的账号**、导入前就存在的旧缓存等。
+- **安全处置 SOP**：
+  1. **确认导入完成**：在 4.x 里打开几个老聊天，能看到旧消息和旧文件；多账号要逐个账号确认。
+  2. **估算真实可释放量**（只读）：对几个大文件用 `fsutil hardlink list "<文件路径>"` 看是否同时出现在 `xwechat_files` 下；或用 WizTree 这类按文件 ID 去重的工具看。告诉用户"显示 X GB，实际大约能释放 Y GB"。
+  3. **冷备观察**：把 `Documents\WeChat Files` 重命名为 `WeChat Files_old`，正常使用微信 3~7 天。
+  4. **移入回收站**：用户确认后用模板 7（`t07-safe-recycle.ps1 -Path … [-Apply]`，即 `Invoke-WcoRecycle`）。它会先检查回收站是否可用、容量是否够，不够就拒绝而不是永久删除。
+  5. 用户再次确认后清空回收站。**不要把旧数据拷进 `xwechat_files`**（腾讯 FAQ：新旧数据不可混用）。
 
 ### "改了保存位置占 C 盘还是涨"——逐个排查
 
 1. 设置→账号和存储 显示的新路径是否真在 D 盘？
 2. `%APPDATA%\Tencent\xwechat` 是否还在 C 盘（包含 `xplugin` 插件与日志，近 1 GB 级，**不会随迁移自动搬走**，需在退出后定期清 `log/crashinfo`）？
-3. 旧 `Documents\WeChat Files` 是否残留没删（即上述 3.x 孤岛）？
+3. 旧 `Documents\WeChat Files` 是否还在？（注意硬链接：它显示的大小不等于删掉能释放的空间，见上节）
 4. **OneDrive 冲突与 Fallback**：若用户的「文档」开启了 OneDrive 备份/同步，微信 4.x 遇到同步锁或跨驱动器冲突时会回退至 `$env:USERPROFILE\xwechat_files`，导致实际落盘位置与默认文档目录不一致。
 
 ### 迁移后验证（只读统计）
 
 ```powershell
 # 确认 D 盘目标有对应体积、C 盘不再增长
+# 注意：这种按文件求和的方式会把硬链接重复计算（旧 WeChat Files 与 xwechat_files 之间常见），只看量级和趋势
 (Get-ChildItem "D:\WeChatData\xwechat_files" -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum/1GB
 (Get-ChildItem "$env:USERPROFILE\xwechat_files" -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum/1GB   # 应显著变小
 (Get-ChildItem "$([Environment]::GetFolderPath('MyDocuments'))\xwechat_files" -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum/1GB
@@ -90,7 +97,7 @@
 
 ### "暂时无法迁移"怎么办（社区排坑）
 
-常见原因：微信进程存活占用文件 / 目标盘空间不足 / 目标目录已有同名残留。**对策**：彻底退出微信（确认任务管理器无 `WeChat.exe` / `WeChatAppEx.exe`） → 换一个全新的空目录重试 → 确保 D 盘余量充足。
+常见原因：微信进程存活占用文件 / 目标盘空间不足 / 目标目录已有同名残留。**对策**：彻底退出微信（确认任务管理器无 `Weixin.exe` / `WeChat.exe` / `WeChatAppEx.exe`） → 换一个全新的空目录重试 → 确保 D 盘余量充足。
 
 ---
 
@@ -99,46 +106,48 @@
 - **数据位置**：
   - 核心文档与文件：默认在 `Documents\WXWork\` 或 `$env:USERPROFILE\Documents\WXWork`
   - 运行时配置与缓存：`%APPDATA%\Tencent\WXWork\`
-- **官方迁移路径**：
-  - 打开企业微信 → 左下角三道杠/齿轮 → **设置 → 文档/文件管理 → 更改文件存储位置** → 选 D 盘目录（如 `D:\WXWorkData`）→ 确认后软件自动复制并切换。
+- **迁移路径**（「存疑」未找到腾讯官方页面，菜单名以当前版本界面为准）：
+  - 打开企业微信 → 设置 → 找"文件存储位置/更改"类选项 → 选 D 盘目录（如 `D:\WXWorkData`）→ 按提示迁移。
 - **安全清理缓存**：
-  - 优先在企业微信内使用「设置 → 通用 → 清理缓存」。
-  - 手动安全清理：彻底退出企业微信进程（`WXWork.exe`），使用 `SafeRecycle` 清理 `%APPDATA%\Tencent\WXWork\Data\Crash` 及 `log` 目录；**不要删除任何含有聊天记录的 `.db` 文件**。
+  - 优先用企业微信自带的清理缓存功能（「存疑」菜单路径同上）。
+  - 手动清理：彻底退出企业微信进程（`WXWork.exe`），用模板 7（`t07-safe-recycle.ps1 -Path … [-Apply]`）把 `%APPDATA%\Tencent\WXWork\Data\Crash` 及 `log` 目录移入回收站；**不要删除任何含有聊天记录的 `.db` 文件**。
+- 公司管理的企业微信可能有管理员策略限制存储位置，改不了时不要绕过。
 
 ---
 
 ## QQ NT 版
 
-### 官方迁移步骤（"更改默认存储路径"）
+### 迁移步骤（「存疑」：未找到腾讯官方页面，菜单路径来自社区/实测）
 
-> **确切界面路径（QQ NT 架构，v9.9+）**：
-> 1. **聊天记录存储位置迁移**：点击 QQ 左下角菜单/齿轮 → **设置 → 存储管理**（或通用设置） → 在「聊天记录存储位置」点击 **更改路径 / 迁移** → 选择 D 盘目录（如 `D:\QQNTData`）→ 确认并重启 QQ。
-> 2. **接收文件保存位置**：在 **设置 → 文件管理** 中点击 **更改**，修改默认接收文件夹（如 `D:\QQFiles`）。
-> 3. 旧版路径：用户"文档"下 `Tencent Files\<QQ号>`。
+> **界面路径（QQ NT 架构，v9.9+，以当前版本为准）**：
+> 1. **聊天记录存储位置**：QQ 左下角菜单 → 设置 → 存储管理（各版本名称可能不同）→ 更改存储位置 → 选择 D 盘目录（如 `D:\QQNTData`）→ 按提示迁移并重启 QQ。
+> 2. **接收文件保存位置**：在设置里找"文件"相关选项修改默认接收文件夹（如 `D:\QQFiles`）。
+> 3. 数据目录：用户"文档"下 `Tencent Files\<QQ号>`（腾讯 FAQ 称为"QQ 个人文件夹"）。
 > 
 > **排坑说明**："改了不生效/写回 C 盘"——根因通常是后台残留 `QQ.exe` 进程导致配置覆写，改完务必彻底退出并重启验证。
 
-**可用官方参考**：
+**可用官方参考**（只能证明目录和架构，**不含**上面的迁移菜单路径）：
 - QQ 官方客服专区（FAQ 检索入口）：https://kf.qq.com/product/QQ.html
 - 官方承认"QQ 个人文件夹"：[电脑端QQ登录提示"QQ个人文件夹中的文件被占用"](https://kf.qq.com/faq/230412aANFzq230412iqEr2M.html)
 - 官方确认"基于 QQNT 技术架构"：[腾讯软件中心](https://pc.qq.com/detail/15/detail_35095.html)
 
 ### 缓存清理
 
-- 应用内"设置 → 存储管理"管理缓存；确定不再需要的旧 `Tencent Files\<QQ号>` 目录（已迁移后）可清理。
+- 优先用 QQ 自带的存储管理清理缓存；确定不再需要的旧 `Tencent Files\<QQ号>` 目录（已迁移并验证后），先重命名观察，再用模板 7 移入回收站。
 
 ---
 
 ## 钉钉
 
-- **官方说明**：钉钉官方支持在 **「设置 → 通用 → 文件存储」** 中将接收文件修改为 D 盘，在 **「设置 → 通用 → 清理缓存」** 中一键清理；但**不支持**将 `%LOCALAPPDATA%\DingTalk_91` 应用核心数据目录整体修改盘符。
-- **目录**：数据在 `%LOCALAPPDATA%\DingTalk_91\`（Chromium/Electron 系，含 `Cache`、`Code Cache`、`GPUCache`、`Local Storage` 等）。
-- **安全清理**：完全退出钉钉后，删除 `Cache`、`Code Cache`、`GPUCache` 子目录**内容**（不影响账号与组织数据）。
-- **卸载残留**：内核守护服务"钉钉保镖"`C:\Program Files (x86)\AlibabaProtect` 卸载后仍残留，需提权删除（`pitfalls.md` 39）：
-  ```cmd
-  sc stop AlibabaProtect && sc delete AlibabaProtect
-  rd /s /q "C:\Program Files (x86)\AlibabaProtect"
-  ```
+- **菜单路径**（「存疑」：未找到钉钉官方帮助页）：社区引用钉钉客服的说法是 Windows 版 **头像 → 设置与隐私 → 高级 → 清理缓存**；接收文件位置也在设置里修改。应用数据目录本身没有改盘符的选项。
+- **目录**（「存疑」，版本不同名字不同）：社区报告在 `%APPDATA%\DingTalk`，部分版本为 `%LOCALAPPDATA%\DingTalk_<数字>`（Chromium/Electron 系，含 `Cache`、`Code Cache`、`GPUCache`、`Local Storage` 等）。以只读扫描实际找到的目录为准。
+- **安全清理**：优先用应用内清理缓存；手动时完全退出钉钉，用模板 7 把 `Cache`、`Code Cache`、`GPUCache` 子目录移入回收站（不影响账号与组织数据）。
+- **卸载残留"钉钉保镖"（AlibabaProtect）**：钉钉卸载后服务和 `C:\Program Files (x86)\AlibabaProtect` 可能仍在（`pitfalls.md` 39）。**不要直接 `sc delete` + `rd /s /q`**（`rd /s /q` 是永久删除，没有演练、备份和撤销）。按下面顺序（管理员）：
+  1. 确认电脑上**没有其他阿里系软件**仍依赖它（`Get-WcoInstalledProgram -Name '*Ali*'`、`'*淘宝*'`、`'*钉钉*'` 等），有就保留。
+  2. 停用并观察：`Set-WcoServiceStartType -Name AlibabaProtect -StartType disabled`（演练）→ 加 `-Apply` → 重启后确认一切正常。
+  3. 删除服务：`Remove-WcoService -Name AlibabaProtect`（演练）→ 加 `-Apply`。它会先 `reg export` 服务键，撤销 = `reg import` 后重启。若被自我保护拒绝，报告给用户，不强行绕过。
+  4. 目录：先重命名为 `AlibabaProtect.old` 观察，再用模板 7（`t07-safe-recycle.ps1 -Path … [-Apply]`）移入回收站。
+  5. `Export-WcoUndo` 生成撤销脚本；完成后重新扫描确认。
 
 ---
 
@@ -157,5 +166,6 @@
 
 - 其他软件官方迁移 → `drive-migration-official.md`
 - mklink 兜底（聊天软件列为不兼容）→ `mklink-migration.md`
-- 缓存清理走回收站的安全封装 → `scan-scripts.md` 模板 7（`SafeRecycle`）
+- 缓存清理走回收站的安全封装 → `scan-scripts.md` 模板 7（`t07-safe-recycle.ps1` / `Invoke-WcoRecycle`）
+- 卸载流程与残留打分 → `software-uninstall.md`
 

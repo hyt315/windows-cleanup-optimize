@@ -1,350 +1,203 @@
 # 常见陷阱与实战教训
 
-<!-- skill-doctor: allow-block SEC002（实战路径示例用 <用户名> / %USERPROFILE% 占位，无真实用户路径） -->
-
-执行清理/迁移过程中容易踩的坑（2026 实战沉淀）。按需查阅，主文件 SKILL.md 只在流程关键点引用本节条目。
+清理、卸载、迁移、优化时容易踩的坑，按主题归类。每条一个规则，细节链接到负责的手册。SKILL.md 在流程关键点按主题引用本文。
 
 ## 目录
 
-- 执行方式陷阱（1-3, 21, 27）
-- 判断误判陷阱（4, 10, 14, 17-20, 23-25）
-- 空间/性能陷阱（5-6, 12-13, 28-29）
-- 安全边界陷阱（7-8, 22, 26）
-- 迁移专项陷阱（11, 15-16）
-- 2026-09 自启动+迁移彻底化（68-78）
-
-## 执行方式陷阱
-
-1. **PowerShell 变量 `$` 符号被 bash 吃掉。** 不要通过 `-Command` 传含 `$` 的脚本。正确做法：先 `Write` 一个 `.ps1` 文件，再用 `powershell -ExecutionPolicy Bypass -File "path.ps1"` 执行。
-
-2. **SendToRecycleBin 不释放空间。** 这是最容易引起困惑的点。文件进了回收站还在 C 盘上，必须清空回收站才释放。务必在阶段 5 明确告知用户。
-
-3. **Temp 目录大量文件被锁。** 这是正常行为（运行中的程序占用），不是错误。跳过即可，不需要反复重试。
-
-21. **PowerShell 函数内 `$report +=` 会静默丢失（白扫一轮）。** 函数内普通赋值创建的是局部变量，不会写回脚本级变量。全盘扫描几十行结果全空、但没报任何错误——八成是这个原因。修复：函数内一律 `$script:report +=`，或让函数返回数组由调用方捕获。这是 2026-08 实战中实际踩过的坑。
-
-27. **清空回收站命令不要用 bash 内联传 `$` 变量。** `powershell -Command "...$c..."` 会被 bash 展开变量导致解析错误（报 `op_Division` 之类）。同陷阱 1：一律 .ps1 文件执行。实战中 `Clear-RecycleBin` 曾因此差点执行结果无法确认。
-
-## 判断误判陷阱
-
-4. **AppData\Roaming 里残留已卸载软件的数据。** Windows 卸载程序通常不删 Roaming 下的配置目录。通过检查对应 exe 是否仍存在于 `Program Files` 或 PATH 中来判断是否为残留。
-
-10. **Roaming 交叉比对的模糊匹配有局限。** 注册表里的 `DisplayName` 和 Roaming 目录名不一定一一对应（例如 VMware 在 Roaming 里的目录名就是 `VMware`，但注册表可能显示 `VMware Workstation Pro`）。交叉比对结果是辅助判断，不是最终结论——呈现给用户时标注"疑似残留"而非"确认残留"，让用户做最终决定。
-
-14. **TRAE 改名导致 Roaming 交叉比对误判。** TRAE Solo 在 2026-06-09 改名为 TRAE Work，但 `%APPDATA%\TRAE SOLO CN` 目录名未变、注册表 `DisplayName` 已变为 `TRAE Work CN (User)`。交叉比对的模糊匹配无法将 `TRAE Work CN` 与 `TRAE SOLO CN` 关联，会把正在使用的 TRAE 误标为"RESIDUAL（已卸载残留）"。遇到类似情况（软件改名但目录名未同步更新），应优先检查进程列表中是否存在对应进程，而非仅依赖注册表匹配。
-
-17. **非系统盘根目录的哈希命名隐藏目录通常是视频流缓存。** 如 `D:\50c1669063de13bda9d5cbeab7da607b`（32 位十六进制字符串），内含 `.hls`/`.ts`/`.m3u8` 文件。这类目录来自某些视频播放器或浏览器的离线缓存，可以安全清理。识别方法：隐藏属性 + 哈希命名 + 内含流媒体分片文件。
-
-18. **"- AppData" 后缀目录是软件搬家的旧备份。** 腾讯电脑管家等工具的"软件搬家"功能会把 AppData 目录迁移到 D 盘，有时在目标位置留下 `原目录名 - AppData` 的备份副本（如 `<自定义安装根>/TRAE SOLO CN - AppData`）。如果当前软件运行正常且 AppData 已指向新位置，这些备份可以安全清理。
-
-19. **非系统盘上版本号命名的 IDE 目录大概率是旧版残留。** 如 `D:\IntelliJ IDEA Community Edition 2022.1.3`（2022 年版，LastWrite 2024-10）。用户通常已升级到新版，旧版安装目录（含 plugins/lib/jbr 等）就是纯占用。判断方法：目录名含版本号 + LastWriteTime 超过 6 个月 + 注册表中无对应安装记录。
-
-20. **非系统盘 Users 目录不能只看顶层 LastWriteTime 就判定为孤儿。** 软件搬家（如腾讯电脑管家）会把 C 盘 `AppData\Local\Programs\*` 迁移到 `D:\Users\<用户名>\AppData\Local\Programs\*`，顶层目录 LastWrite 可能很旧（迁移时间），但内部子目录（如 VS Code）仍在活跃写入。**必须逐层展开检查内部每个软件的 LastWriteTime，并确认 C 盘是否有 junction 指向此路径。** 实战教训：`D:\Users\<用户名>` 顶层 LastWrite 2025-12，差点被判定为孤儿，实际内部的 VS Code LastWrite 2026-07-22，是正在使用的搬家目标。
-
-23. **软件搬家备份不止 `- AppData` 后缀一种命名。** 腾讯电脑管家"软件搬家"还会生成 `软件名_腾讯电脑管家搬家目录_哈希`（如 `douyin_腾讯电脑管家搬家目录_852562`）。识别：目录名含"搬家"字样，且对应软件已卸载（注册表无记录）→ 旧备份，可清。若对应软件还在用，先核对 C 盘是否有 junction 指向它。
-
-24. **哈希视频缓存目录删除前先看 LastWriteTime。** 如果 LastWriteTime 在最近几天内，说明有播放器/浏览器正在写它——此时删除会失败（文件被占用），且清理后播放中的内容会中断。做法：先告知用户"该缓存正在使用，删除后会自动重建"，被占用导致失败时重试即可，不要反复死磕。
-
-25. **D 盘可能出现无法显示的乱码目录名**（如 `�����ļ�`，GBK 字节被当 Unicode 显示）。这是正常现象（老工具创建的目录），不是文件损坏。用 `[System.IO.Directory]::GetDirectories('D:\')` 可读真实名；**不要凭乱码名猜测内容，先看内部再定档**（实战：乱码目录内部是 `Tencent Files`，实为 QQ 聊天文件数据，第四档）。
-
-## 空间/性能陷阱
-
-5. **Python 全局环境膨胀。** `site-packages` 可能累积到几 GB。建议用户迁移到 `uv venv` 虚拟环境工作流，而非反复清理全局包。
-
-6. **扫描大目录耗时。** `Get-ChildItem -Recurse` 扫描几 GB 的目录可能需要 1-3 分钟。给 Bash 命令设置足够的 `timeout`（建议 300000ms 以上），并使用 `-ErrorAction SilentlyContinue` 避免权限错误中断。
-
-12. **推荐 WizTree / TreeSize Free 作为辅助诊断工具。** PowerShell 的 `Get-ChildItem -Recurse` 扫描几 GB 目录需要数分钟，而 WizTree 利用 NTFS MFT（Master File Table）可以秒级出全盘热力图。当用户对扫描结果有疑问或想更直观地看空间分布时，建议他们安装 WizTree（免费、免安装版可用）做可视化验证。
-
-13. **WSL2 虚拟磁盘文件会无限增长。** `%LOCALAPPDATA%\Packages\*Ubuntu*\LocalState\ext4.vhdx` 只增不减，即使你在 WSL 里删了文件，vhdx 也不会自动缩小。需要用 `diskpart` 的 `compact vdisk` 命令手动压缩。如果用户有 WSL2 环境，这个路径值得单独检查。
-
-28. **DriverStore 驱动存储库是最大盲区之一。** `C:\Windows\System32\DriverStore\FileRepository` 累积所有旧版驱动（实测 11 GB、20+ 个 NVIDIA 版本）。**绝不手动删文件**，清理用 `pnputil /enum-drivers` + `pnputil /delete-driver oemXXX.inf /uninstall`（详见 system-cleanup.md）。扫描阶段只测大小，若 >2 GB 提示用户。
-
-29. **清理前建议建系统还原点。** 涉及驱动/系统组件的操作（pnputil、DISM）前，执行 `Checkpoint-Computer -Description "BeforeDriversDelete"`（需管理员），用户数据类清理不需要。
+1. [安全底线（绝不默认做）](#一安全底线绝不默认做)（1–14）
+2. [删除、回收站与权限](#二删除回收站与权限)（15–25）
+3. [扫描与误判](#三扫描与误判)（26–41）
+4. [自启动](#四自启动)（42–50）
+5. [卸载与流氓软件](#五卸载与流氓软件)（51–56）
+6. [迁移](#六迁移)（57–65）
+7. [性能与内存误区](#七性能与内存误区)（66–76）
 
 ---
 
-## 优化主题踩坑（30+）
+## 一、安全底线（绝不默认做）
 
-30. **"内存清理工具"几乎都是 placebo。** 360 内存清理、CCleaner、Mem Reduct、Razer Cortex 等都调用 `EmptyWorkingSet`，只是把内存页从 Working Set 移到 Standby 列表——物理 RAM 占用**不变**。详见 `memory-optimization.md`。**不要推荐用户安装任何这类工具**。
+1. **不手删 `C:\Windows\WinSxS`。** System32 里大量文件是指向 WinSxS 的硬链接，普通目录求和会重复计算，看起来比实际大。只用官方命令：先 `Dism.exe /Online /Cleanup-Image /AnalyzeComponentStore` 分析，再 `/StartComponentCleanup`。手删可能导致无法开机或无法更新。依据：[Clean up the WinSxS folder](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/clean-up-the-winsxs-folder)。
 
-31. **不要禁用 SysMain（Superfetch）除非你确定机器配置。** 现代机器（SSD + 8 GB+ 内存）SysMain 加速应用冷启动，禁用反而变慢。判断方法：`Get-PhysicalDisk | Select MediaType`（SSD = 4，HDD = 3）。详见 `services-optimization.md` SysMain 节。
+2. **不默认加 `/ResetBase`。** `Dism /StartComponentCleanup /ResetBase` 之后，**现有**的更新包都无法卸载（以后安装的更新仍可卸载）。只有用户明确知道这个后果并要求时才做。
 
-32. **不要禁用 Windows Defender 来"优化性能"。** Defender 在 Win10/11 已经非常轻量（CPU < 2%），禁用后安全风险巨大。**正确做法**：开发目录放 Dev Drive 用性能模式；排除列表是 🟠 HIGH 的最后手段，只排除可再生成的构建产物。详见 `performance-tuning.md` 第七节。
+3. **Win11 24H2 磁盘清理里"约 8.63 GB 更新残留清不掉"是历史显示问题。** 微软 2024-10 记录为已知问题，2024-10-24（KB5044384）起的更新已缓解，现已不在 24H2 发布健康页上。遇到时不要因此去动 WinSxS。
 
-33. **不要禁用 Windows Update 来"提速"。** 收益几乎为零，安全风险巨大。正确做法：设置"工作时间不更新"，或保持默认自动更新。
+4. **不碰 `C:\Windows\Installer`。** 这里是已安装 MSI/MSP 的缓存，删了之后 Office、Visual Studio、SQL Server 等会无法更新、修复或卸载（报"installation source is not available"）。只读；需要时用官方卸载程序卸掉不用的软件。`C:\ProgramData\Package Cache` 同理：不删，用产品自己的卸载/修复。
 
-34. **页面文件不要设为 0。** 即使物理内存很大，Windows 需要页面文件生成崩溃转储（蓝屏诊断）。**最小值**：1 GB（仅给崩溃转储用）。完全禁用会导致崩溃转储失败。
+5. **不手删 DriverStore。** `C:\Windows\System32\DriverStore\FileRepository` 会累积旧版驱动（显卡驱动尤其多）。**绝不手动删文件**，只用 `pnputil /enum-drivers` + `pnputil /delete-driver oemXX.inf /uninstall`（详见 `system-cleanup.md`）。扫描阶段只测大小，超过 2 GB 时提示用户。
 
-35. **服务禁用需要管理员权限。** `Disable-ScheduledTask`（计划任务）和 `sc.exe config ... start= disabled`（服务）经常因权限不足失败——错误信息为 "Access is denied"。**解决方案**：用 `Start-Process powershell -Verb RunAs` 提权，会弹 UAC。
+6. **不默认清卷影副本。** `vssadmin delete shadows /all` 会删掉全部系统还原点和文件"以前的版本"。只读查询 `vssadmin list shadowstorage`；只有空间极度紧张、用户知道"所有还原点会失效"后，由用户明确触发。
 
-36. **提权后的 `Stop-Service` 对部分受保护服务无效。** 例如 `DiagTrack`、`RemoteRegistry` 等被系统保护的服务，停止时可能需要 5-10 秒等待，或在 `Stop-Service` 后加 `Start-Sleep -Seconds 5`。
+7. **不关 Windows Defender 来"优化性能"。** 开发目录提速首选 Dev Drive 的性能模式；排除项是 🟠 HIGH 的最后手段，只排除可再生成的构建产物，不排除整盘，**不排除进程**（`-ExclusionProcess "Code.exe"` 会让它读写的所有文件都不被扫描，包括打开的恶意项目和插件）。详见 `performance-tuning.md`。
 
-37. **bloatware 卸载前先看进程列表。** 360 安全卫士等带自我保护的标准卸载会失败——必须先终止进程（`Stop-Process -Force`），再走标准卸载。详见 `software-uninstall.md`。
+8. **Defender 排除路径支持通配符，但有边界。** 微软文档：文件、文件夹、进程排除可用 `*`、`?` 和环境变量；文件夹路径里的 `*` 只匹配一层，如 `D:\code\*\node_modules` 排除 `D:\code\<任一项目>\node_modules` 及其子目录。**文件夹排除不覆盖其下的重解析点子文件夹**——用 junction 迁移过的目录要对目标路径单独排除。依据：[Configure exclusions based on file name, extension, and folder location](https://learn.microsoft.com/en-us/defender-endpoint/configure-extension-file-exclusions-microsoft-defender-antivirus)（2026-11-11 核对）。
 
-38. **360 内核驱动普通方法删不掉。** `360AvFlt`、`360Box`、`360FsFlt`、`360SelfProtection` 是内核级驱动，先关自我保护、走官方卸载、重启后再看残留；仍有残留再建还原点进安全模式处理（v2.0：第三方强卸脚本降为 🔴 CRITICAL 最后手段，见 `software-uninstall.md` 360 节）。**不要用普通 `Remove-Item` 操作这些驱动文件**——可能导致系统无法启动。
+9. **不关 Windows Update 来"提速"。** 收益几乎为零，安全风险大。用"使用时段"避开工作时间即可。Windows 10 已停止常规支持，更不能关更新（详见 SKILL.md 运行环境）。
 
-39. **钉钉的"钉钉保镖"是内核服务，标准卸载后仍残留。** 路径 `C:\Program Files (x86)\AlibabaProtect`，需提权删除。
+10. **页面文件不要设为 0，大小不要套固定倍数。** 微软的说法是页面文件大小"不能一概而论"，推荐"系统管理的大小"。崩溃转储依赖页面文件（或专用转储文件）：没有足够的页面文件，蓝屏时就写不出转储；所需大小取决于转储类型（小型转储很小，完整转储约为内存 + 257 MB）。`0x3B`、`0x1A` 是蓝屏代码，不是应用崩溃代码。依据：[How to determine the appropriate page file size](https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/how-to-determine-the-appropriate-page-file-size-for-64-bit-versions-of-windows)。规范做法见 `system-cleanup.md`。
 
-40. **WPS 卸载后 Kingsoft 目录残留巨大。** 典型残留：`addons/pool/win-i386/`（旧版插件）和 `%APPDATA%\kingsoft`（配置）。WPS 还会在 `%LOCALAPPDATA%\Kingsoft` 留云服务缓存。详见 `software-uninstall.md` WPS 专项。
+11. **休眠文件：`powercfg /h /type reduced` 缩小约 30%，但会去掉"休眠"选项。** reduced 只保留快速启动（hiberboot）所需；如果之前自定义过大小，先 `powercfg /h /size 0` 恢复系统管理，再改类型。`powercfg -h off` 会同时关掉快速启动，只在用户确认不用休眠也不在乎快速启动时做。依据：[powercfg 命令行选项](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options)、[Compact OS](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/compact-os)（"Reduces the file by 30%"）。
 
-41. **腾讯桌面整理 (DeskGo) 自启**。**保留**——这是腾讯少有的"无广告无捆绑"工具，但默认会自启（占 350 MB 内存）。如果觉得太占内存，可在 HKCU Run 中禁用，但保留软件本体。
+12. **CompactOS 不是默认动作。** `compact.exe /compactos:query` 查状态；`/compactos:always` 压缩系统文件，微软在 Win10 1607 测试镜像上测得约 2.75–3.7 GB。对性能的影响通常很小，但低速 CPU 或机械硬盘上可能略慢；`/compactos:never` 可撤销。用户同意后才做。
 
-42. **Windows Search 索引范围影响性能。** 索引 `D:\code` 等大型代码库会大量消耗磁盘 I/O。建议：索引用户库 + 开始菜单，**不索引**大型项目目录。用 Everything（第三方）替代更快。
+13. **IFEO `Debugger` 屏蔽弹窗是 🟠 HIGH，默认不做。** 它本身就是一种劫持技术（MITRE T1546.012），Microsoft Defender 会检测为 `Behavior:Win32/ifeoDebugger.DB` 并清除，公司 EDR 会告警；按文件名对所有同名 exe 全局生效。只在应用内关推送、关通知、禁用任务都无效且用户明确同意后才用：只指向完整路径的 `systray.exe`，不用 `rundll32.exe`，不填空值或不存在的路径；回退只删 `Debugger` 这一个值，不删整个子键。详见 `bloatware-catalog.md` §9。
 
-43. **修改注册表前必须导出备份。** 优化涉及 `HKLM` 或 `HKCU\Software\` 的修改前，必须 `reg export` 备份整个注册表项（不是单个值），便于回退。
-
-44. **Defender 排除路径不要加太多。** 排除 = 不扫描 = 不保护。**只加**确认安全的路径：IDE 缓存、构建输出、虚拟磁盘镜像。**不要加**整个 `C:\` 或 `D:\`——失去 Defender 防护。
-
-45. **电源计划"卓越性能"对笔记本电池有负面影响。** 该计划禁用 USB 选择性挂起等节能功能，**电池续航降低 10-20%**。笔记本用户推荐：插电时切"高性能"，电池时保留"平衡"。
-
-46. **视觉效果"调整为最佳性能"会禁用 ClearType。** 视觉效果全关后字体发虚，**必须手动勾回"平滑屏幕字体边缘"**（这是 UI 可读性的最低要求）。
-
-47. **NTFS Last Access Time 在 Win10 1803+ 已默认禁用。** 不需要手动设置。早期版本可 `fsutil behavior set disablelastaccess 1`。
-
-48. **Nagle 算法禁用只对在线竞技游戏有意义。** 普通办公 / 网页用户禁用没收益，反而增加网络流量。**只对**游戏玩家推荐。
-
-49. **DoH (DNS over HTTPS) 配置后可能访问变慢。** DoH 服务器响应延迟可能比 ISP DNS 高。**先测速**：访问一些国际网站是否变慢；如果变慢，切回 ISP DNS。
-
-50. **不要排除 IDE 进程（v2.0 改）。** `Add-MpPreference -ExclusionProcess "Code.exe"` 会让该进程读写的所有文件都不被扫描，包括它打开的恶意项目和插件。v1.x 推荐过，v2.0 撤回；需要提速用 Dev Drive。
-
-51. **服务禁用后某些计划任务会自动启用服务。** 例如 `WaaSMedicSvc` 服务可能被某些 Windows Update 计划任务重新启用。**禁用计划任务**和**禁用服务**需要同时进行。
-
-52. **HKCU 注册表修改不需要管理员权限，但 HKLM 需要。** 写脚本时先检测权限（`$isAdmin`），非管理员时只改 HKCU 项；HKLM 项放提权脚本里。
-
-53. **修改电源计划需要管理员。** `powercfg /setactive` 在普通权限下报"Access is denied"。需要 `Start-Process -Verb RunAs`。
-
-54. **服务禁用后系统某些功能可能延迟几小时才察觉。** 例如关 WSearch 后，Outlook 搜索结果可能要重启后才明显改变。**不要立刻回退**——等 24 小时确认是配置问题还是真问题。
-
-55. **"内存 80% 就紧张"的判断是错的。** Windows 内存管理 Standby 缓存，80% 是**正常**。只有 Available < 500 MB 才是真压力。详见 `memory-optimization.md`。
-
-56. **TRIM 对 SSD 的重要性被高估了。** 现代 SSD 都有 GC（垃圾回收），TRIM 是"提示"而不是"必须"。**但开启 TRIM 仍然是好习惯**（默认开）——不会造成伤害。
-
-57. **Defender 排除路径用绝对路径，不要用通配符。** `Add-MpPreference -ExclusionPath "D:\code\projects\*\node_modules"` 这种通配符**不生效**。需要逐个写具体路径——**不要因此改成排除整个父目录**（v2.0）。
-
-58. **腾讯会议 / 微信 PC 用 mklink 迁移会损坏数据。** 这两个软件使用硬编码路径，不支持 junction 迁移。详见 `mklink-migration.md` 不兼容列表。
+14. **改注册表、驱动、系统组件前先留后路。** 注册表一律经 `Set-WcoRegistryValue` / `Remove-WcoRegistryKey`（自动 `reg export` 整个键，生成 undo）；动驱动、跑 DISM 前建还原点（`Checkpoint-Computer`，需管理员，默认 24 小时内只能建一个）。开了 BitLocker 的电脑先用 `manage-bde -status C:` 确认状态，并提醒用户确认恢复密钥已备份（例如在微软账户里）；"创建还原点会触发 BitLocker 恢复"这一说法无可靠来源，存疑。用户数据类清理（进回收站）不需要还原点。
 
 ---
 
-## 2026-08 实战新增（踩坑 59-66）
+## 二、删除、回收站与权限
 
-59. **非标准安装路径会漏检。** 2026-08 实战：WPS Office 装在 `<自定义安装根>/WPS Office/<版本号>/office6/`（用户从第三方渠道装的），而非标准的 `C:\Program Files (x86)\Kingsoft\WPS Office`。诊断脚本里所有"已知路径"硬编码都不命中，导致搜索不到更新器、检查不到 ksolaunch 等关键文件。**对策**：永远不要硬编码安装路径。改用两步法：
-    ```powershell
-    # 1. 从 Uninstall 注册表查 DisplayName 反查 InstallLocation
-    Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-                     'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -EA SilentlyContinue |
-        Where-Object { $_.DisplayName -match 'WPS|Kingsoft' } | ForEach-Object {
-            Write-Host "$($_.InstallLocation) -> $($_.DisplayName)"
-        }
-    # 2. 然后在 InstallLocation 下找具体 exe（如 wps.exe、ksolaunch.exe）
-    ```
-    同时额外扫：`C:\Program Files\*`、`C:\Program Files (x86)\*`、`D:\Program Files\*`、`<自定义安装根>/*`（用户自定义安装区）、`%LOCALAPPDATA%\Programs\*`、`%LOCALAPPDATA%\Kingsoft\*` 等候选根。
+15. **移入回收站不释放空间。** 文件还在原盘上，清空回收站才释放。阶段 5 必须明确告诉用户。
 
-60. **`HKCR\*` 通配符枚举极慢甚至卡死。** 2026-08 实战：`Get-ChildItem 'Registry::HKEY_CLASSES_ROOT\*\...'` 会枚举整个 HKCR 树（几十万个 ProgID 和文件扩展名），10 分钟都跑不完且无输出。**对策**：改用 `HKLM:\Software\Classes\<具体路径>`（HKCR 是 HKLM\Software\Classes + HKCU\Software\Classes 的合并视图，但 HKLM 这一半枚举速度快很多）。文件右键菜单常用的几个具体路径：`HKLM:\Software\Classes\*\shell`、`HKLM:\Software\Classes\Directory\shellex\ContextMenuHandlers`、`HKLM:\Software\Classes\Directory\Background\shellex\ContextMenuHandlers`、`HKLM:\Software\Classes\Drive\shellex\ContextMenuHandlers`、`HKLM:\Software\Classes\SystemFileAssociations\<.exe|.txt|.lnk>\shell`。
+16. **这些命令是永久删除，不经过回收站：** `rd /s /q`、`del`、`Remove-Item`、`Shift+Delete`、`robocopy /MIR`（目标里多出来的文件会被删除）。默认用 `t07-safe-recycle.ps1`（`Invoke-WcoRecycle`）；它在回收站不可用（U 盘/网络盘、设为直接删除、超过容量上限、策略未知）时拒绝执行，而不是退化为永久删除。
 
-61. **WPS 自动升级任务反复复活的根因与三层修复。** 2026-08 实战：WPS 始终在用户电脑安装，无论怎么手动禁用 `WpsUpdateTask_<用户名>` 和 `WpsUpdateLogonTask_<用户名>`，下次开 WPS 这两个任务又自动被 `ksolaunch.exe /wpsupdate` 重新写回。用户反复禁用 = WPS 反复复活。**根因**：WPS 启动器 `ksolaunch.exe` 在 WPS 主程序运行时检查并重注册任务。**三层防护**：
-    1. **配置层（治本）**：把注册表 `HKCU:\Software\Kingsoft\Office\6.0\Common\updateinfo\UpdateMode` 从 `auto` 改为 `manual`（字符串类型）。这一项让 ksolaunch **不再去**注册任务，从源头解决。
-    2. **任务层（兜底）**：禁用三个 WPS 任务：`WpsUpdateTask_<用户名>`、`WpsUpdateLogonTask_<用户名>`、`WpsWakeWnsLogonTask`（消息推送中心，也会被 WPS 自动重写）。
-    3. **服务层（兜底）**：禁用 `wpscloudsvr` 服务（云服务也能重写任务）。
-    
-    **陷阱**：① 用户找不到 in-app "自动升级" 开关时（某些版本藏得深），直接改 UpdateMode 是治本的最快路径。② 修改前必须 `reg export` 备份整个 `updateinfo` 子键（不要只备份 UpdateMode 单值），便于回退。③ 还要把 `LastUpdateMode` 同步改为 `manual`，否则 WPS 可能在下次启动时根据 LastUpdateMode 把 UpdateMode 改回 `auto`。详细模板见 `software-uninstall.md` WPS 专项（已更新）。
+17. **Temp 里大量文件被锁是正常的。** 运行中的程序占用着，跳过即可，不要反复重试；重启后再清。目录很小（< 10 MB）又大量锁定时，记录原因直接跳过，不在小目录上浪费时间。
 
-62. **计划任务根目录修改需要管理员，子目录某些可非管理员改。** 2026-08 实战：`schtasks /change /tn "\WpsUpdateTask_20919" /disable` 报 `Access is denied`（即使任务 owner 是当前用户），但同一个用户 token 下 `\GoogleUserPEH\RunPlatformExperienceHelperOnUnlock` 禁用却成功。规律：注册在 `\` 根目录下的任务（特别是厂商专属更新的）会被任务调度器安全策略拦截；`\<子文件夹>\` 下的任务大多可改。**对策**：遇到根目录任务禁用失败，统一放到管理员提权脚本里执行（见 `mklink-migration.md` 提权方案）。
+18. **`C:\Program Files` 下回收失败的报错有误导性。** 非管理员时 SendToRecycleBin 可能报 "This function is not supported on this system"，实际是权限不足。确认非管理员 + 目标在 Program Files 下，就提权重试。超长路径（> 260 字符）是另一种失败，报告为"路径过长"，不能当成"文件被占用"。
 
-63. **`schtasks /change` 失败的隐藏错误。** 2026-08 实战：`schtasks /change /tn ... /disable` 返回的 stderr 在 powershell 里是空的（看起来像成功但 `$LASTEXITCODE != 0`），实际是 `Access is denied`。**对策**：用 `Start-Process -FilePath schtasks.exe -ArgumentList ... -Wait -PassThru -RedirectStandardError ... -RedirectStandardOutput ...` 才能抓住真错误。PowerShell 原生调用 `schtasks` 时 stderr 被吞噬。
+19. **哪些操作需要管理员。** HKCU 写入不需要；HKLM、服务启动类型、根目录 `\` 下的计划任务、驱动、DISM、`powercfg /h` 需要。非管理员时典型报错：`sc config` 报 "OpenService FAILED 5: Access is denied"，`schtasks /change` 报 "Access is denied"（即使任务属于当前用户）；`\<子文件夹>\` 下的部分任务普通权限可改。做法：普通部分（HKCU、用户目录、Temp）直接跑，需要管理员的部分集中到一个脚本，用 `Start-Process powershell -Verb RunAs` 触发 UAC。`powercfg /setactive` 切换电源计划一般不需要管理员（存疑，遇到拒绝再提权）。
 
-64. **诊断/执行脚本不要放在用户根目录。** 2026-08 实战：清点下来用户在 `C:\Users\<用户名>\` 下看到一堆 `diag.ps1`、`exec_cleanup.ps1`、`wps_investigate.ps1` 等临时脚本大发雷霆——这是噪声不是功能。**对策**：所有诊断/执行/临时 .ps1 一律写到 `$env:TEMP` 或 `C:\Windows\Temp`，不用 `Write` 到用户目录。真的需要可点击的"用户运行入口"（如管理员提权 .bat）才放用户目录，但跑完立即让用户删掉并在脚本里自动 `Remove-Item` 自己。
+20. **原生命令失败要看退出码。** `schtasks`、`sc`、`reg` 失败时 PowerShell 不会抛异常；不加重定向时它们的错误输出会显示，但脚本里容易被 `| Out-Null` 吞掉。每次调用后检查 `$LASTEXITCODE`，需要日志时 `Start-Process ... -Wait -PassThru -RedirectStandardError <文件>`。
 
-65. **electron-updater 残留目录扫描模板。** 2026-08 实战：在 `%LOCALAPPDATA%` 下扫到 `@opencode-aidesktop-updater`(241MB)、`qwen-work-cn-updater`(226.8MB) 两个残留。这些是早期版本的 electron 应用留下的更新缓存，软件本体可能已升级或卸载，但更新器缓存没人清。**扫描模式**：在 `LocalAppData`、`AppData`、各软件安装目录下找名字匹配 `*updater*`、`*update*`、`pending`、`*Update*` 的目录，结合 Uninstall 注册表交叉比对（已卸载软件的就清，没卸载看大小决定）。完整模板见 `scan-scripts.md` 模板 5。
+21. **提权进程写日志用绝对路径。** `Start-Process -Verb RunAs` 启动的管理员进程环境可能不同（尤其是用另一个管理员账户提权时），`$env:TEMP` 和 `HKCU` 可能指向别的账户。日志写固定的绝对路径（或由调用方传 `-OutDir`）；要改当前用户 HKCU 的步骤在用户自己的普通会话里跑。
 
-66. **服务禁用需要管理员，非管理员错误一律是 "OpenService FAILED 5: Access is denied"。** 2026-08 实战：`sc config <service> start= disabled` 在非管理员 token 下报这个错。`schtasks /change` 失败报 `Access is denied`。两者都通过 `%LOCALAPPDATA%\Temp\<script>.log` 抓日志后一目了然。**对策**：所有需要改 `HKLM`、服务、计划任务根目录的脚本，组装到独立的 `*_admin.ps1`，让用户双击 `*_admin.bat` 调 `powershell -Verb RunAs` 触发 UAC。把非管理员部分（HKCU 写、Temp 删除、用户目录扫描）放在普通脚本里并行跑。
+22. **诊断/临时脚本不要放用户目录。** 写到 `$env:TEMP\wco\`，用完即删；用户目录里散落一堆 `.ps1` 会被当成垃圾。
 
-67. **PowerShell `Invoke-RestMethod` 往 GitHub API POST/PATCH 中文 body 会变乱码（`???`）。** 2026-08 实战：用 `Invoke-RestMethod -Body ($obj|ConvertTo-Json)` 创建含中文的 GitHub Release 后，名字和说明全变成 `?`。**根因**：PowerShell 5.1 的 HttpWebRequest 默认 ContentType 编码不是 UTF-8，中文被压成 `?` 存进 GitHub——之后怎么读都是 `?`，只能手动重建。**对策（必用）**：
-    - **幂等好法**：写临时 UTF-8 JSON 文件 + `curl.exe`：
-      ```powershell
-      $utf8 = New-Object System.Text.UTF8Encoding($false)
-      [System.IO.File]::WriteAllText("C:\Temp\payload.json", $json, $utf8)
-      & curl.exe -sS -X PATCH "$uri" -H "Authorization: Bearer $token" `
-          -H "Content-Type: application/json; charset=utf-8" --data-binary "@C:\Temp\payload.json"
-      ```
-    - 若必须用 `Invoke-RestMethod`：先 `$payload = $obj|ConvertTo-Json`（会输出 `\uXXXX` 转义的纯 ASCII），再 `Invoke-RestMethod -Body ([System.Text.Encoding]::UTF8.GetBytes($payload)) -ContentType "application/json; charset=utf-8"`。**绝不要**直接传字符串 body 且不带 charset。
-    - 验证：GET 回来后 `if($obj.body -match '\?\?\?') { '有乱码' }`。
-    - 延伸（pitfalls 备用）：GitHub token 应只从环境变量读取（`[Environment]::GetEnvironmentVariable('GITHUB_TOKEN','User')`），不要写进任何脚本文件——脚本文件里出现可用的凭据字面量属于高危。凭据用后按用户意图决定是否保留环境变量。
+23. **`HKCR\*` 通配符枚举极慢甚至卡死。** HKCR 是 HKLM\Software\Classes 与 HKCU\Software\Classes 的合并视图，含几十万项。改查具体路径，如 `HKLM:\Software\Classes\*\shellex\ContextMenuHandlers`、`...\Directory\shellex\ContextMenuHandlers`、`...\Directory\Background\shellex\ContextMenuHandlers`、`...\Drive\shellex\ContextMenuHandlers`，以及 HKCU 下的同名路径。
 
-## 安全边界陷阱
+24. **系统更新缓存只走官方入口。**
+    - 传递优化缓存：用磁盘清理里的"传递优化文件"，或 `Delete-DeliveryOptimizationCache -Force`（[官方 FAQ](https://learn.microsoft.com/en-us/windows/deployment/do/waas-delivery-optimization-faq)）；不手删目录。缓存实际位置随版本不同（常见于 `C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache`，属观察值），以 `system-cleanup.md` 为准。
+    - `C:\Windows\SoftwareDistribution`：只清 `Download` 子目录。重置更新缓存时依次停止 `wuauserv`、`bits`、`cryptsvc`，把 `SoftwareDistribution` 改名为 `SoftwareDistribution.old`、`System32\catroot2` 改名为 `catroot2.old`，再启动这三个服务（改名而不是删除，出问题能改回）。
 
-7. **Edge / Chrome 缓存不要直接删文件夹。** 建议用户从浏览器设置里清除浏览数据，直接删文件夹可能导致浏览器异常。
-
-8. **微信/QQ/腾讯视频的缓存建议在应用内清理。** 这些应用的缓存格式私有，直接删文件夹可能导致聊天记录损坏。
-
-22. **`C:\Program Files` 下删除失败的报错有误导性。** 非管理员下 SendToRecycleBin 会报 `"This function is not supported on this system"`（看起来像功能不支持，实际是权限不足）。识别方法：确认 `isAdmin` 为 False + 目标在 Program Files 下。处理见主文件 4.4 提权方案。
-
-26. **提权进程（RunAs）写日志用绝对路径。** `Start-Process -Verb RunAs` 启动的管理员进程环境变量可能与当前会话不同，`$env:TEMP` 可能解析到别的目录导致报告"丢失"。统一写 `C:\Users\<user>\AppData\Local\Temp\<固定名>.txt` 绝对路径。
-
-## 迁移专项陷阱
-
-9. **量太小不值得折腾时果断跳过。** 实战中遇到 OpenRGB 残留目录仅 4 MB，但 logs 子目录有 2485 个文件全被系统锁定。强行逐个处理耗时远超收益。正确做法：记录跳过原因，告诉用户"重启后可处理"，不要在微小目录上浪费大量时间。一般阈值：目录 < 10 MB 且遇到锁定错误时，直接跳过。
-
-11. **安装到 D 盘不代表 AppData 搬走了。** 绝大多数软件（TRAE、VS Code、Kimi、Claude Desktop、各类 IDE、AI 客户端等）即使本体装到 D 盘，用户数据和缓存仍然默认写入 `C:\Users\<用户名>\AppData`。用户以为装到 D 盘就没事了，实际上 C 盘还在被持续占用。**这是 Windows 的普遍现象，不是单个软件的 bug**。需要配合符号链接迁移（见 `references/mklink-migration.md`）才能真正把数据搬到 D 盘。
-
-15. **mklink 迁移时复制工具的两大隐形坑（迁移必读，通用）。** （一）**稀疏文件膨胀**：robocopy 默认把稀疏文件（sparse file，逻辑大小远小于分配大小）展开到完整大小——常见于虚拟磁盘镜像类文件（如 TRAE `VMCache`、WSL2 `ext4.vhdx`、Docker VHD 等），复制后目标体积膨胀 2-3 倍。识别方法：`fsutil sparse queryflag <文件>`。**对策**：对含稀疏文件的子目录单独用 xcopy 或 `Copy-Item -Recurse`。（二）**junction 跟踪**：robocopy 默认跟随源目录内的 junction point，把 junction 指向的目标内容也复制一份，导致文件数暴增数倍。**对策**：加 `/XJ` 排除 junction。xcopy 没有这两个问题，但有 260 字符路径长度限制，深层 `node_modules` 会报"路径找不到"并跳过。实战最稳方案：**xcopy 复制主体 + robocopy `/XJ /E` 补充长路径子目录**，最后用文件数+大小双重验证。另外，bash/cmd 下直接调 robocopy 时 `/E`、`/MIR` 等参数会被 shell 当路径解析，必须写成 `.ps1` 脚本通过 `powershell -File` 执行。详见 `references/mklink-migration.md` 通用指南与 `references/migration-cases.md` Case A 实战。
-
-16. **非系统盘扫描策略与 C 盘完全不同。** C 盘有固定的 AppData 分层结构，可以逐层深入扫描。D 盘等非系统盘的目录结构完全由用户习惯决定，没有统一模式。正确做法是**根目录一级展开**，按大小排序后逐个识别，而不是套用 C 盘的 AppData 扫描逻辑。对 D 盘做 `Get-ChildItem -Recurse` 全盘扫描会非常慢（几十 GB 到上百 GB），应该只扫描根目录一级，然后对可疑大目录再深入一层。
+25. **浏览器和聊天软件的缓存在应用内清。** Edge/Chrome 用"清除浏览数据"；微信/QQ/腾讯视频用应用内的存储管理——缓存格式私有，直接删文件夹可能损坏聊天记录或让浏览器异常。
 
 ---
 
-## 2026-09 自启动 + 迁移彻底化（踩坑 68-78）
+## 三、扫描与误判
 
-> 依据：Edge/Chrome 官方策略与支持页、微软官方文档、Stack Overflow / GitHub issue / CSDN 复盘等多源交叉核验（详见 `startup-mechanisms.md`、`startup-audit.md`、`mklink-migration.md`、`drive-migration-official.md`、`chat-apps-migration.md`）。
+26. **"疑似残留"不是"确认残留"。** 卸载注册表的 `DisplayName` 和 AppData 目录名不一定对应（如目录 `VMware` 对应 `VMware Workstation Pro`）；商店应用、用别的名字建目录的套件、厂商公共目录（`Tencent`、`Kingsoft`、`JetBrains`）都会被误判。对没匹配上的目录一律标"疑似"，用 `Find-WcoLeftover` 打分，让用户做最终决定。
 
-### 自启动"关不彻底"（68-70）
+27. **软件改名会让交叉比对失效。** 例：TRAE Solo 改名 TRAE Work 后，`%APPDATA%\TRAE SOLO CN` 目录名没变，注册表 DisplayName 变成 `TRAE Work CN (User)`，正在用的软件被标成残留。先看进程列表里有没有对应进程，再下结论。
 
-68. **Edge/Chrome 自启"关了还会冒出来"的根因：只删了 Run 键，没关浏览器自己的后台开关。** Edge 的 `MicrosoftEdgeAutoLaunch_<hash>`、Chrome 的 `GoogleChromeAutoLaunch_<hash>` 只是"执行层"，真正的"开关层"是 Edge 的**启动提升(Startup Boost)+ 后台运行扩展** 与 Chrome 的**后台运行应用**。只删 Run 键不关开关，浏览器一运行/更新就把 Run 键写回。**对策（顺序不可反）**：①先关内置开关（用户级注册表），②强烈建议再写 `HKLM\SOFTWARE\Policies\...` 策略强制（防写回，管理员），③最后删 Run 键。完整命令见 `startup-audit.md` 浏览器专项。
+28. **不要用硬编码安装路径判断"没装"。** 第三方渠道装的软件常在非标准位置（如 `<自定义安装根>\WPS Office\<版本号>\office6\`）。先 `Get-WcoInstalledProgram` 从卸载注册表反查 InstallLocation，再扫候选根，最后用进程路径兜底（见 `bloatware-catalog.md`"多路径检测方法学"）。
 
-69. **Chrome 没有「启动提升 / Startup Boost」——那是 Edge 的功能。** 中文网大量文章将此混为一谈（Chrome 官方策略列表从未包含 `StartupBoostEnabled`）。给 Chrome 做彻底关闭时不要去找不存在的"启动提升"开关，Chrome 的对应物就是"关闭后继续运行后台应用"（`BackgroundModeEnabled`）+ Run 键。
+29. **非系统盘根目录的 32 位十六进制名隐藏目录，多半是视频流缓存。** 识别：隐藏属性 + 哈希名 + 内含 `.ts`/`.m3u8`/`.hls` 分片。先看 LastWriteTime：最近几天有写入说明播放器正在用，删除会失败或打断播放，先告诉用户"会自动重建"。
 
-70. **Edge ≥153 新增"开机后可见启动"策略 `LaunchEdgeOnWindowsStartupEnabled`。** 用户反馈"开机直接弹出 Edge 窗口"而非后台进程时，查这个策略并置 0（`HKLM\SOFTWARE\Policies\Microsoft\Edge`，管理员）。它与"启动提升"的后台静默预启动是两回事。
+30. **软件搬家会留下旧备份，命名不止一种。** 腾讯电脑管家"软件搬家"会生成 `原目录名 - AppData`、`软件名_腾讯电脑管家搬家目录_<数字>`。对应软件已卸载 → 可进回收站；还在用 → 先确认 C 盘是否有 junction 指向它。
 
-### 自启动隐藏机制（71-73）
+31. **不能只看顶层 LastWriteTime 判定孤儿目录。** 搬家目标（如 `D:\Users\<用户名>\AppData\Local\Programs\*`）顶层时间可能很旧（迁移时间），里面的软件仍在活跃写入。逐层看内部每个软件的 LastWriteTime，并检查 C 盘是否有 junction 指向这里。
 
-71. **任务管理器「启动」页"已禁用"只是打标记，Run 键值仍在。** 禁用状态记在 `HKCU\...\Explorer\StartupApproved\Run`（首字节 02=禁用/03=启用），Run 键本身没删。这解释了"看起来关了还会自启"，也解释了某些软件的勾反逻辑。彻底处理＝删除对应 Run 值。
+32. **非系统盘上带版本号的 IDE 目录大概率是旧版残留。** 如 `D:\IntelliJ IDEA Community Edition 2022.1.3`：目录名含版本号 + 半年以上没写入 + 注册表无对应安装记录 → 疑似旧版，列给用户确认。
 
-72. **Winlogon / Active Setup / AppInit / 策略 Run 等 20+ 个隐藏启动点，常规审计脚本看不到。** 用户说"实在找不到它怎么起来的"时，用微软官方工具 **AutoRuns**（Sysinternals，`download.sysinternals.com/files/Autoruns.zip`），勾选"隐藏微软签名项"后一键看全部第三方自启，比手查快 10 倍。详见 `startup-mechanisms.md`。
+33. **乱码目录名不代表损坏。** 老工具用 GBK 建的目录可能显示成乱码。用 `[System.IO.Directory]::GetDirectories('D:\')` 读真实名；不要凭乱码猜内容，先看里面（实例：乱码目录里是 `Tencent Files`，是 QQ 聊天数据，属第四档）。
 
-73. **Chrome/Edge 的 `msedgewebview2.exe` / WebView2 组件进程不是浏览器自启。** 很多桌面应用（Office、各种 Electron 外壳）用 WebView2 渲染界面，进程名带 msedge。验证"Edge 是否还自启"时，只看 `msedge.exe`，别把 `msedgewebview2.exe` 误判为失败。
+34. **非系统盘用"根目录一级展开"，不要整盘递归。** C 盘有固定的 AppData 分层可逐层深入；D 盘结构由用户习惯决定，整盘 `-Recurse` 很慢。先展开根目录一级按大小排序，再对可疑大目录深入一层。
 
-### 迁移"搬不彻底"（74-78）
+35. **大目录递归扫描很慢，辅以 WizTree / TreeSize Free。** `Get-ChildItem -Recurse` 扫几 GB 要几分钟；WizTree 读 NTFS MFT，几秒出全盘分布。用户对结果有疑问时建议用它们核对。
 
-74. **微软从未官方支持"用 junction 搬 AppData"。** 官方受支持通道是文件夹重定向（Folder Redirection），且官方清单**明确不含 AppData\Local**（官方文档：https://learn.microsoft.com/en-us/windows-server/storage/folder-redirection/folder-redirection-using-group-policy ）。想"官方地"搬用户数据→用系统重定向；AppData 只能走"软件官方迁移/配置项"或"有依据地 junction"（见 `mklink-migration.md` 兼容性预检）。
+36. **硬链接会被重复计算。** WinSxS 与 System32 之间、微信 4.x 新旧目录之间（微信官方 FAQ：4.0 迁移优先使用硬链接，大部分文件不占双份空间，[kf.qq.com](https://kf.qq.com/faq/250710MraIZj250710QniyAr.html)）都有硬链接。按路径求和会高估；删除其中一份释放的空间可能远小于它的显示大小。估算"能省多少"时说明这一点（WizTree 等工具按文件 ID 去重）。
 
-75. **微信 4.x"改了保存位置还占 C 盘"的典型原因：`%APPDATA%\Tencent\xwechat` 那份没搬走。** 微信 4.x 数据目录在 `Documents\xwechat_files`（应用内可迁），但配置/登录缓存 `%APPDATA%\Tencent\xwechat`（实测可近 1 GB）**不会随迁移自动搬走**。迁移后需单独清理（退出微信后清 `log/crashinfo` 等，勿动 `config/login`）。详见 `chat-apps-migration.md`。
+37. **扫描时不要读取云文件占位符的内容。** OneDrive / iCloud 的"按需文件"本地只有占位符；脚本读取文件内容、算哈希时会触发自动下载（水合），越扫 C 盘越满、流量暴增。遍历时跳过带 `ReparsePoint` / `SparseFile` / `RecallOnDataAccess` 属性的文件，只读属性和长度（不会触发下载）。注意已下载到本地的 OneDrive 文件也带云重解析标记，因此按这个规则统计会少算，报告时写"OneDrive 本地占用见 OneDrive 设置"，不要写 0。
 
-76. **OneDrive 不认识 junction 目录。** 把目录 mklink 塞进 OneDrive，会导致"单向同步/一直 processing/不上传"。官方确认：OneDrive 原生不支持同步 symlink/junction，同步的是被指向的真实目录。避开：用 OneDrive 官方"更改位置 / 已知文件夹移动"。
+38. **Windows PowerShell 5.1 的 `Get-ChildItem -Recurse` 会钻进 junction。** "不跟随链接"是 PowerShell 6.0 起的行为。在 5.1 上先过滤再统计没用——过滤发生在遍历之后。测大小要在进入目录前跳过 `ReparsePoint`，否则迁移到 D 盘的数据会被算成 C 盘占用。路径里有 `[`、`]` 时用 `-LiteralPath`，否则会被当成通配符，结果静默为 0。
 
-77. **新版 Chrome 程序目录（`Program Files\Google`）不能用 junction 迁移——会闪退。** Chrome 138+ 的 App-Bound Encryption 密钥与安装路径绑定：junction 后物理路径（`D:\`）与注册表路径（`C:\`）不一致，报 `Unable to decrypt key ... 0x80070002`，默认浏览器注册也失效。**正解**：官方离线包 `ChromeStandaloneSetup64.exe --install-dir="D:\..."` 真装到 D 盘，或只迁数据不动程序文件。同样，MSIX/UWP 应用（如 Claude/Codex）的数据目录含 junction 会写虚拟化异常，慎用。
+39. **electron 应用的更新器缓存常年无人清理。** 在 `%LOCALAPPDATA%`、`%APPDATA%` 下找 `*updater*`、`*-updater`、`pending` 一类目录（例：`qwen-work-cn-updater` 200+ MB），与卸载注册表交叉比对：软件已卸载就清，还在用看大小决定。模板见 `scan-scripts.md` T5。
 
-78. **迁移后要验证"真的搬走了且没坏"再算完成。** 三个动作：① `(Get-Item <路径> -Force).LinkType` 应为 Junction、Target 指向 D 盘；② 重启后任一时刻在 C 盘路径建文件，去 D 盘确认可见；③ **残留写入检测**：记录 C 盘该目录大小，一周后对比是否回升（或用 Sysinternals ProcMon 过滤 `Path contains C:\Users\<用户>\AppData` 的 WriteFile/CreateFile 看有没有组件绕过 junction 就地重建）。详见 `mklink-migration.md`"官方限制与真实失败案例"。
+40. **Python 全局环境会膨胀。** 全局 `site-packages` 可能累积到几 GB。建议改用虚拟环境（如 `uv venv`），而不是反复清理全局包。
 
-### 深度根治与现代系统避坑（79-86）
-
-79. **WPS 自动更新反复复活的根因：只删计划任务没用，源头是注册表 `UpdateMode=auto`。** 只要打开任意文档，WPS 主程序就会触发静默检查，重新向任务计划程序写入 `WpsUpdateTask` 和 `WpsUpdateLogonTask`，并重新注册 `wpscloudsvr` 服务。**对策**：先将 `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo` 下的 `UpdateMode` 和 `LastUpdateMode` 改为 `manual`，再禁用计划任务并降级服务。
-
-80. **百度网盘与迅雷后台守护服务：退出界面不等于退出服务。** 百度网盘的 `YunDetectService` 与迅雷的 `XLServicePlatform`、`ThunderNetwork` 是独立系统服务，即使退出客户端，服务仍以 SYSTEM 运行进行后台探测或 P2P 上传。**对策**：必须在服务管理器或通过 `sc config <svc> start= disabled` 彻底禁用底层服务。
-
-81. **搜狗输入法打字伴随唤醒 `SogouCloud` 与 `SGDownload`。** 输入法不是独立进程而是 IME DLL。打字时任何窗口加载输入法都会触发后台唤醒。**对策**：输入法设置中关闭「云计算候选」与「今日热点」，禁用其更新任务，并对 `SGDownload.exe` 配置出站防火墙规则。
-
-82. **Windows 11 24H2 磁盘清理显示 8.63 GB 更新残留无法清除是误报。** 微软官方确认此为 UI 计算标记 Bug，实际旧更新已完成释放。**绝不要强删 `C:\Windows\WinSxS`**，否则可能损坏系统组件导致无法接收后续安全更新。
-
-83. **Ollama 本地大模型与 Hugging Face 权重默认吞噬 C 盘。** 运行 DeepSeek / Qwen 等大模型，权重默认保存在 `%USERPROFILE%\.ollama\models`，动辄占用数十 GB。**对策**：配置系统环境变量 `OLLAMA_MODELS=D:\OllamaModels` 与 `HF_HOME=D:\HF_Cache`，重启服务后官方原生换盘，严禁无脑 mklink。
-
-84. **Win11 24H2 默认开启 BitLocker 加密时的系统还原风险。** 在创建系统还原点或进行驱动清理前，应使用 `manage-bde -status C:` 检查加密状态，提醒用户在微软账户备份好 48 位恢复密钥，避免还原异常触发恢复锁定。
-
-85. **TCP Nagle 算法优化（TcpAckFrequency/TCPNoDelay）写在 `Tcpip\Parameters` 根下是完全无效的静默空跑。** 微软官方网络协议栈规范确认，`TcpAckFrequency` 与 `TCPNoDelay` 必须写入到当前活动网卡的特定 GUID 键值下：`HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{AdapterGUID}`。写在全局 Parameters 下系统不会读取，导致所谓“网络优化”变成安慰剂。**对策**：必须动态枚举网卡或路由匹配出有 IPv4 地址分配的活动网卡 GUID，再写入配置并重启网卡使之生效。
-
-86. **IFEO 映像劫持（Image File Execution Options）阻断弹窗时，Debugger 绝对不能随手乱填不存在的路径或空字符串。** 若 Debugger 键值无效，Windows 在尝试启动该 exe 时会弹系统级“找不到文件”报错框，或者引起调用方死循环反复抛异常拉起子进程。**对策**：必须将其劫持映射到 Windows 内置的静默退出宿主程序，如 `systray.exe` 或 `rundll32.exe`，确保被劫持的弹窗进程瞬时无感退出，既不弹窗也不报错。
+41. **WSL2 虚拟磁盘不会自动缩小。** `ext4.vhdx` 在 WSL 里删了文件也不会变小。做法：WSL 内先 `sudo fstrim -av`；较新的 WSL 提供 `wsl --manage <发行版> --compact`（较新版本才有，存疑：以 `wsl --help` 为准）；否则 `wsl --shutdown` 后用 diskpart `compact vdisk`。稀疏 VHD（`sparseVhd` / `--set-sparse true`）有数据损坏报告，较新版本已加门槛，不作默认推荐（存疑，见 `drive-migration-official.md`）。
 
 ---
 
-## 深水区：官方规范基线与安全探针（原 pitfalls.md，v2.0 并入）
+## 四、自启动
 
-> 涉及 DISM / WinSxS、Installer 缓存、卷影副本、云端随选文件时先读本节。
+42. **浏览器自启"关了还会冒出来"：只处理了 Run 值，没关浏览器自己的开关。** Edge 的 `MicrosoftEdgeAutoLaunch_<hash>`、Chrome 的 `GoogleChromeAutoLaunch_<hash>` 是执行层；开关层是 Edge 的启动提升 + 后台运行、Chrome 的后台运行应用。顺序不可反：①关浏览器内开关 → ②（推荐）写 `HKLM\SOFTWARE\Policies\...` 策略防写回 → ③关 Run 项的启动开关。完整命令见 `startup-audit.md` 浏览器专项。
 
-<!-- skill-doctor: allow-block SEC002 -->
+43. **Chrome 没有「启动提升 / Startup Boost」，那是 Edge 的功能。** Chrome 的对应物是"关闭后继续运行后台应用"（策略 `BackgroundModeEnabled`）+ Run 值。
 
-> 本指南聚合 GitHub 顶级开源磁盘清理工程实践、微软官方架构内部白皮书（DISM/VSS/CompactOS）与【冷门长尾探索池】中的真实生产级故障，为 Windows 深度清理与磁盘优化提供防破坏与避坑准则。
+44. **"开机直接弹出 Edge 窗口"查两处。** Edge ≥153 的策略 `LaunchEdgeOnWindowsStartupEnabled`（`HKLM\SOFTWARE\Policies\Microsoft\Edge`，置 0）；以及 Win11 的"自动保存我的可重启应用，并在我重新登录时重启它们"（设置 › 账户 › 登录选项）。两者都与启动提升的后台预启动不同。
 
----
+45. **任务管理器"禁用"不删 Run 值，只写 StartupApproved。** 状态在 `...\Explorer\StartupApproved\Run`（`Run32`、`StartupFolder`）：首字节 `02` = 启用、`03` = 禁用（`06`/`07` 为变体），没有值 = 启用。审计时必须读这个状态，否则会把用户已关掉的项再报一遍。可逆关闭用 `Set-WcoStartupApproved`；删除 Run 值只作可选的第二步（先 `reg export`）。
 
-### 一、 微软官方规范与系统级清理基线
+46. **常规审计看不到的启动点，用 Autoruns 查。** Winlogon、Active Setup、AppInit、策略 Run、IFEO、WMI、隐藏计划任务等 20 多个位置。Autoruns（Sysinternals）勾选"隐藏微软项"看第三方自启；取消勾选 = 禁用，可勾回。详见 `startup-mechanisms.md`。
 
-### 1. WinSxS 组件存储库与 Hard Link 错觉
-- **官方原理**：`C:\Windows\System32` 中的大量文件并非独立实体，而是通过 NTFS 硬链接（Hard Link）指向 `C:\Windows\WinSxS` 中的物理文件。普通扫描工具（如简单的目录求和）会重复计算硬链接大小，产生 WinSxS 虚胖假象（看起来占用 20GB+，实际独占空间仅 6~8GB）。
-- **官方清理规范**：
-  - 第一步（分析可回收空间）：`Dism.exe /Online /Cleanup-Image /AnalyzeComponentStore`；
-  - 第二步（标准安全回收）：`Dism.exe /Online /Cleanup-Image /StartComponentCleanup`。
-- **🚨 致命风险禁区（`/ResetBase`）**：
-  - 严禁默认执行 `Dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase`！
-  - **根因**：`/ResetBase` 会物理删除组件存储中所有被取代的旧版本补丁，执行后**当前所有已安装的累积更新（LCU）将永久无法卸载和回滚**。若未来微软补丁出现兼容性 Bug，用户将无法通过卸载补丁自救。必须仅在用户明确了解该不可逆后果时手动授权执行。
+47. **`msedgewebview2.exe` 不是 Edge 自启。** 很多桌面应用用 WebView2 渲染界面。验证 Edge 是否还自启时只看 `msedge.exe`。不要卸载 WebView2 运行时。
 
-### 2. Windows 交付优化缓存 (Delivery Optimization)
-- **官方规范**：Windows 10/11 从网络或对等节点下载更新时，会在 `C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache` 缓存分块文件。
-- **推荐做法**：调用系统原生支持的 PowerShell 命令 `Delete-DeliveryOptimizationCache` 或使用系统磁盘清理 API，严禁手动直接 `rmdir` 导致 BITS 传递队列异常。
+48. **"复活型"软件要先切源头。**
+    - **WPS**：`ksolaunch.exe` 每次运行都重建更新任务——先把 `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo` 的 `UpdateMode` 和 `LastUpdateMode` 改为 `manual`（只改 UpdateMode 可能被改回），再禁用三个任务、`wpscloudsvr` 服务（三层修复见 `software-uninstall.md`）。
+    - **百度网盘 / 迅雷**：退出界面不等于退出服务，`YunDetectService`、`XLServicePlatform`、`ThunderNetwork` 以独立服务运行，需改启动类型。
+    - **搜狗输入法**：以 IME 加载进各程序，打字时拉起 `SogouCloud`、`SGDownload`；先在设置里关云候选和资讯，再禁用更新任务；防火墙规则要写确切路径。
 
-### 3. CompactOS 原生系统文件压缩
-- **官方原理**：微软自 Windows 10 引入的基于 WOF（Windows Overlay Filter）与 XPRESS4K/LZX 算法的系统核心文件无损压缩技术。
-- **查询状态**：`compact.exe /compactos:query`；
-- **安全启用**：`compact.exe /compactos:always`，可在不影响系统性能与冷启动速度的前提下，稳定释放 2.0GB ~ 4.5GB C 盘空间。
+49. **服务禁用后可能被计划任务或修复服务重新启用。** 例：Windows 更新相关的修复机制会把更新服务改回来。需要同时看对应的计划任务；系统更新服务本来就不应禁用（第 9 条）。
 
-### 4. 休眠文件 `hiberfil.sys` 与快速启动的取舍平衡
-- **常识误区**：许多脚本直接执行 `powercfg -h off`，虽然释放了与物理内存大小相当的 `hiberfil.sys`，但会**静默关闭 Windows 快速启动（Fast Startup）**，导致机械硬盘或旧电脑开机变慢 3~5 倍，且在现代待机（Modern Standby / S0ix）笔记本上可能引起异常耗电。
-- **最佳实践**：
-  - 若需保留快速启动但节省空间，执行：`powercfg /h /type reduced`（体积缩减 50% 并保留快速启动）；
-  - 仅在用户确认不使用休眠且要求极致空间释放时，才执行 `powercfg -h off`。
-
-### 5. 虚拟内存页面文件 (`pagefile.sys`) 底线
-- **崩溃转储基线**：即便物理内存（RAM）高达 32GB/64GB，也**严禁将页面文件完全设为 0**。
-- **根因**：完全禁用页面文件会导致 Windows 在遭遇内核故障时无法生成内存转储（Minidump / Memory.dmp），且部分老旧软件与 Direct3D 大作在 Commit Charge 达到 100% 时会直接崩溃闪退（报 0x0000003B / 0x0000001A MEMORY_MANAGEMENT）。页面文件安全下限为 1024MB。
+50. **改服务/任务后，部分影响要过一阵才显现。** 如关 Windows Search 后 Outlook 搜索的变化要重启后才明显。不要立刻回退，观察一天再判断。
 
 ---
 
-### 二、 【冷门长尾探索池】极端特异性杀手坑
+## 五、卸载与流氓软件
 
-### 1. OneDrive / iCloud "文件随选 (Files On-Demand)" 水合雪崩陷阱
-- **病症**：许多递归扫描、哈希校验或清理脚本在扫描 `%USERPROFILE%` 时，越扫 C 盘反而越满，网络流量暴增数百兆。
-- **底层机理**：
-  - 云存储的“文件随选”采用 NTFS 重解析点（Reparse Points）与稀疏文件机制，本地仅保存几个字节的占位符元数据；
-  - 传统脚本遍历读取文件头、获取哈希或读取内容时，Windows 文件系统微筛选驱动（Filter Driver）会将其判定为“用户正在读取该文件”，从而触发云端自动将整份文件实时下载（Hydration 水合）到本地 SSD，导致空间直接被占满！
-- **防御对策**：
-  - 在 PowerShell 遍历中，必须检查并跳过包含以下属性的文件：
-    ```powershell
-    $isCloudPlaceholder = ($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -or
-                          ($file.Attributes -band [System.IO.FileAttributes]::SparseFile)
-    if ($isCloudPlaceholder) { continue } # 跳过，严禁读取内容
-    ```
+51. **卸完要复扫才能说"已卸载"。** 卸载程序跑完只能说"已启动卸载程序"；重启后用 `Get-WcoInstalledProgram` + `Find-WcoLeftover` 确认条目和残留都没了，再汇报。流程见 `software-uninstall.md`。
 
-### 2. `C:\Windows\Installer` (.msi / .msp) 误删灾难
-- **病症**：扫描发现 `C:\Windows\Installer` 占用数 GB 乃至数十 GB，用户或激进清理工具手动全选删除。
-- **后果**：直接导致已安装的 Microsoft Office、Visual Studio、SQL Server、AutoCAD 等大型软件**永久无法更新、打补丁、修复或卸载**，再次点击卸载将报错 `The installation source for this product is not available`（微软官方明确声明手动删除该目录文件不受支持）。
-- **防御对策**：
-  - 将 `C:\Windows\Installer` 列入全局只读白名单，严禁直接 `Remove-Item`；
-  - 仅支持通过官方卸载程序卸载废弃软件，或借助经过验证的孤儿补丁分析工具（如 PatchCleaner）进行只读探测。
+52. **自保护软件（360 等）：先关自我保护，走官方卸载，重启后再看残留。** 不要先 `Stop-Process -Force` 硬杀进程。`360AvFlt`、`360Box`、`360FsFlt`、`360SelfProtection` 等内核/过滤驱动重启后才真正移除；仍有残留 → 建还原点进安全模式（设置 › 恢复 › 高级启动，F8 默认无效）。**不要用 `Remove-Item` 删驱动文件**，可能导致无法开机；第三方强卸脚本是 🔴 最后手段，读完内容才运行，绝不 `irm | iex`。
 
-### 3. VSS 卷影副本 (Volume Shadow Copy) 静默清除隐患
-- **病症**：使用 `vssadmin delete shadows /all` 一键清空卷影存储以释放几十 GB 空间。
-- **后果**：所有系统还原点（System Restore Points）以及文件“以前的版本”（Previous Versions）瞬间物理蒸发。若后续系统更新异常或遭受恶意软件篡改，机器将彻底失去本地秒级回滚防线。
-- **防御对策**：
-  - 不得将清空卷影副本设为默认执行项；
-  - 提供只读查询：`vssadmin list shadowstorage`，仅在空间极度告急且告知用户“所有历史还原点将失效”后由用户显式触发。
+53. **钉钉保镖（AlibabaProtect）标准卸载后可能残留。** 走官方卸载 → 重启 → 仍在时按 停止 → 禁用 → `Remove-WcoService` 的顺序处理（管理员）；停不下来就进安全模式。不要用 `sc delete` + `rd /s /q` 直接删。
 
-### 4. SoftwareDistribution 目录与 Windows Update 服务锁死
-- **病症**：直接对 `C:\Windows\SoftwareDistribution` 执行强制递归删除，报“文件被占用拒绝访问”或导致 Windows Update 服务出现 0x80248007 错误码。
-- **防御对策**：
-  - 仅可清理下载缓存子目录 `C:\Windows\SoftwareDistribution\Download`；
-  - 若需重置更新缓存，必须按规范停用服务并按序重启：
-    `net stop wuauserv` ➔ `net stop cryptsvc` ➔ 重命名或清理 ➔ `net start cryptsvc` ➔ `net start wuauserv`。
+54. **WPS 卸载后 Kingsoft 目录残留大。** 典型残留：`addons\pool\win-i386\`（旧版插件）、`%APPDATA%\kingsoft`、`%LOCALAPPDATA%\Kingsoft`。只删 WPS 产品子键，不删 `HKCU\Software\Kingsoft` 根键（可能有金山其他产品）。
+
+55. **按服务名通配符批量删除会误伤。** `360*`、`*2345*` 会匹配到显示名碰巧相似的其他服务，而且 `Get-Service` 看不到驱动。按 `PathName`（可执行文件路径）判断归属，逐个处理。
+
+56. **首页"改回去又被改回来"，可能是驱动级或服务级劫持。** 反复改注册表无效时，交给安全软件处理；先用 T23/T24/T25 找写入来源。
 
 ---
 
-### 三、 GitHub 顶级开源项目与同类 Agent 技能对标经验
+## 六、迁移
 
-| 维度 | 行业标杆工具 / 项目 | 沉淀的工程设计范式 |
-|---|---|---|
-| **MFT 秒级遍历** | **WizTree / Everything** | 对于超大容量磁盘，放弃极慢的逐层 `Get-ChildItem -Recurse`，建议在需要全盘热力图时提示用户使用 MFT 级轻量工具辅助验证。 |
-| **五档安全隔离架构** | **BleachBit / Czkawka** | 将清理目标划分严格的安全等级：<br>1. **第一档（无感无损缓存）**：系统与浏览器临时文件、缩略图缓存；<br>2. **第二档（已卸载残留）**：注册表空键、废弃 Roaming 文件夹；<br>3. **第三档（开发环境与构建产物）**：`node_modules`、`.gradle`、`target/`；<br>4. **第四档（应用大文件搬家）**：微信/QQ 存储目录 mklink 重定向；<br>5. **第五档（系统核心禁区）**：`WinSxS`、`Installer`、驱动库，只读排查，绝不强删。 |
-| **就近内联动作范式** | **Agent Skills 行业标准** | 消除主工作流中的“可参考/详见”，所有参考手册在步骤下方以 `👉 动作：读取 [文件]` 直达，彻底杜绝 AI 跳步。 |
+57. **装到 D 盘不代表 AppData 搬走了。** 大多数软件（TRAE、VS Code、各类 IDE 和 AI 客户端）本体装到 D 盘，用户数据和缓存仍写 `C:\Users\<用户名>\AppData`。先找软件官方的"更改数据位置/缓存位置"，再考虑 `mklink-migration.md`。
+
+58. **微软从未官方支持"用 junction 搬 AppData"。** 官方受支持的是文件夹重定向，且清单不含 AppData\Local（[Folder Redirection](https://learn.microsoft.com/en-us/windows-server/storage/folder-redirection/folder-redirection-using-group-policy)）。AppData 只能走软件官方迁移/配置项，或有依据的 junction（见 `mklink-migration.md` 兼容性预检）。
+
+59. **复制工具：统一用 robocopy，必须加 `/XJ`。**
+    - robocopy 默认会**跟随** junction（`/XJ` 排除"默认会包含的"junction），不加会把链接指向的内容再复制一份，文件数和体积暴增。
+    - robocopy 默认**保留**文件的稀疏状态（`/sparse` 默认为 yes），"robocopy 会展开稀疏文件"的说法不对；复制后可用 `fsutil sparse queryflag <文件>` 核对。
+    - xcopy 默认会**复制符号链接指向的文件**（加 `/b` 才复制链接本身），并非"不跟随链接"，不再推荐 xcopy 混用方案。
+    - 推荐：`robocopy <源> <目标> /E /XJ /COPY:DAT /DCOPY:DAT /R:1 /W:1`，完成后用文件数 + 大小双重核对。在 bash/cmd 里传 `/E` 等参数可能被当路径解析，写进 `.ps1` 用 `powershell -File` 执行。
+    - 依据：[robocopy](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy)、[xcopy](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/xcopy)（2026-11-11 核对）。
+
+60. **微信 / QQ / 腾讯会议不要用 mklink 迁移。** 用应用内"存储位置/文件管理"迁移，mklink 可能损坏数据。详见 `chat-apps-migration.md`。
+
+61. **微信 4.x 改了保存位置还占 C 盘：`%APPDATA%\Tencent\xwechat` 没搬走。** 数据目录 `xwechat_files` 可在应用内迁移，但配置/登录缓存 `%APPDATA%\Tencent\xwechat` 不随迁移走。退出微信后只清 `log`、`crashinfo` 一类，不动 `config`、`login`。详见 `chat-apps-migration.md`。
+
+62. **OneDrive 不支持同步 junction / 符号链接。** 把 mklink 目录放进 OneDrive 会出现不同步、一直处理中。用 OneDrive 自己的"更改位置 / 备份文件夹"（[OneDrive 限制](https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa)）。
+
+63. **Chrome 程序目录不要用 junction 迁移。** Chrome 的应用绑定加密（App-Bound Encryption，Chrome 127 起）与安装路径相关，junction 后会出现解密失败、闪退、默认浏览器注册失效等报告。要装到 D 盘就重新安装到 D 盘（安装器是否支持 `--install-dir` 参数存疑，以 Google 文档为准），或只迁数据不动程序文件。MSIX/商店应用的数据目录含 junction 也容易出问题，慎用。
+
+64. **迁移后要验证"真的搬走了且没坏"。** ① `(Get-Item <路径> -Force).LinkType` 为 Junction、Target 指向 D 盘；② 在 C 盘路径新建文件，到 D 盘确认可见；③ 记录 C 盘该目录大小，一周后对比是否回升（或用 ProcMon 过滤该路径的写入），看有没有组件绕过 junction 就地重建。
+
+65. **AI 模型缓存用官方环境变量换盘，不用 mklink。** Ollama：`OLLAMA_MODELS=D:\OllamaModels`；Hugging Face：`HF_HOME=D:\HF_Cache`；设好后重启服务/终端。详见 `drive-migration-official.md`。
 
 ---
 
-### 四、 自动化安全核验探针 (Safety Probes)
+## 七、性能与内存误区
 
-所有诊断脚本与清理建议在落地前，必须通过以下静态与运行时探针断言：
+66. **不推荐任何"内存清理"工具。** 360 内存清理、Mem Reduct 等调用 `EmptyWorkingSet` 或清空待机列表：被裁掉的页进入待机/修改列表，任务管理器里"可用"内存看起来变多，但随后程序要把它们重新读回来（修改过的页还要先写入页面文件），反而更慢。详见 `memory-optimization.md`。
 
-1. **重解析点探针（防云端脱水文件被拉下）**：
-   ```powershell
-   # 验证代码是否具备重解析点拦截
-   if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-       Write-Verbose "Skipping ReparsePoint: $($item.FullName)"
-   }
-   ```
-2. **只读预检探针（Zero-Mutation 断言）**：
-   - 探测命令中绝不包含 `-Force` 删除语句；
-   - 估算大小必须输出为结构化 JSON 或 Markdown 事实卡供用户审核。
+67. **内存占用 80% 不等于紧张。** Windows 用空闲内存做缓存（待机列表），"可用"= 空闲 + 待机。只有可用内存长期很低、频繁硬错误时才是真压力。
+
+68. **不要随手禁用 SysMain。** SSD + 8 GB 以上内存的机器上，SysMain 有助于应用冷启动。用 `Get-PhysicalDisk | Select-Object MediaType` 看硬盘类型后再判断，详见 `services-optimization.md`。
+
+69. **TRIM 保持默认开启即可。** 现代 SSD 有自身垃圾回收，TRIM 不是"开了就快很多"，但开着没有坏处（Windows 默认开）。
+
+70. **Windows Search 索引范围影响磁盘 I/O。** 不要索引大型代码库（如 `D:\code`）；索引用户库和开始菜单即可。找文件可用 Everything。
+
+71. **电源计划：默认"平衡"。** "卓越性能"会关掉 USB 选择性挂起等节能项，笔记本续航会下降（具体幅度因机器而异）；只在台式机、用户要求时用。
+
+72. **"调整为最佳性能"会关掉字体平滑。** 视觉效果全关后字体发虚，必须手动勾回"平滑屏幕字体边缘"。
+
+73. **NTFS 最后访问时间：先查再改。** `fsutil behavior query disablelastaccess` 看当前状态（新版 Windows 为"系统管理"，会按卷大小自动决定，存疑），不需要无条件设置。
+
+74. **Nagle / TCP 调参只对部分在线游戏可能有用。** `TcpAckFrequency`、`TCPNoDelay` 属于旧式调参，普通办公和网页用户没有收益。确需尝试时写在活动网卡的接口键 `HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{网卡GUID}` 下（写在全局 Parameters 下通常不生效），先备份、实测、无效就回退；效果无微软官方确认（存疑）。详见 `performance-tuning.md`。
+
+75. **DoH（DNS over HTTPS）可能让解析变慢。** 改之前后各测一次常用网站的打开速度，变慢就改回。
+
+76. **很多"优化"收益为零而风险不小。** 禁用保留存储、搜索索引、IPv6、合并 svchost、把服务全部改手动——副作用难排查（更新失败、搜索失效、网络问题），本技能不做。

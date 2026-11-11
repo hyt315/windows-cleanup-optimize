@@ -39,19 +39,19 @@
 
 > 数据来源：实际调研综合（Microsoft Learn、Stack Overflow、GitHub Issues、各软件官方文档、社区论坛）。"未验证"指调研时找不到公开用户案例，但基于架构分析预期可用。
 
-### ✅ 完全兼容（推荐用 mklink）
+### 🟡 社区报告可用（仍属最后手段，先找应用内设置）
 
 | 类别 | 软件 |
 |------|------|
-| AI 桌面客户端 | TRAE / TRAE Solo / TRAE Work、CherryStudio、Cursor、WorkBuddy、通义千问 Qwen Desktop、豆包 Doubao |
-| IDE / 编辑器 | VS Code、Sublime Text、Vim / Neovim（推荐用 XDG 环境变量）、Eclipse |
+| AI 桌面客户端 | TRAE / TRAE Solo / TRAE Work、CherryStudio、Cursor、WorkBuddy、通义千问 Qwen Desktop、豆包 Doubao（**MSIX/商店版除外**，见下方失败案例） |
+| IDE / 编辑器 | VS Code（也可用 Portable Mode）、Sublime Text、Vim / Neovim（推荐用 XDG 环境变量）、Eclipse |
 | API 客户端 | Postman、Insomnia |
-| 浏览器 | Chrome / Edge（缓存可用 junction，配置文件更推荐用 Profile 迁移）、Firefox |
-| 聊天 | Discord、Slack、Telegram Desktop |
+| 聊天 | Discord、Slack、Telegram Desktop（官方有便携版，优先用） |
 | 邮件 | Thunderbird（推荐用 about:profiles） |
 | 笔记 | Obsidian（纯文件，推荐用 Vault 位置）、Notion Desktop |
-| 游戏平台 | Steam、Epic Games、Battle.net |
 | 媒体 | Spotify、VLC、mpv |
+
+> 不在此表：**Chrome / Edge**（User Data junction 有 APPCRASH 报告，程序目录受 App-Bound 加密影响，改用 `--user-data-dir` / `UserDataDir` 策略）、**Claude Desktop 等 MSIX 应用**（junction 下写入失败）、**Steam / Epic / Battle.net**（用客户端自带的库文件夹/移动安装功能）。见 `drive-migration-official.md`。
 
 ### ⚠️ 部分兼容（可用 mklink，但有功能损失或更优替代）
 
@@ -68,11 +68,11 @@
 | 软件 | 原因 | 正确做法 |
 |------|------|---------|
 | **Docker Desktop** | WSL2 ext4 文件系统不识别 junction；Hyper-V 用 VHD。**用安装器参数**：`--wsl-default-data-root`、`--hyper-v-default-data-root` | `drive-migration-official.md` §3.5 |
-| **Microsoft Outlook** | 微软官方警告禁止移动 PST/OST；MAPI profile 路径硬编码 | 用内置"邮箱数据文件位置" |
+| **Microsoft Outlook** | PST/OST 被 Outlook 独占打开，junction 后的行为没有微软支持（「存疑」旧版文中"微软官方警告禁止移动"未找到原文；微软文档提供的是在设置里/用 ForceOSTPath 改 OST 位置） | 用 Outlook 的数据文件设置或 ForceOSTPath 改位置 |
 | **OneNote** | 与 OneDrive 深度集成，硬编码路径 | OneDrive 已知文件夹移动（`drive-migration-official.md` §2.2） |
 | **OneDrive** | OneDrive 自身用 reparse point（占位符），junction 与之冲突会损坏同步 | OneDrive 官方"更改文件夹位置"（`drive-migration-official.md` §2.2） |
-| **微信 PC (WeChat)** | 中文路径、硬编码路径，已知会导致文件损坏 | **应用内"文件管理→更改保存位置"**（`chat-apps-migration.md`） |
-| **QQ** | 硬编码注册表路径，会话数据可能丢失 | **应用内"文件管理→更改默认存储路径"**（`chat-apps-migration.md`） |
+| **微信 PC (WeChat)** | 中文路径、硬编码路径，已知会导致文件损坏；4.x 用硬链接迁移旧数据 | **应用内存储位置设置**（4.x：右下角「设置」→「账号和存储」→「存储位置」，见 `chat-apps-migration.md`） |
+| **QQ** | 硬编码注册表路径，会话数据可能丢失 | **应用内存储位置设置**（菜单路径「存疑」，见 `chat-apps-migration.md`） |
 | **钉钉 (DingTalk)** | 企业功能依赖硬编码安装路径 | `chat-apps-migration.md`（且缓存不支持改盘符） |
 
 > ⚠️ **不兼容列表不是绝对的**：部分软件可能在新版本修复，但调研时无证据支持安全。出现这种情况，**先优先找官方迁移能力**（见 `drive-migration-official.md` 决策树），官方没有再考虑"测试 junction 试一次"。
@@ -170,21 +170,21 @@ mkdir "D:\AppData\MyApp"
 
 ### 第三步：复制源目录到目标位置
 
-**混合策略最稳**（原因见下方"复制工具的通用坑"）：
-
-```cmd
-:: Step A: xcopy 复制主体（速度快，不展开稀疏文件，不跟 junction）
-xcopy /E /I /H /Y /Q "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>" "D:\AppData\<Roaming|Local>\<AppFolder>"
-```
+**统一用一个工具：robocopy + `/XJ`**（原因见下方"复制工具的通用坑"）：
 
 ```powershell
-# Step B: 对含稀疏文件 / 长路径 / 大虚拟磁盘镜像的子目录，用 robocopy /XJ 补充
-# 必须写成 .ps1 脚本用 powershell -File 执行，bash/cmd 下 /E /XJ 会被当路径解析
-$robocopyArgs = @('"C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>\<SubFolder>"',
-                   '"D:\AppData\<Roaming|Local>\<AppFolder>\<SubFolder>"',
-                   '/E', '/XJ', '/R:1', '/W:1')
-Start-Process -FilePath "robocopy.exe" -ArgumentList $robocopyArgs -Wait -PassThru -NoNewWindow
+# 写成 .ps1 用 powershell -File 执行（bash 下 /E /XJ 会被当路径解析）
+$robocopyArgs = @('"C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>"',
+                  '"D:\AppData\<Roaming|Local>\<AppFolder>"',
+                  '/E', '/XJ', '/COPY:DAT', '/DCOPY:DAT', '/R:1', '/W:1')
+$p = Start-Process -FilePath "robocopy.exe" -ArgumentList $robocopyArgs -Wait -PassThru -NoNewWindow
+# robocopy 退出码 0–7 表示成功（含"有文件被复制"），>= 8 表示有失败
+if ($p.ExitCode -ge 8) { Write-Host "[FAIL] robocopy 退出码 $($p.ExitCode)，不要进行下一步" }
 ```
+
+- `/XJ`：robocopy **默认会跟随 junction 复制**，不加会把链接指向的内容也复制一份（文件数暴增、可能循环）。
+- 稀疏文件：当前 Windows 的 robocopy **默认保留稀疏状态**（`/sparse` 默认 yes），不需要额外处理；复制后仍按下方方法核对。
+- **不要用 `/MIR`** 做初次复制：它会删除目标里源没有的文件（永久删除）。
 
 ### 第四步：验证复制完整性
 
@@ -202,13 +202,15 @@ Write-Host "目标: $($dst.Count) 文件 / $([math]::Round($dstSum/1MB,2)) MB"
 
 ### 第五步：删除源目录 + 创建 junction
 
-**删除源目录**（用 SendToRecycleBin，可恢复）：
+**移走源目录**（先改名，再走模板 7 进回收站，不直接调用删除 API）：
 ```powershell
-Add-Type -AssemblyName Microsoft.VisualBasic
-[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory(
-    'C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>',
-    'OnlyErrorDialogs', 'SendToRecycleBin')
+# 1) 先改名：junction 需要原路径不存在；改名瞬间完成，出问题可直接改回
+Rename-Item -LiteralPath 'C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>' -NewName '<AppFolder>.old'
+# 2) 建好 junction、第六步验证通过、观察几天后，再把 .old 移入回收站：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\templates\t07-safe-recycle.ps1 -Path 'C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>.old'          # 演练
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\templates\t07-safe-recycle.ps1 -Path 'C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>.old' -Apply   # 执行
 ```
+`Invoke-WcoRecycle`（模板 7）会先检查回收站是否存在、是否设为直接删除、体积是否超过上限，任何一项不满足就拒绝——直接调用 `DeleteDirectory(…SendToRecycleBin)` 没有这些检查，超过回收站容量时会**静默永久删除**。
 
 **创建 junction**（优先用 `/J`，不需要管理员权限）：
 ```cmd
@@ -232,26 +234,28 @@ $item = Get-Item "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>" -Force
 
 ## 复制工具的通用坑
 
-| 工具 | 优点 | 坑 | 适用场景 |
+| 工具 | 事实 | 坑 | 结论 |
 |------|------|----|----------|
-| **xcopy** `/E /I /H /Y /Q` | 快速，不跟 junction，不展开稀疏文件 | 260 字符路径长度限制；深层 `node_modules` 会跳过 | **通用首选**，覆盖 80% 场景 |
-| **robocopy** `/E /XJ` | 支持长路径，多线程 `/MT:8` | 默认跟 junction → 文件重复；默认展开稀疏文件 → 体积膨胀 2-3 倍 | 含稀疏文件子目录时用 `/XJ` |
-| **Copy-Item** `-Recurse` | PowerShell 原生，保持稀疏属性 | 大目录极慢；错误处理不如 robocopy | 小目录、稀疏文件保留 |
-| **robocopy `/MIR`** | 双向镜像 | 不适合初次复制（会清空目标新增内容） | **仅用于清理坏副本**（见下方） |
+| **robocopy** `/E /XJ /COPY:DAT /DCOPY:DAT /R:1 /W:1` | 支持长路径；稀疏状态默认保留（`/sparse` 默认 yes） | **默认跟随 junction** → 不加 `/XJ` 会文件重复/循环 | **唯一推荐的复制工具** |
+| **xcopy** | 默认复制符号链接**指向的内容**（只有 `/b` 才复制链接本身）；有 `/sparse` 选项 | 260 字符路径限制，深层 `node_modules` 会跳过；对 junction 的行为微软未说明（「存疑」） | 不再推荐（旧版"xcopy 不跟链接"的说法是错的） |
+| **Copy-Item** `-Recurse` | PowerShell 原生 | 大目录很慢；5.1 下会跟随 junction | 只用于小目录 |
+| **robocopy `/MIR`** | 镜像：删除目标里源没有的文件 | 🔴 **CRITICAL：永久删除，不进回收站**；方向写反会清空源数据 | **不用于迁移**；只在确认是坏副本时按下方步骤用 |
+
+依据：robocopy https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy （`/sparse` 默认 yes；`/XJ` "Excludes junction points, which are normally included by default"）；xcopy https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/xcopy （`/b` "Copies the symbolic link instead of the files"）。访问于 2026-11-11。
 
 ### 通用注意事项
 
 1. **bash/cmd 下不能直接传 robocopy 参数**：`/E`、`/MIR` 会被 shell 当路径解析。**必须写成 .ps1 脚本用 `powershell -File` 执行**。
 
-2. **稀疏文件（sparse file）**：逻辑大小远小于分配大小（如 VMCache 虚拟磁盘镜像）。**robocopy 会展开成完整大小，导致目标膨胀 2-3 倍**。验证步骤发现目标明显大于源时，说明稀疏文件被展开了——改用 `Copy-Item -Recurse` 复制该子目录，或单独用 xcopy。
+2. **目标比源大很多**：先怀疑**跟随了 junction**（忘了 `/XJ`），这是最常见原因；再用 `fsutil sparse queryflag` 核对大文件是否仍是稀疏文件。旧版文档说"robocopy 默认展开稀疏文件"与微软文档不符，已更正（很旧的 robocopy 版本没有 `/sparse` 参数，行为「存疑」）。
 
-3. **260 字符路径限制**：xcopy 对深层路径（特别是 `node_modules`）会跳过。robocopy 支持长路径但有上述稀疏文件问题。**最稳方案：xcopy 复制主体 + robocopy `/XJ /E` 补充长路径子目录**。
+3. **260 字符路径限制**：xcopy 和部分 PowerShell 5.1 操作会跳过深层路径；robocopy 支持长路径，所以统一用 robocopy。
 
 ---
 
 ## 特殊场景：含稀疏文件 / 大型虚拟磁盘
 
-某些软件（TRAE VMCache、WSL2 vhdx、Docker VHD 等）使用**稀疏文件**模拟大容量虚拟磁盘，逻辑大小可能几百 MB 但分配了几十 GB。直接用 robocopy 复制会让目标体积膨胀数倍。
+某些软件（TRAE VMCache、WSL2 vhdx、Docker VHD 等）使用**稀疏文件**模拟大容量虚拟磁盘：逻辑大小（Length）可能很大，实际分配的空间小得多。复制后要确认目标仍是稀疏文件，否则会按逻辑大小占满空间。WSL/Docker 的 vhdx 不要用 junction 搬，用 `drive-migration-official.md` §3.5 的官方方法。
 
 **识别方法**：
 ```powershell
@@ -263,11 +267,10 @@ fsutil file layout "路径"  # 详细分配信息
 ```
 
 **处理策略**：
-- xcopy 不展开稀疏属性（保留）——**推荐**
-- robocopy 默认展开——必须加 `/XJ` 且验证目标大小
-- Copy-Item 保留稀疏属性——适合单个大文件
+- robocopy 默认保留稀疏状态；**一定加 `/XJ`**，复制后对大文件跑 `fsutil sparse queryflag` 核对
+- 如果目标文件不再是稀疏文件且体积暴涨：删掉坏副本（先改名为 `.bad`），确认源没有 junction 后重新复制
 
-**典型案例**：TRAE SOLO CN 的 `VMCache` 子目录包含虚拟磁盘镜像，迁移时**单独用 xcopy** 而不是整体 robocopy。
+**典型案例**：TRAE SOLO CN 迁移时目标体积膨胀约 2.5 倍（见 `migration-cases.md` Case A）。旧版归因为"robocopy 展开稀疏文件"，按微软文档更可能是**跟随了 junction**——加 `/XJ` 后正常。
 
 ---
 
@@ -277,17 +280,17 @@ fsutil file layout "路径"  # 详细分配信息
 
 | 软件 | 主要数据路径（默认） | 迁移建议 |
 |------|----------------------|----------|
-| **TRAE / TRAE Solo** | `%APPDATA%\TRAE SOLO CN` + `%USERPROFILE%\.trae-cn` | 整体可迁移；VMCache 用 xcopy |
+| **TRAE / TRAE Solo** | `%APPDATA%\TRAE SOLO CN` + `%USERPROFILE%\.trae-cn` | 整体可迁移；robocopy 必须 `/XJ`，复制后核对 VMCache 稀疏状态 |
 | **VS Code** | `%APPDATA%\Code` + `%USERPROFILE%\.vscode\extensions` | 可 junction；或用 Portable Mode |
 | **Cursor** | `%LOCALAPPDATA%\Cursor` + `%APPDATA%\Cursor` | 可 junction |
 | **JetBrains IDEs** | `%APPDATA%\JetBrains\<IDE>` + `%LOCALAPPDATA%\JetBrains\` | **优先用 idea.properties** 而非 junction |
 | **Kimi Desktop** | `%APPDATA%\Kimi` 或 `%LOCALAPPDATA%\Kimi` | 可 junction（确认实际路径后） |
-| **Claude Desktop** | `%LOCALAPPDATA%\Claude` | 可 junction |
+| **Claude Desktop** | `%LOCALAPPDATA%\Claude`（MSIX 版在 `Packages` 下） | ❌ MSIX 版不要 junction（见失败案例）；非 MSIX 版也只按最后手段测试 |
 | **CherryStudio** | `%APPDATA%\CherryStudio` | 可 junction |
 | **WorkBuddy** | `%APPDATA%\WorkBuddy` + `%LOCALAPPDATA%\WorkBuddy` + `%LOCALAPPDATA%\WorkBuddyExtension` | 三个目录都要处理 |
 | **通义千问 Qwen** | `%APPDATA%\Qwen` + updater 单独 | 主数据可 junction；updater 谨慎 |
 | **Postman** | `%APPDATA%\Postman` | 可 junction |
-| **Chrome 用户数据** | `%LOCALAPPDATA%\Google\Chrome\User Data` | 可 junction 整个 User Data |
+| **Chrome 用户数据** | `%LOCALAPPDATA%\Google\Chrome\User Data` | ❌ 不要 junction（APPCRASH 报告）；用 `--user-data-dir` 或 `UserDataDir` 策略（`drive-migration-official.md` §3.4） |
 | **Steam 游戏库** | 自定义 | Steam 自身支持多 libraryfolder，无需 mklink |
 
 > ⚠️ 表中路径是基于已知架构推断，**实际使用前请在 `%APPDATA%` / `%LOCALAPPDATA%` 确认目录名**。
@@ -324,7 +327,7 @@ rmdir "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>"
    ```powershell
    Rename-Item "D:\坏副本路径" "D:\坏副本路径.bad"
    ```
-2. **robocopy 空目录镜像法快速清空**（永久删除，不走回收站——仅在确认是坏副本时使用）：
+2. **优先用模板 7 移入回收站**（`t07-safe-recycle.ps1 -Path "D:\坏副本路径.bad" -Apply`）。只有体积超过回收站上限、被模板 7 拒绝，且**用户明确确认这是坏副本、可以永久删除**时，才用 robocopy 空目录镜像法（🔴 CRITICAL：永久删除，源/目标写反会清空真数据）：
    ```cmd
    mkdir %TEMP%\_empty
    robocopy "%TEMP%\_empty" "D:\坏副本路径.bad" /MIR /R:0 /W:0 /NFL /NDL /NJH /NJS
@@ -332,6 +335,15 @@ rmdir "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>"
    rmdir "%TEMP%\_empty"
    ```
 3. 然后重新走通用流程
+
+### 迁移后定期体检：失效链接
+
+目标盘换盘符、被拔掉或目标目录被删后，junction 会变成"指向不存在目标的链接"，应用会反复报错或重置。定期只读检查：
+```powershell
+Get-ChildItem -LiteralPath $env:APPDATA, $env:LOCALAPPDATA -Force -EA SilentlyContinue |
+    Where-Object { $_.LinkType -eq 'Junction' -and $_.Target -and -not (Test-Path -LiteralPath @($_.Target)[0]) } |
+    Select-Object FullName, Target
+```
 
 ### 调试工具
 
@@ -347,7 +359,7 @@ rmdir "C:\Users\<user>\AppData\<Roaming|Local>\<AppFolder>"
 |------|------|------|
 | 同机本地目录迁移 | **`mklink /J`**（junction） | 不需要管理员权限；功能对本地迁移完全够用 |
 | 跨网络共享（UNC 路径） | `mklink /D`（symlink） | junction 不支持 UNC 路径 |
-| 链接文件而非目录 | `mklink D`（symlink） | junction 只能链接目录 |
+| 链接文件而非目录 | `mklink <链接> <目标>`（文件 symlink，不带参数） | junction 只能链接目录 |
 | 需要链接被备份软件识别 | `mklink /D`（symlink） | 部分备份软件不识别 junction |
 
 **本技能场景下 99% 用 junction 即可**——优先 `/J`，简单够用。

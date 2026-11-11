@@ -1,0 +1,1387 @@
+{
+  "schema": 1,
+  "verified_at": "2026-11-11",
+  "note": "流氓/捆绑/广告/OEM/商店预装软件识别目录，供 T11/T25 使用；references/bloatware-catalog.md 是给人看的摘要，冲突时以本文件为准。processes/services 为不含 .exe 的名称（drivers 可含 .sys），tasks/appx 支持通配符，dirs 为常见位置或目录名线索（不能作为'不存在'的判据）。confidence=low 的条目来自历史报告或社区名单、缺少可核对来源，命中只能算'疑似'，需实机确认。publishers 取自 winget 清单时与 ARP 中写法可能不同。不收录：Windows/Microsoft 核心组件、WebView2、VC++/.NET 等运行库、正规硬件厂商驱动与运行时；用户主动选择的火绒、腾讯 DeskGo、Wallpaper Engine、Steam 也不收录。同一发行主体可能同时有正常软件与广告组件（金山 WPS/毒霸、腾讯 QQ/电脑管家、360 各产品），不按发行主体一刀切；共用目录/注册表根键只删具体产品子键。",
+  "families": [
+    {
+      "id": "qihoo-360-safe",
+      "name": "360安全卫士",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "360safe",
+        "360Tray",
+        "ZhuDongFangYu"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [
+        "360AvFlt",
+        "360Box",
+        "360FsFlt",
+        "360SelfProtection"
+      ],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\360\\360safe",
+        "%APPDATA%\\360safe",
+        "%ProgramData%\\360safe"
+      ],
+      "uninstall_notes": "❌ 建议卸载。先用官方卸载程序（关闭自我保护后），重启后复扫；内核驱动不要直接删文件，见 software-uninstall.md 360 节。360 系列产品共用 %ProgramFiles(x86)%\\360、HKLM\\SOFTWARE\\(WOW6432Node\\)360* 等键，卸载一个产品不要删共用根目录/根键；按 PathName 判断服务归属。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "qihoo-360-sd",
+      "name": "360杀毒",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "360sd",
+        "360SafeClean"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\360\\360sd",
+        "%ProgramFiles(x86)%\\360杀毒",
+        "%APPDATA%\\360sd"
+      ],
+      "uninstall_notes": "❌ 建议卸载，卸载后确认 Windows 安全中心已恢复。360 系列产品共用 %ProgramFiles(x86)%\\360、HKLM\\SOFTWARE\\(WOW6432Node\\)360* 等键，卸载一个产品不要删共用根目录/根键；按 PathName 判断服务归属。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "qihoo-360-total-security",
+      "name": "360 Total Security",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "360TSMain",
+        "QHWatchdog"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles%\\360\\Total Security",
+        "%ProgramData%\\360TotalSecurity"
+      ],
+      "uninstall_notes": "❌ 国际版，同样弹窗捆绑。360 系列产品共用 %ProgramFiles(x86)%\\360、HKLM\\SOFTWARE\\(WOW6432Node\\)360* 等键，卸载一个产品不要删共用根目录/根键；按 PathName 判断服务归属。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "2345-safe",
+      "name": "2345安全卫士",
+      "publishers": [],
+      "signers": [
+        "Shanghai 2345 Mobile Technology Co., Ltd."
+      ],
+      "processes": [
+        "2345Safe",
+        "2345Guard",
+        "2345Live"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\2345安全卫士",
+        "%APPDATA%\\2345Security",
+        "2345PCSafe",
+        "2345SafeCenter",
+        "2345AvScan"
+      ],
+      "uninstall_notes": "❌ 建议卸载；常伴随 2345 导航锁首页，卸载后检查浏览器主页与快捷方式参数（T19/T23）。签名主体来自社区名单，只作线索。需实机确认。",
+      "risk": "hijack",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/main/sign.txt",
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/block-ads1.1/note.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "tencent-pcmgr",
+      "name": "腾讯电脑管家",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "QQPCMgr",
+        "QQPCRtp",
+        "TQMCenter"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Tencent\\PCMgr",
+        "%APPDATA%\\Tencent\\PCMgr"
+      ],
+      "uninstall_notes": "⚠️ 可选：比 360 温和，用户不需要时再卸载。腾讯系软件（QQ、微信等）共用 Tencent 目录与键，不能按发行主体一刀切。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "kingsoft-duba",
+      "name": "金山毒霸",
+      "publishers": [],
+      "signers": [
+        "Beijing Kingsoft Security software Co.,Ltd"
+      ],
+      "processes": [
+        "KSAVSvc",
+        "kxescore",
+        "kxetray"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Kingsoft\\KSafe",
+        "%APPDATA%\\kingsoft\\KSafe"
+      ],
+      "uninstall_notes": "❌ 建议卸载。金山系共用 Kingsoft 目录/键：与 WPS（Kingsoft Corporation）区分开，只删具体产品子键；卸载后复查 kbasesrv 等残留（见 kingsoft-kbasesrv）。需实机确认。",
+      "risk": "ad",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/main/sign.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "ludashi",
+      "name": "鲁大师",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "LDSMain",
+        "LDSService"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\LuDaShi",
+        "%APPDATA%\\LuDaShi"
+      ],
+      "uninstall_notes": "❌ 建议卸载，可用 CPU-Z / HWMonitor 替代。另有报告进程名 ComputerZ_*.exe（未列入，需实机确认）。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "drivergenius",
+      "name": "驱动精灵",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "DriverGenius",
+        "DGService"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\MyDrivers\\DriverGenius",
+        "%APPDATA%\\MyDrivers"
+      ],
+      "uninstall_notes": "❌ 建议卸载，用 Windows 更新和电脑厂商官网驱动替代；卸载时可能投放 kbasesrv（见 kingsoft-kbasesrv），卸后复扫。需实机确认。",
+      "risk": "bundle",
+      "sources": [
+        "https://www.huorong.cn/document/tech/vir_report/802"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "drivethelife",
+      "name": "驱动人生",
+      "publishers": [],
+      "signers": [
+        "Shenzhen Drive The Life Technology Co.,Ltd."
+      ],
+      "processes": [
+        "DTLSoft",
+        "DrvLife"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\DTLSoft\\驱动人生",
+        "%APPDATA%\\DTLSoft",
+        "DriveTheLife"
+      ],
+      "uninstall_notes": "❌ 建议卸载，用 Windows 更新替代。签名主体来自社区名单，只作线索。需实机确认。",
+      "risk": "bundle",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/main/sign.txt",
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/block-ads1.1/note.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "xunlei-thunder",
+      "name": "迅雷",
+      "publishers": [
+        "迅雷网络技术有限公司",
+        "深圳市迅雷网络技术有限公司"
+      ],
+      "signers": [],
+      "processes": [
+        "Thunder",
+        "ThunderKernel"
+      ],
+      "services": [
+        "XLServicePlatform",
+        "ThunderNetwork"
+      ],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Thunder Network\\Thunder",
+        "%APPDATA%\\Thunder Network",
+        "%LOCALAPPDATA%\\Thunder Network"
+      ],
+      "uninstall_notes": "⚠️ 可选（需关服务）：还要用时把 XLServicePlatform、ThunderNetwork 设为禁用/手动并关\"下载完成后继续上传\"；不用了走官方卸载→重启→复扫。发行主体取自 winget 清单，ARP 中的写法需实机确认。",
+      "risk": "ad",
+      "sources": [
+        "https://winstall.app/apps/Thunder.Thunder",
+        "https://github.com/microsoft/winget-pkgs/blob/master/manifests/t/Thunder/Xmp/7.0.30.123/Thunder.Xmp.locale.zh-CN.yaml"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "baidu-netdisk",
+      "name": "百度网盘",
+      "publishers": [
+        "北京度友科技有限公司"
+      ],
+      "signers": [],
+      "processes": [
+        "baidunetdisk",
+        "baidunetdiskhost"
+      ],
+      "services": [
+        "YunDetectService"
+      ],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%APPDATA%\\Baidu\\BaiduNetdisk",
+        "%ProgramFiles%\\Baidu\\BaiduNetdisk"
+      ],
+      "uninstall_notes": "⚠️ 可选（需关服务）：退出后 YunDetectService 仍常驻；%APPDATA%\\Baidu 可能还有百度输入法数据，不整目录删，先问有无下载到一半的文件。发行主体取自 winget 清单，ARP 中的写法需实机确认。",
+      "risk": "ad",
+      "sources": [
+        "https://github.com/microsoft/winget-pkgs/blob/master/manifests/b/Baidu/BaiduNetdisk/7.17.0/Baidu.BaiduNetdisk.locale.zh-CN.yaml"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "quark",
+      "name": "夸克网盘",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "Quark",
+        "QuarkServices"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%LOCALAPPDATA%\\Programs\\Quark",
+        "%APPDATA%\\Quark"
+      ],
+      "uninstall_notes": "⚠️ 可选：开机常驻、分片临时文件占 C 盘；用户在用就只关自启。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "tencent-qqdownload",
+      "name": "QQ旋风（已停服残留）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "QQDownload"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Tencent\\QQ旋风",
+        "%APPDATA%\\Tencent\\QQDownload"
+      ],
+      "uninstall_notes": "❌ 已停服，只清残留（Find-WcoLeftover）。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "alibaba-protect",
+      "name": "钉钉保镖 AlibabaProtect（卸载残留）",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [
+        "AlibabaProtect"
+      ],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\AlibabaProtect"
+      ],
+      "uninstall_notes": "⚠️ 钉钉卸载后可能残留服务与目录；仍在用钉钉/阿里系软件时不要动。处理顺序见 chat-apps-migration.md：停用→观察→Remove-WcoService，不用 sc delete + rd /s /q。需实机确认。",
+      "risk": "bundle",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "sogou-input",
+      "name": "搜狗输入法",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "SogouService",
+        "SogouCloud",
+        "SGDownload",
+        "PinyinUp",
+        "SogouNews",
+        "SogouIM",
+        "SGMain"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\SogouInput",
+        "%APPDATA%\\SogouPY"
+      ],
+      "uninstall_notes": "⚠️ 可选（关弹窗即可）：先在设置里关资讯/热点，再考虑 IFEO 静音 SGDownload/SogouNews（第 9 节，有风险）。SogouIM、SGMain 来自旧版 T11 列表。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "2345-ime",
+      "name": "2345输入法",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "2345Ime",
+        "2345Pinyin"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\2345输入法",
+        "%APPDATA%\\2345Ime"
+      ],
+      "uninstall_notes": "❌ 建议卸载，微软拼音可替代。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "tencent-qqpinyin",
+      "name": "QQ输入法",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "QQPinyin",
+        "QQPinyinService"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Tencent\\QQPinyin",
+        "%APPDATA%\\Tencent\\QQPinyin"
+      ],
+      "uninstall_notes": "⚠️ 相对温和，用户不需要时再卸载。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "qihoo-360-desktop",
+      "name": "360桌面助手",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "360Desktop",
+        "360DesktopLite"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\360\\360DesktopLite",
+        "%APPDATA%\\360DesktopLite"
+      ],
+      "uninstall_notes": "❌ 建议卸载。360 系列产品共用 %ProgramFiles(x86)%\\360、HKLM\\SOFTWARE\\(WOW6432Node\\)360* 等键，卸载一个产品不要删共用根目录/根键；按 PathName 判断服务归属。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "kingsoft-desktop",
+      "name": "金山桌面",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "KingsoftDesktop"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Kingsoft\\KingsoftDesktop",
+        "%APPDATA%\\kingsoft\\Desktop"
+      ],
+      "uninstall_notes": "❌ 建议卸载。金山系共用 Kingsoft 目录，只删具体子目录。需实机确认。",
+      "risk": "bundle",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "mojing-wallpaper",
+      "name": "魔镜壁纸",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "MojingWallpaper"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\MojingWallpaper",
+        "%APPDATA%\\MojingWallpaper"
+      ],
+      "uninstall_notes": "❌ 弹窗、修改桌面。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "haozhuodao",
+      "name": "好桌道壁纸",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "HaoZhuoDao"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\好桌道",
+        "%APPDATA%\\HaoZhuoDao"
+      ],
+      "uninstall_notes": "❌ 弹窗、篡改。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "bird-wallpaper",
+      "name": "小鸟壁纸",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "BirdWallpaper"
+      ],
+      "uninstall_notes": "❌ 捆绑安装、弹窗。仅有安装目录名线索 BirdWallpaper（社区名单，许可未声明）。需实机确认。",
+      "risk": "bundle",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/block-ads1.1/note.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "wallpaper-misc",
+      "name": "其他壁纸/画报类（360壁纸、66壁纸、元气桌面壁纸等）",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "360bizhi",
+        "66bizhi",
+        "aibizhi",
+        "yuanqizhuomianbizhi",
+        "360huobao"
+      ],
+      "uninstall_notes": "⚠️ 先问用户是否主动安装（Wallpaper Engine 等正常软件不在此列）。只有目录名线索。需实机确认。",
+      "risk": "bundle",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/block-ads1.1/note.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "2345-explorer",
+      "name": "2345浏览器",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "2345Explorer"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\2345浏览器",
+        "%APPDATA%\\2345Explorer",
+        "7654Browser"
+      ],
+      "uninstall_notes": "❌ 首页劫持（2345 导航）；卸载后检查主页、策略和快捷方式参数。需实机确认。",
+      "risk": "hijack",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "qihoo-360-browser",
+      "name": "360安全浏览器 / 360极速浏览器",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "360se",
+        "360chrome"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\360\\360SE",
+        "%APPDATA%\\360se"
+      ],
+      "uninstall_notes": "❌ 捆绑、首页篡改；卸载前先导出书签。360 系列产品共用 %ProgramFiles(x86)%\\360、HKLM\\SOFTWARE\\(WOW6432Node\\)360* 等键，卸载一个产品不要删共用根目录/根键；按 PathName 判断服务归属。需实机确认。",
+      "risk": "hijack",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "tencent-qqbrowser",
+      "name": "QQ浏览器",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "QQBrowser"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Tencent\\QQBrowser",
+        "%APPDATA%\\Tencent\\QQBrowser"
+      ],
+      "uninstall_notes": "❌ 捆绑、抢默认浏览器；卸载前先导出书签，默认浏览器只在 设置 › 默认应用 改回。需实机确认。",
+      "risk": "bundle",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "sogou-explorer",
+      "name": "搜狗浏览器",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "SogouExplorer"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\SogouExplorer",
+        "%APPDATA%\\SogouExplorer"
+      ],
+      "uninstall_notes": "❌ 首页劫持、抢默认浏览器。需实机确认。",
+      "risk": "hijack",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "ucbrowser",
+      "name": "UC浏览器 PC（已停产残留）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "UCBrowser"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\UCBrowser",
+        "%APPDATA%\\UCBrowser"
+      ],
+      "uninstall_notes": "❌ 只清残留。需实机确认。",
+      "risk": "bundle",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "shopping-assistant",
+      "name": "购物/比价/降价助手类",
+      "publishers": [],
+      "signers": [
+        "四川比价兔网络科技"
+      ],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 多以浏览器扩展 + 桌面助手出现（\"比价\"\"返利\"\"降价提醒\"），改搜索/首页、注入购物推广。没有可靠的固定进程名；用 T23 查扩展策略/Native Messaging，扩展在浏览器扩展页移除。签名主体只是社区名单线索。需实机确认。",
+      "risk": "hijack",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/main/sign.txt",
+        "https://github.com/aakk007/RogueCleaner"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "flashcenter",
+      "name": "Flash中心（重庆重橙）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "FlashCenter",
+        "FlashHelperService",
+        "FFNewTask"
+      ],
+      "services": [
+        "FlashHelperService"
+      ],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\FlashCenter",
+        "%APPDATA%\\FlashCenter"
+      ],
+      "uninstall_notes": "❌ Flash 已停止支持，无需保留；直接卸载。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "todayhot",
+      "name": "今日热点",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "TodayHot",
+        "NewsPush"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\今日热点",
+        "%APPDATA%\\TodayHot"
+      ],
+      "uninstall_notes": "❌ 右下角弹新闻。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "hotnews",
+      "name": "热点资讯",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "HotNews"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 随其他软件安装的弹窗推送；先找它随哪个软件来的。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "2345-pic",
+      "name": "2345看图王",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "2345Pic"
+      ],
+      "services": [],
+      "tasks": [
+        "2345PicUpdate"
+      ],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\2345看图王",
+        "%APPDATA%\\2345Pic"
+      ],
+      "uninstall_notes": "❌ 抢图片默认打开方式；卸载后在 设置 › 默认应用 改回\"照片\"。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "2345-haozip",
+      "name": "2345好压",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "HaoZip",
+        "HaoZipPopup"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\2345好压",
+        "%APPDATA%\\2345HaoZip"
+      ],
+      "uninstall_notes": "❌ 弹窗、右键扩展；建议换 7-Zip。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "ad-utility-viewer-pdf-zip",
+      "name": "\"XX看图 / XX PDF / XX压缩\"类广告工具",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "6789Zip",
+        "NetPoweZipLYT",
+        "6789GameBox"
+      ],
+      "uninstall_notes": "❌ 免费工具 + 抢 .jpg/.png/.pdf/.zip 关联 + 右键扩展 + 推广弹窗；名称各异，无固定标识。只有目录名线索（6789Zip、NetPoweZipLYT），以及快压捆绑的\"ABC看图\"\"小黑记事本\"。替代：照片、SumatraPDF、7-Zip。需实机确认。",
+      "risk": "ad",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/block-ads1.1/note.txt",
+        "https://huorong.cn/document/tech/vir_report/1669"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "scareware-repair",
+      "name": "\"蓝屏修复 / 一键修复 / C盘清理大师\"类",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "Clean Master",
+        "ToWinCleaner",
+        "WinAssist"
+      ],
+      "uninstall_notes": "❌ 夸大问题（\"发现 999 个问题\"）诱导付费或装软件；没有固定标识，只有目录名线索。需实机确认。",
+      "risk": "fake-av",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/block-ads1.1/note.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "fake-av-generic",
+      "name": "假杀毒 / 伪装安全或广告拦截软件",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "ADBlockMaster"
+      ],
+      "uninstall_notes": "❌ 自称安全/广告拦截却弹窗推广（如 ADBlockMaster）；也要警惕把弹窗程序改名成安全软件文件名的模块——看签名和路径，不看文件名。拿不准交给 Windows 安全中心离线扫描或火绒。需实机确认。",
+      "risk": "fake-av",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/block-ads1.1/note.txt",
+        "https://www.huorong.cn/document/tech/vir_report/803"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "kingsoft-wps",
+      "name": "WPS Office",
+      "publishers": [
+        "Kingsoft Corp."
+      ],
+      "signers": [
+        "Kingsoft Corporation"
+      ],
+      "processes": [
+        "wps",
+        "wpscloudsvr",
+        "wpscenter",
+        "ksolaunch",
+        "ksobulletin"
+      ],
+      "services": [
+        "wpscloudsvr"
+      ],
+      "tasks": [
+        "WpsUpdateTask_*",
+        "WpsUpdateLogonTask_*",
+        "WpsWakeWnsLogonTask"
+      ],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Kingsoft\\WPS Office",
+        "%APPDATA%\\kingsoft\\office6",
+        "%LOCALAPPDATA%\\Kingsoft\\WPS Office"
+      ],
+      "uninstall_notes": "⚠️ 可选（关闭广告可用）：本体可用，先关推送/广告与云服务；更新任务会被 ksolaunch.exe 反复重建，见 software-uninstall.md WPS 专项。共用键提示：Kingsoft 根键/目录与金山毒霸、金山桌面等共用，只删具体产品子键；%APPDATA%\\WPS Cloud Files 先问有无未同步文档。发行主体取自 winget 清单，签名主体来自社区名单，ARP 写法需实机确认。",
+      "risk": "ad",
+      "sources": [
+        "https://winstall.app/apps/Kingsoft.WPSOffice.CN",
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/main/sign.txt"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "foxit-reader-free",
+      "name": "福昕阅读器（免费版）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "FoxitReader"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Foxit Software\\Foxit Reader",
+        "%APPDATA%\\Foxit Software"
+      ],
+      "uninstall_notes": "⚠️ 可选：捆绑、弹窗；可换 SumatraPDF 或浏览器自带 PDF。需实机确认。",
+      "risk": "bundle",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "stormplayer",
+      "name": "暴风影音（残留）",
+      "publishers": [],
+      "signers": [
+        "暴风集团"
+      ],
+      "processes": [
+        "StormPlayer"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\StormPlayer",
+        "%APPDATA%\\Baofeng"
+      ],
+      "uninstall_notes": "❌ 已衰落，清残留；替代 PotPlayer / VLC。签名主体只是社区名单线索。需实机确认。",
+      "risk": "ad",
+      "sources": [
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/main/sign.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "pps-pptv",
+      "name": "PPS / PPTV（残留）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "PPStream",
+        "PPTV"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%APPDATA%\\PPStream"
+      ],
+      "uninstall_notes": "❌ 服务已弱化，清残留。需实机确认。",
+      "risk": "ad",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "meitu",
+      "name": "美图秀秀 PC 版",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "Meitu",
+        "MeituViewer"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\Meitu",
+        "%APPDATA%\\Meitu"
+      ],
+      "uninstall_notes": "❌ 捆绑。需实机确认。",
+      "risk": "bundle",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "kingsoft-kbasesrv",
+      "name": "金山系 kbasesrv 广告组件（驱动精灵卸载时投放）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "kbasesrv",
+        "kwhcommonpop",
+        "knbhm",
+        "infocenter",
+        "phoenix"
+      ],
+      "services": [
+        "kbasesrv"
+      ],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 主程序卸载后仍在：静默服务、锁首页、推广；kwhcommonpop 会随机改名成安全软件文件名，必须看签名和路径。2019 年报告，需实机确认；处理交给安全软件或按服务→目录顺序，不要只删文件。",
+      "risk": "hijack",
+      "sources": [
+        "https://www.huorong.cn/document/tech/vir_report/802",
+        "https://www.huorong.cn/document/tech/vir_report/803"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "drivethelife-disguise",
+      "name": "驱动人生系伪装组件（realtek.exe / AERTSrv.exe）",
+      "publishers": [],
+      "signers": [
+        "Shenzhen Drive The Life Technology Co.,Ltd."
+      ],
+      "processes": [
+        "realtek",
+        "AERTSrv"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "DTLPlugs"
+      ],
+      "uninstall_notes": "❌ realtek.exe 自称\"Realtek 音频管理器\"但带驱动人生签名——真正的 Realtek 音频驱动组件不要动，必须核对签名者再判断。插件目录 DTLPlugs。需实机确认。",
+      "risk": "bundle",
+      "sources": [
+        "https://www.huorong.cn/document/tech/vir_report/803"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "ludashi-promo-2025",
+      "name": "鲁大师推广链（2025 报告）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "computercenter",
+        "guardhp",
+        "master_ai_main"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 云控浏览器劫持、弹窗装软件、锁首页，会检测安全软件/虚拟机规避分析；插件 *.tpi。先卸鲁大师主程序，再复扫这些进程。",
+      "risk": "hijack",
+      "sources": [
+        "https://www.huorong.cn/document/tech/vir_report/1858"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "qiaozip",
+      "name": "巧压",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "QiaoZipSvcHost"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 卸载后服务项与右键扩展仍驻留并云控下载；卸载后用 T16 查右键扩展、T18 查服务。建议换 7-Zip。需实机确认。",
+      "risk": "bundle",
+      "sources": [
+        "https://huorong.cn/document/tech/vir_report/811"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "kuaizip-zhanmeng",
+      "name": "快压 + 上海展盟系",
+      "publishers": [],
+      "signers": [
+        "SHANGHAI ZHANMENG NETWORK TECHNOLOGY CO.,LTD.",
+        "上海展盟网络科技",
+        "上海广乐网络科技"
+      ],
+      "processes": [
+        "KuaiZip",
+        "KZTui"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\快压",
+        "%APPDATA%\\KuaiZip"
+      ],
+      "uninstall_notes": "❌ 右键扩展 KuaiZipShell.dll 随资源管理器拉起 UpdateChecker.exe（通用名，未列入进程表）；推广弹窗 KZTui.exe；捆绑\"小黑记事本\"\"ABC看图\"等。先卸快压，再用 T16 确认右键扩展已移除。上海广乐签名来自社区名单，只作线索。需实机确认。",
+      "risk": "bundle",
+      "sources": [
+        "https://huorong.cn/document/tech/vir_report/1669",
+        "https://raw.githubusercontent.com/AzureIvory/block-ads/main/sign.txt"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "2345-commander",
+      "name": "2345 下载器 → commander",
+      "publishers": [],
+      "signers": [
+        "Shanghai 2345 Mobile Technology Co., Ltd."
+      ],
+      "processes": [
+        "commandtools",
+        "DTPageSet"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%APPDATA%\\commander"
+      ],
+      "uninstall_notes": "❌ 装在 %APPDATA%\\commander、无快捷方式；其 Services.exe 与系统进程同名，所以只按目录判断（不列入进程表，切勿按名结束系统 services.exe）；定时拉起 commandtools.exe；锁首程序 DTPageSet.exe。需实机确认。",
+      "risk": "hijack",
+      "sources": [
+        "https://huorong.cn/document/tech/vir_report/1666"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "lafa-calendar",
+      "name": "\"拉法日历\"",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [
+        "dll.sys"
+      ],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 网络过滤驱动 dll.sys + 推广模块 ExpFc.dll；驱动类不要直接删文件，交给安全软件。需实机确认。",
+      "risk": "hijack",
+      "sources": [
+        "https://www.huorong.cn/document/tech/vir_report/852"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "vaultify",
+      "name": "Vaultify（以\"主页保护\"为名）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "vaultify_service"
+      ],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 常驻 vaultify_service.exe，regsvr32 注册 Shell 扩展，直接改 Chrome/Edge 的 Secure Preferences；卸载后浏览器 设置 › 重置设置。",
+      "risk": "hijack",
+      "sources": [
+        "https://www.huorong.cn/document/tech/vir_report/2013"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "activator-xiaoma",
+      "name": "激活工具类（\"小马\"等变种）",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 文件系统过滤驱动保护自身 + WMI ActiveScriptEventConsumer；强删驱动可能断网/无法启动——不要手动删，交给安全软件；用 T19 查 WMI。无固定文件名。需实机确认。",
+      "risk": "hijack",
+      "sources": [
+        "https://www.huorong.cn/document/tech/vir_report/783",
+        "https://www.huorong.cn/document/tech/safety-classroom/1715.html"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "fake-official-installer",
+      "name": "仿冒官网安装包（后门）",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "❌ 搜索竞价仿冒下载站（钉钉、WPS、Chrome、火绒等），先装正版掩护再植入后门；无固定标识。怀疑时断网并交给安全软件全盘/离线扫描，软件只从官网或 winget 获取。需实机确认。",
+      "risk": "fake-av",
+      "sources": [
+        "https://huorong.cn/document/tech/vir_report/1827"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "mcafee-trial",
+      "name": "McAfee（预装试用）",
+      "publishers": [
+        "McAfee, LLC"
+      ],
+      "signers": [
+        "McAfee, LLC"
+      ],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles%\\McAfee"
+      ],
+      "uninstall_notes": "❌（不需要时）先在 设置 › 应用 卸载；卸不干净再用厂商清除工具 McAfee Consumer Product Removal（下载地址以官网为准）。卸载后确认 Windows 安全中心防护已恢复。发行主体写法需实机确认。",
+      "risk": "trial",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "norton-trial",
+      "name": "Norton（预装试用）",
+      "publishers": [
+        "NortonLifeLock Inc.",
+        "Gen Digital Inc."
+      ],
+      "signers": [
+        "NortonLifeLock Inc.",
+        "Gen Digital Inc."
+      ],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles%\\Norton Security",
+        "%ProgramFiles%\\Norton"
+      ],
+      "uninstall_notes": "❌（不需要时）先在 设置 › 应用 卸载；卸不干净再用 Norton Remove and Reinstall（下载地址以官网为准）。卸载后确认 Windows 安全中心防护已恢复。发行主体写法需实机确认。",
+      "risk": "trial",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "oem-lenovo-vantage",
+      "name": "Lenovo Vantage",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [
+        "E046963F.LenovoCompanion",
+        "E046963F.LenovoSettingsforEnterprise"
+      ],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 默认保留：常负责驱动、固件、BIOS 更新和电池/风扇设置；只关推送通知或推广内容。用户坚持卸载时先说明后果。需实机确认。",
+      "risk": "oem",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "oem-hp-support-assistant",
+      "name": "HP Support Assistant",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 默认保留：常负责驱动、固件、BIOS 更新和电池/风扇设置；只关推送通知或推广内容。用户坚持卸载时先说明后果。需实机确认。",
+      "risk": "oem",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "oem-dell-supportassist",
+      "name": "Dell SupportAssist",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 默认保留：常负责驱动、固件、BIOS 更新和电池/风扇设置；只关推送通知或推广内容。用户坚持卸载时先说明后果。需实机确认。",
+      "risk": "oem",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "oem-asus-armoury-myasus",
+      "name": "ASUS Armoury Crate / MyASUS",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [
+        "B9ECED6F.ArmouryCrate",
+        "B9ECED6F.ASUSPCAssistant"
+      ],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 默认保留：常负责驱动、固件、BIOS 更新和电池/风扇设置；只关推送通知或推广内容。用户坚持卸载时先说明后果。需实机确认。",
+      "risk": "oem",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "oem-acer-care-center",
+      "name": "Acer Care Center",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 默认保留：常负责驱动、固件、BIOS 更新和电池/风扇设置；只关推送通知或推广内容。用户坚持卸载时先说明后果。需实机确认。",
+      "risk": "oem",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "oem-huawei-pc-manager",
+      "name": "华为电脑管家",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 默认保留：常负责驱动、固件、BIOS 更新和电池/风扇设置；只关推送通知或推广内容。用户坚持卸载时先说明后果。华为电脑管家还负责多屏协同等功能。需实机确认。",
+      "risk": "oem",
+      "sources": [],
+      "confidence": "low"
+    },
+    {
+      "id": "store-promo-candycrush",
+      "name": "商店预装/推广游戏（Candy Crush 等）",
+      "publishers": [],
+      "signers": [],
+      "processes": [],
+      "services": [],
+      "tasks": [],
+      "drivers": [],
+      "appx": [
+        "king.com.CandyCrushSaga",
+        "king.com.CandyCrushSodaSaga",
+        "king.com.CandyCrushFriends",
+        "king.com.BubbleWitch3Saga",
+        "king.com.FarmHeroesSaga"
+      ],
+      "dirs": [],
+      "uninstall_notes": "❌（不需要时）开始菜单右键卸载，或 Remove-WcoAppxPackage -Name <包名>（先演练）；-Provisioned 只影响新用户。推广磁贴随系统版本和地区变化。需实机确认。",
+      "risk": "store",
+      "sources": [],
+      "confidence": "low"
+    }
+  ]
+}

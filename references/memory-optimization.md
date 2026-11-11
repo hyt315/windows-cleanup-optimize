@@ -1,6 +1,6 @@
 # 内存优化参考手册（含批判性分析）
 
-> **重要结论**：市面上绝大多数"内存清理工具"（360 内存清理、CCleaner、Mem Reduct、Razer Cortex 等）都是 **placebo（安慰剂）**。它们调用 `EmptyWorkingSet` 只是把数据从 Working Set 移到 Standby Memory——**实际占用物理 RAM 没变**。本节先科普原理，再教你**真正有效**的内存优化。
+> **重要结论**：市面上绝大多数"内存清理工具"（360 内存清理、CCleaner、Mem Reduct、Razer Cortex 等）都是 **placebo（安慰剂）**。它们调用 `EmptyWorkingSet` 只是把页面从进程的 Working Set 挪到 Standby / Modified 列表——这些页面算作"可用"，所以工具显示"释放了"，但数据还在内存里；程序一用到又要从内存或磁盘再取回来，并没有真正变快。本节先科普原理，再教你**真正有效**的内存优化。
 
 ---
 
@@ -53,7 +53,7 @@
 |------|--------------|----------|
 | **360 内存清理** | 调用 `EmptyWorkingSet` API | ❌ Placebo |
 | **CCleaner (Registry Cleaner + 内存优化)** | 同上 | ❌ Placebo |
-| **Mem Reduct** | 同上 | ❌ Placebo |
+| **Mem Reduct** | 除 Working Set 外，还会用未文档化接口清空 Standby / Modified 列表（其 README 自述） | ❌ 有害——丢掉文件缓存，随后磁盘读取增加 |
 | **Razer Cortex (游戏加速)** | 同上 | ❌ Placebo |
 | **IObit Advanced SystemCare** | 同上 | ❌ Placebo |
 
@@ -65,16 +65,17 @@ SetProcessWorkingSetSize(process, -1, -1);  // 强制压缩 Working Set
 ```
 
 效果：
-- 把内存页从 Working Set **移到 Standby 列表**
-- **物理 RAM 占用不变**
-- 工具显示"释放了 XX MB"——这个数字是"Working Set 减少了 XX"，不是"RAM 减少了 XX"
+- 把内存页从 Working Set **移到 Standby（未修改的页）或 Modified（已修改的页）列表**
+- 这些页被计入"可用内存"（可用 = Free + Zeroed + Standby），所以任务管理器的占用率会下降，但数据仍在物理内存里
+- Modified 页随后会被写进页面文件，进程再用到时要硬缺页读回——这才是代价
+- 工具显示"释放了 XX MB"——这个数字是"Working Set 减少了 XX"，不是"程序真的少用了 XX"
 
 ### 为什么"看起来有用"但实际无用
 
 | 用户感受 | 真相 |
 |----------|------|
 | "清理后系统快了一点" | **错觉**——清理后 Standby 增加，下一次访问相同内容变快；但这不是"清理"的好处，而是**正常缓存机制** |
-| "内存占用从 80% 降到 50%" | **数字游戏**——从 Working Set 转移到 Standby，物理 RAM 不变 |
+| "内存占用从 80% 降到 50%" | **数字游戏**——页面从 Working Set 挪到 Standby/Modified 后被算作"可用"，数据其实还在内存里 |
 | "清理后能多开几个程序" | **短期**——因为腾出 Working Set 配额，但 Standby 可以立刻复用，**长期没区别** |
 
 ### 真正有害的一面
@@ -115,17 +116,12 @@ SetProcessWorkingSetSize(process, -1, -1);  // 强制压缩 Working Set
 
 ### ✅ 优化 4：应用层内存配置
 
-**JVM 应用**（IntelliJ / Eclipse / VS Code 等）：
-```powershell
-# IntelliJ 在 Help → Edit Custom Properties
-idea.max.intellisense.filesize=10mb
-# VS Code 在 settings.json
-"typescript.tsserver.maxTsServerMemory": 4096
-```
+**JVM 应用**（IntelliJ / Eclipse 等）：
+- IntelliJ：Help → Change Memory Settings 调整最大堆（-Xmx）。`idea.max.intellisense.filesize` 是代码分析的文件大小上限，不是内存设置。
 
-**数据库**（MySQL / PostgreSQL）：
-- 不要无限制设置 `buffer_pool_size`
-- 经验值：物理内存的 50-70%
+**VS Code**（不是 JVM 应用）：settings.json 里 `"typescript.tsserver.maxTsServerMemory": 4096` 只限制 TS 语言服务进程。
+
+**本机数据库**（开发用 MySQL 等）：桌面电脑上不要照搬服务器的"缓冲池占内存 50–70%"经验值，那是专用数据库服务器的建议；开发机保持默认或按实际数据量调小。
 
 **Docker**：
 - 限制单个容器内存（`docker run -m 4g`）
@@ -159,8 +155,9 @@ Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 20 |
 3. **再次测量**——比较 Working Set 增长
 4. **找出"持续增长"且不释放的进程**
 
-**自动化脚本**：
+**自动化脚本**（与模板 15 `t15-detect-memory-leak.ps1` 的逻辑一致：第一次只记录基线，**过一段时间再单独运行对比**；不能在同一次运行里写基线又马上拿刚写的基线对比）：
 ```powershell
+New-Item -ItemType Directory -Force "$env:TEMP\wco" | Out-Null
 $logFile = "$env:TEMP\wco\memory_monitor_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
 
 # 记录基线
@@ -171,22 +168,24 @@ Write-Host "基线已记录到: $logFile"
 Write-Host "请等待 30 分钟后再次运行对比脚本。"
 ```
 
-**对比脚本**（第二次运行时）：
+**对比脚本**（等待之后第二次运行；读取的是**之前**那份基线）：
 ```powershell
-# 读取基线 + 当前值
-$baseline = Import-Csv "$env:TEMP\wco\memory_monitor_20260819_120000.csv"
+# 读取最近一份基线（本次不写新基线）
+$baseFile = Get-ChildItem "$env:TEMP\wco\memory_monitor_*.csv" | Sort-Object LastWriteTime | Select-Object -Last 1
+$baseline = Import-Csv -LiteralPath $baseFile.FullName
 $current = Get-Process | Select-Object Name, Id, @{N='WS_MB';E={[math]::Round($_.WorkingSet/1MB,1)}}
 
-# 找出疑似泄漏
-$leakSuspects = $baseline | ForEach-Object {
-    $now = $current | Where-Object { $_.Name -eq $_.Name -and $_.Id -eq $_.Id }
+# 找出疑似泄漏：用 $b 保存基线行，再按 Id + Name 匹配当前进程
+# （旧版写成 $_.Name -eq $_.Name，是拿当前进程和它自己比，永远为真，结果是错的）
+$leakSuspects = foreach ($b in $baseline) {
+    $now = $current | Where-Object { $_.Id -eq [int]$b.Id -and $_.Name -eq $b.Name } | Select-Object -First 1
     if ($now) {
-        $delta = $now.WS_MB - $_.WS_MB
+        $delta = $now.WS_MB - [double]$b.WS_MB
         if ($delta -gt 50) {
             [PSCustomObject]@{
-                Name = $_.Name
-                Id = $_.Id
-                Baseline_MB = $_.WS_MB
+                Name = $b.Name
+                Id = $b.Id
+                Baseline_MB = [double]$b.WS_MB
                 Current_MB = $now.WS_MB
                 Delta_MB = $delta
             }
@@ -229,38 +228,21 @@ $leakSuspects | Sort-Object Delta_MB -Descending | Format-Table -AutoSize
 
 ### 推荐配置
 
-**经验值**（来自 Microsoft 文档与社区共识）：
+**保持"系统管理的大小"。** 微软的说法是页面文件大小"无法一概而论"，按内存大小套表格（"内存的 1–1.5 倍""32 GB 只要 1–2 GB"之类）都不是微软的建议，本手册不再给数值表。
 
-| 物理内存 | 页面文件大小（系统管理即可） | 手动设置建议 |
-|----------|------------------------------|-------------|
-| 4 GB | 系统管理（默认） | 4-8 GB |
-| 8 GB | 系统管理（默认） | 4-8 GB |
-| 16 GB | 系统管理（默认） | 1-4 GB（可小但不要 0） |
-| 32 GB+ | 系统管理（默认） | 1-2 GB（最小值，给崩溃转储用） |
-
-> ⚠️ **不要设为 0**——会导致崩溃转储失败、某些应用崩溃
+> ⚠️ **不要设为 0**——内存吃紧时程序会提交失败而崩溃，且可能写不出崩溃转储。
 
 ### 查看当前页面文件
 
 ```powershell
-Get-CimInstance Win32_PageFile | Select-Object Name, InitialSize, MaximumSize
+Get-CimInstance Win32_PageFileUsage | Select-Object Name, AllocatedBaseSize, CurrentUsage, PeakUsage   # MB
 ```
 
-### 推荐做法
+`PeakUsage` 长期远小于 `AllocatedBaseSize` 说明页面文件够用；接近时说明内存或提交量吃紧。
 
-1. **保持系统管理**（最稳）：系统属性 → 高级 → 性能 → 设置 → 高级 → 虚拟内存 → "系统管理的大小"
-2. **手动设置**（仅当你清楚需求）：选"自定义大小"，设置初始大小和最大值相同（避免动态调整卡顿）
+### 迁移到 D 盘、大小与崩溃转储
 
-### 进阶：把页面文件移到 D 盘
-
-**适合**：C 盘 SSD 容量紧张，D 盘有空间
-
-**步骤**（系统属性 → 高级 → 性能 → 设置 → 高级 → 虚拟内存 → 更改）：
-1. C 盘选"无分页文件" → 设置
-2. D 盘选"自定义大小"或"系统管理的大小" → 设置
-3. 重启生效
-
-**风险**：某些应用（如某些游戏）假设页面文件在 C 盘，可能找不到。**测试后再下结论**。
+迁移步骤、系统管理时的大小规则和崩溃转储要求统一见 **`system-cleanup.md` 的"页面文件（pagefile.sys）"一节**（本仓库唯一权威说明），这里不重复。
 
 ---
 
@@ -269,9 +251,10 @@ Get-CimInstance Win32_PageFile | Select-Object Name, InitialSize, MaximumSize
 ### 浏览器（Chrome / Edge）
 
 ```
-设置 → 性能 → 启用"内存节省程序"
-设置 → 性能 → 限制后台进程数（建议保留 4-8 个）
+设置 → 系统和性能 / 性能 → 启用"内存节省程序"（Memory Saver / 效率模式，菜单名随版本变化）
 ```
+
+「存疑」网上流传的"限制后台进程数（保留 4–8 个）"在 Chrome/Edge 设置里没有找到对应选项，已删除。
 
 **Memory Saver 效果**（实测）：
 - 100 标签页 → 释放 1-4 GB
@@ -280,32 +263,28 @@ Get-CimInstance Win32_PageFile | Select-Object Name, InitialSize, MaximumSize
 ### IDE（JetBrains）
 
 ```
-Help → Edit Custom Properties:
-idea.max.intellisense.filesize=10mb
-idea.cycle.buffer.size=1024
-
-Help → Change Memory Settings → 调整 Maximum Heap Size
+Help → Change Memory Settings → 调整 Maximum Heap Size（这是 IDE 的内存上限）
 ```
+
+`idea.max.intellisense.filesize`、`idea.cycle.buffer.size` 分别是代码分析文件大小上限和控制台缓冲区设置，不是内存优化项。
 
 ### VS Code
 
 ```json
-// settings.json
+// settings.json：只限制 TypeScript 语言服务进程的内存
 {
-    "typescript.tsserver.maxTsServerMemory": 4096,
-    "extensions.supportUntrustedWorkspaces": false
+    "typescript.tsserver.maxTsServerMemory": 4096
 }
 ```
 
+更有效的是关掉不用的扩展（扩展视图里看"运行中的扩展"）。
+
 ### Node.js 项目
 
-```json
-// package.json
-{
-    "scripts": {
-        "dev": "node --max-old-space-size=4096 ./node_modules/.bin/xxx"
-    }
-}
+```powershell
+# Windows 上 node_modules\.bin\xxx 是 shell 包装脚本，不能直接交给 node 运行；用环境变量传参
+$env:NODE_OPTIONS = "--max-old-space-size=4096"   # 只对当前 PowerShell 窗口生效
+npm run dev
 ```
 
 ### 大模型 / AI 应用
@@ -320,9 +299,11 @@ Help → Change Memory Settings → 调整 Maximum Heap Size
 ### 实时内存状态
 
 ```powershell
-Get-Counter '\Memory\Available MBytes'         # 可用内存
-Get-Counter '\Memory\Committed Bytes'          # 提交字节（虚拟内存占用）
-Get-Counter '\Memory\% Committed Bytes In Use' # 提交使用百分比
+# 用 CIM 而不是 Get-Counter：计数器路径在中文等非英文系统上是本地化名称，
+# 写死英文的 '\Memory\Available MBytes' 会找不到计数器
+$os = Get-CimInstance Win32_OperatingSystem
+"可用物理内存: {0:N0} MB" -f ($os.FreePhysicalMemory / 1KB)
+"提交量(已用/上限): {0:N0} / {1:N0} MB" -f (($os.TotalVirtualMemorySize - $os.FreeVirtualMemory) / 1KB), ($os.TotalVirtualMemorySize / 1KB)
 ```
 
 ### 进程级监控

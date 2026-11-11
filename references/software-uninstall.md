@@ -1,103 +1,242 @@
 # 软件卸载与残留清理（Software Uninstall）
 
-> 软件不只是删个图标那么简单——Windows 卸载程序通常**只删除 Program Files 下的安装目录和注册表项**，但 AppData 下的用户配置/缓存/聊天记录、计划任务、后台服务都不会自动清理。本节提供从"标准卸载"到"残留清理"再到"专项卸载（WPS / 钉钉 / 360）"的完整流程。
+> Windows 卸载程序通常只删安装目录和自己的卸载注册表项，AppData 里的配置/缓存、计划任务、后台服务、驱动常常留下。本节给出"**真正卸干净**"的完整流程：先盘点 → 走软件自己的卸载程序 → 重启 → 复扫 → 残留打分 → 用户确认后经模块清理（可回退）→ 自保护软件逐级升级处理。
+>
+> **汇报口径**：卸载程序跑完只能说"**已启动卸载程序 / 已提交卸载**"。必须重启并复扫（`Get-WcoInstalledProgram` + `Find-WcoLeftover`）确认条目和残留都不在了，才能说"已卸载"。没有复扫，不说"已彻底删除"。
 
 ---
 
 ## 目录
 
-- [完整卸载流程（5 步）](#完整卸载流程5-步)
-- [Step 1：标准卸载（控制面板 / 设置）](#step-1标准卸载控制面板--设置)
-- [Step 2：专用卸载工具（Geek / Revo / IObit）](#step-2专用卸载工具geek--revo--iobit)
-- [Step 3：残留清理（AppData + 注册表 + 服务 + 计划任务）](#step-3残留清理appdata--注册表--服务--计划任务)
-- [Step 4：浏览器劫持修复](#step-4浏览器劫持修复)
-- [专项卸载：WPS Office](#专项卸载wps-office)
-- [专项卸载：钉钉 (DingTalk)](#专项卸载钉钉-dingtalk)
-- [专项卸载：360 家族（最难）](#专项卸载360-家族最难)
-- [工具对比](#工具对比)
+- [完整卸载流程](#完整卸载流程)
+- [第 0 步：盘点](#第-0-步盘点)
+- [第 1 步：走官方卸载](#第-1-步走官方卸载)
+- [第 2–3 步：重启并复扫](#第-23-步重启并复扫)
+- [第 4 步：残留打分](#第-4-步残留打分)
+- [第 5 步：确认后清理残留](#第-5-步确认后清理残留)
+- [第 6 步：自保护软件逐级升级](#第-6-步自保护软件逐级升级)
+- [识别卸载器套路](#识别卸载器套路)
+- [弹窗定位：3 秒抓现行](#弹窗定位3-秒抓现行)
+- [浏览器劫持修复](#浏览器劫持修复)
+- [专项：WPS Office](#专项wps-office)
+- [专项：钉钉 (DingTalk)](#专项钉钉-dingtalk)
+- [专项：360 家族（最难）](#专项360-家族最难)
+- [专项：百度网盘 / 迅雷 / 搜狗输入法](#专项百度网盘--迅雷--搜狗输入法)
+- [第三方卸载工具](#第三方卸载工具)
 
 ---
 
-## 完整卸载流程（5 步）
+## 完整卸载流程
 
 ```
-Step 1：标准卸载（控制面板 / 设置）
-        ↓
-Step 2：专用工具扫描残留（Geek / Revo / IObit）
-        ↓
-Step 3：AppData + ProgramData 残留清理
-        ↓
-Step 4：注册表残留清理（备份后删）
-        ↓
-Step 5：计划任务 / 服务残留清理（提权）
+第 0 步  盘点：T25 / Get-WcoInstalledProgram（确认是哪个程序、发行主体、卸载命令、捆绑了什么）
+   ↓
+第 1 步  官方卸载：设置 / 控制面板 / Invoke-WcoUninstall（MSI → msiexec /x，否则跑软件自己的卸载程序）
+         / winget uninstall --interactive（一次一个）/ 商店应用 Remove-WcoAppxPackage
+   ↓
+第 2 步  重启（驱动和被占用的文件通常要重启后才真正移除）
+   ↓
+第 3 步  复扫：Get-WcoInstalledProgram + T25，确认卸载条目已消失
+   ↓
+第 4 步  残留打分：Find-WcoLeftover（只读，给出置信度）
+   ↓
+第 5 步  用户逐项确认后清理：计划任务 → 服务 → 驱动（手动高危）→ 注册表键 → 文件夹进回收站
+   ↓
+第 6 步  卸不掉的自保护软件：关自我保护再官方卸载 → 安全模式 → 最后手段
+   ↓
+复扫并汇报（之前/之后对比）
 ```
 
-每一步都可中断——如果标准卸载就能清干净，后面的步骤可跳过。
-
----
-
-## Step 1：标准卸载（控制面板 / 设置）
-
-**Win11**：
-```
-设置 → 应用 → 已安装的应用 → 找到目标 → 三点菜单 → 卸载
-```
-
-**Win10**：
-```
-设置 → 应用 → 应用和功能 → 找到目标 → 单击 → 卸载
-```
-
-**控制面板**（老方法，仍可用）：
-```
-Win+R → appwiz.cpl → Enter → 找到目标 → 右键 → 卸载
-```
-
-**winget（v2.0 新增；Windows 11 自带，Windows 10 1809+ 需先从商店装"应用安装程序"）**：批量盘点比翻注册表更可靠，卸载走软件自己的卸载程序。
+每一步都可停：标准卸载后复扫已经干净，后面就不用做。所有写操作先演练（不带 `-Apply`），用户确认后再带 `-Apply`；结束 `Export-WcoUndo` 生成回退脚本。
 
 ```powershell
-winget list                                  # 盘点已装软件（含非商店来源）
-winget list --name "2345"                    # 按名字找
-winget uninstall --id <软件ID> --interactive # 卸载；--interactive 让卸载界面出来，用户能看到"保留数据"等选项
+Import-Module .\scripts\lib\Wco.Common.psm1
 ```
 
-- 一次只卸一个，卸完确认再下一个；**不要用 `--silent` 批量卸**，捆绑软件的卸载器常有"保留数据/修复"之类的选项要用户选。
-- `winget list` 里 Source 为空的条目同样能卸，ID 以列表里显示的为准。
-
 ---
 
-## Step 2：专用卸载工具（BCUninstaller / Geek / Revo）
-
-标准卸载往往留大量垃圾——专用工具能扫出"控制面板看不到"的残留项。
-
-| 工具 | 推荐 | 优势 | 下载 / 仓库 |
-|------|------|------|------|
-| **BCUninstaller (Bulk Crap Uninstaller)** | ⭐⭐⭐⭐⭐ | **GitHub 顶级开源（Apache-2.0，8.5k+ Stars）**。全自动静默批量卸载、业界最强的残留引擎与智能置信度评估、开源透明安全 | [GitHub 官方仓库](https://github.com/BCUninstaller/Bulk-Crap-Uninstaller) / [官网](https://www.bcuninstaller.com) |
-| **Geek Uninstaller** | ⭐⭐⭐⭐⭐ | 极轻量（6 MB）、免安装单文件、强制删除（删除时跳过标准卸载直接扫残留） | https://geekuninstaller.com |
-| **HiBit Uninstaller** | ⭐⭐⭐⭐ | 免费单文件便携版、功能全面（强制卸载、批量、清理注册表、自启管理） | https://hibitsoft.ir |
-| **Revo Uninstaller Free** | ⭐⭐⭐⭐ | 内置 Hunter Mode（拖动瞄准镜到窗口定位卸载）、清理彻底 | https://www.revouninstaller.com |
-| **IObit Uninstaller** | ⭐⭐⭐ | 中文 UI、有"软件健康"评分、批量卸载 | https://www.iobit.com |
-
-**BCUninstaller 使用流程（开源推荐）**：
-1. 下载并运行 BCUninstaller 便携版（无需安装）。
-2. 在软件列表中勾选需要卸载的一款或多款软件 → 点击"Quiet uninstall（静默卸载）"或"Uninstall"。
-3. 软件卸载后自动触发“Look for leftovers（残留扫描）”。
-4. **置信度过滤**：BCU 会将扫描结果分为 Very High / Good / Questionable / Bad。默认选择 High 置信度项，存疑项需人工核对后再删除。
-
-**Geek Uninstaller 使用流程**（极速单文件）：
-1. 下载（不安装，绿色版）
-2. 右键目标软件 → "卸载"（先走标准流程）
-3. 卸载完成后弹窗"扫描注册表残留" → 勾选全部 → 删除
-4. 再扫描"文件残留" → 全部删除
-
----
-
-## 专项工具：3 秒“抓弹窗现行”定位利器（原生 Win32 API）
-
-当电脑屏幕右下角或中央突然弹出垃圾广告、但不知道是哪个后台软件所为时：
+## 第 0 步：盘点
 
 ```powershell
-# 保存为 find_popup.ps1 执行
+.\scripts\templates\t25-inventory-programs.ps1          # 已安装程序 + 商店应用，对照 data/bloatware-catalog.json
+Get-WcoInstalledProgram -Name '*2345*' | Format-List      # 单个软件的详情：发行主体、版本、安装位置、卸载命令、MSI 产品码、签名者
+```
+
+- 看清楚 DisplayName（`Invoke-WcoUninstall` 要用**完整准确**的名字）、Publisher、InstallLocation、UninstallString、是否 MSI（有 ProductCode）。
+- 一个家族常有多个条目（主程序 + 插件 + 更新组件），列给用户，逐个决定。
+- `SystemComponent=1` 或没有 UninstallString 的条目在控制面板里看不到，T25 会单独列出。
+- 卸载前记下盘点结果，最后用来做之前/之后对比。
+
+---
+
+## 第 1 步：走官方卸载
+
+**界面方式**（首选，用户能看到每个对话框）：
+- Win11：设置 › 应用 › 已安装的应用 → 目标右侧"…" → 卸载
+- Win10：设置 › 应用 › 应用和功能 → 目标 → 卸载
+- 控制面板：`Win+R` → `appwiz.cpl`
+
+**模块方式**（跑的仍是软件自己的卸载程序，有界面）：
+
+```powershell
+Invoke-WcoUninstall -Name '2345看图王'            # 演练：打印将要执行的命令
+Invoke-WcoUninstall -Name '2345看图王' -Apply     # 执行：MSI 用 msiexec.exe /x {产品码}（有界面，不加 /qn）；否则运行 UninstallString
+Invoke-WcoUninstall -ProductCode '{GUID}' -Apply  # 按 MSI 产品码
+```
+
+- 返回"已启动卸载程序"。卸载界面里的每个勾选项（"保留配置""修复""顺便安装 XX"）**读给用户听，由用户选**。
+- 不默认使用 `QuietUninstallString` 或静默参数：静默卸载时用户看不到捆绑勾选和挽留选项。
+- 卸载记录写入 `changes.json`（类型 uninstall）；卸载不可自动撤销，`undo.ps1` 里只有说明。
+
+**winget**（Windows 11 自带；Windows 10 1809+ 需要"应用安装程序"）：
+
+```powershell
+winget list --name "2345"                          # 先看匹配到哪些（按子串匹配，不支持通配符）
+winget uninstall --id <列表里的 ID> --interactive  # 一次一个；--interactive 让卸载界面出来
+```
+
+- **一次只卸一个**，卸完确认再下一个；**不要用 `--silent` 批量卸**捆绑软件。
+- `winget list` 里 Source 为空的条目（不是 winget 装的）同样能卸，ID 以列表为准。
+
+**商店 / 预装应用（Appx）**：
+
+```powershell
+Remove-WcoAppxPackage -Name '*CandyCrush*'                          # 演练：列出将删除的包
+Remove-WcoAppxPackage -Name '*CandyCrush*' -Apply                   # 当前用户
+Remove-WcoAppxPackage -Name '*CandyCrush*' -AllUsers -Provisioned -Apply   # 所有用户 + 新用户也不再预装（需管理员）
+```
+
+- 只删预配包（Provisioned）不会从**已有**账户里删掉该应用，所以两者都要处理（[Remove-AppxProvisionedPackage](https://learn.microsoft.com/powershell/module/dism/remove-appxprovisionedpackage)）。
+- 模块拒绝删除：框架包、不可移除包、系统包，以及 Store、App Installer、WebView2、VCLibs、UI.Xaml、Windows 安全中心、开始菜单/Shell 组件。回退只能从商店或 winget 重新安装。
+- **不要卸载 WebView2 运行时**：很多桌面应用（Office、各种 Electron/WebView 外壳）依赖它，`msedgewebview2.exe` 进程是正常的。
+
+---
+
+## 第 2–3 步：重启并复扫
+
+```powershell
+# 让用户保存工作后自己重启（不要替用户直接重启）。重启后：
+Get-WcoInstalledProgram -Name '*2345*'                  # 卸载条目应已消失
+.\scripts\templates\t25-inventory-programs.ps1          # 与第 0 步对比
+```
+
+- 条目还在：卸载程序没跑完、被取消、或需要重启后继续。重新运行一次，或进入第 6 步。
+- 条目没了但进程/服务还在跑：多半是捆绑组件或独立服务，继续第 4 步。
+
+---
+
+## 第 4 步：残留打分
+
+```powershell
+Find-WcoLeftover -Name '2345看图王' -Publisher '<盘点到的 Publisher>' -InstallLocation '<盘点到的 InstallLocation>'
+```
+
+只读。它检查 Program Files / Program Files (x86)、ProgramData、`%APPDATA%`、`%LOCALAPPDATA%`、`HKCU/HKLM\SOFTWARE\<发行主体或产品名>`、安装目录下的服务和计划任务，给每个候选打分（思路参考 BCUninstaller 的置信度规则，代码为本仓库自写）：
+
+| 置信度 | 含义 | 默认 |
+|-------|------|------|
+| **VeryGood / Good** | 名字精确匹配、在该软件独立目录里、由卸载记录指向 | 用户要求时才预选 |
+| **Questionable** | 只部分匹配、目录里还有可执行文件 | 逐个人工核对 |
+| **Bad** | 目录仍被其他已安装程序使用、厂商公共目录 | 不处理 |
+
+规则要点：
+- **4 个字符以内的名字不做模糊匹配**（防"QQ""WPS"这类短名误伤）。
+- **厂商公共目录/键不整体删除**：`Tencent`（QQ、微信、电脑管家共用）、`Kingsoft`（WPS 和毒霸共用）、`Baidu`（输入法、网盘共用）、`Common Files`、`Microsoft`。只处理具体产品的子目录/子键。
+- 跳过 junction / 符号链接（可能指向别的盘上的真实数据）。
+- 聊天记录、文档、存档等用户数据单独问用户，默认保留。
+
+---
+
+## 第 5 步：确认后清理残留
+
+把第 4 步结果按类型列给用户，用户逐项确认后按下面顺序处理（全部先演练、再 `-Apply`）：
+
+**① 计划任务**（先禁用观察，确认无用再删；删除前会导出 XML，可重新注册）：
+
+```powershell
+Disable-WcoScheduledTask -TaskPath '\' -TaskName '2345PicUpdate'            # 可回退
+Remove-WcoScheduledTask  -TaskPath '\' -TaskName '2345PicUpdate' -Apply     # 卸载残留确认后；拒绝 \Microsoft\ 下的任务
+```
+
+**② 服务**（必须先停止并设为禁用，才允许删除；删除前导出服务注册表键）：
+
+```powershell
+Set-WcoServiceStartType -Name '<服务名>' -StartType disabled -Apply
+Stop-Service -Name '<服务名>'
+Remove-WcoService -Name '<服务名>'           # 演练
+Remove-WcoService -Name '<服务名>' -Apply    # 回退 = reg import 后重启
+```
+
+- 按**确切服务名**处理，不要用 `360*`、`*2345*` 这类通配符批量删（会碰到显示名碰巧相似的其他服务）。模块拒绝微软签名服务和"绝对不能禁用"列表里的服务。
+- **先跑官方卸载程序再删服务**：反过来做，官方卸载程序可能因为找不到服务而失败，留下更难处理的半卸载状态。
+
+**③ 驱动**（🔴 CRITICAL，没有自动删除函数，手动处理）：
+- `Get-Service` 看不到驱动。查看：`Get-CimInstance Win32_SystemDriver | Where-Object PathName -match '<产品关键字>'`；过滤驱动用管理员 `fltmc filters`；驱动包用 `pnputil /enum-drivers`（只列驱动库里的第三方驱动包，不是完整的内核驱动清单）。
+- 只在**官方卸载 + 重启之后**仍有残留、且驱动包的提供者（Provider）确实是已卸载产品时才处理：
+
+```cmd
+:: 先建还原点（管理员 PowerShell：Checkpoint-Computer -Description "BeforeDriverDelete"）
+pnputil /export-driver oem42.inf "%TEMP%\wco\driver_backup"
+pnputil /delete-driver oem42.inf /uninstall
+```
+
+- **永远不要手删 `.sys` 文件或 `C:\Windows\System32\DriverStore\FileRepository` 里的目录**；只用 `pnputil /delete-driver`（[pnputil 语法](https://learn.microsoft.com/windows-hardware/drivers/devtest/pnputil-command-syntax)）。非 PnP 的过滤驱动用 pnputil 删不掉，交给第 6 步（安全模式 / 安全软件）。
+
+**④ 注册表键**（删除前 `reg export`，回退 `reg import`）：
+
+```powershell
+Remove-WcoRegistryKey -Path 'HKCU:\Software\2345Pic'          # 演练
+Remove-WcoRegistryKey -Path 'HKCU:\Software\2345Pic' -Apply   # 执行
+```
+
+- 模块拒绝根键和共享键：`HKLM:\SOFTWARE`、`\SOFTWARE\Microsoft*`、`\SOFTWARE\Classes` 根、`\SOFTWARE\Policies` 根、`\SOFTWARE\WOW6432Node` 根、`Services` 根、厂商共用根键（如 `\SOFTWARE\Kingsoft`，只能删具体产品的子键）。
+- 不做"注册表清理"（扫描孤立项一类的工具）：微软不支持注册表清理工具，收益几乎为零。
+
+**⑤ 文件夹**（进回收站，可还原）：
+
+```powershell
+.\scripts\templates\t07-safe-recycle.ps1 -Path "$env:APPDATA\2345Pic","$env:LOCALAPPDATA\2345Pic" -Label '2345看图王残留'          # 演练
+.\scripts\templates\t07-safe-recycle.ps1 -Path "$env:APPDATA\2345Pic","$env:LOCALAPPDATA\2345Pic" -Label '2345看图王残留' -Apply   # 执行
+```
+
+- 回收站不可用（U 盘/网络盘、设为直接删除、体积超过上限、策略未知）时模块拒绝执行，不会退化为永久删除。
+- Program Files 下的目录需要管理员。
+
+**最后复扫**：再跑一次 `Get-WcoInstalledProgram` + `Find-WcoLeftover` + T25，给用户之前/之后对比，然后才说"已卸载"。
+
+---
+
+## 第 6 步：自保护软件逐级升级
+
+适用于 360、部分安全软件、钉钉保镖等带自我保护的软件。按顺序，前一级成功就停：
+
+1. **关软件自己的自我保护**（在软件设置里），再走第 1 步官方卸载。不要先 `Stop-Process -Force` 硬杀进程——自保护软件会拦截或重启进程，而且会打断它自己的卸载流程。
+2. **重启后复扫**。内核驱动通常在重启后才真正卸掉；**重启前不要去删驱动文件**。
+3. **仍有残留**：先建还原点（`Checkpoint-Computer -Description "BeforeCleanup"`，需管理员；系统默认 24 小时内只建一个），开 BitLocker 的电脑先确认恢复密钥已备份（`manage-bde -status C:`）。然后进安全模式：设置 › 系统 › 恢复 › 高级启动 › 立即重新启动 → 疑难解答 › 高级选项 › 启动设置 → 重启后按 4。Windows 10/11 默认**按 F8 进不了安全模式**。在安全模式里重跑官方卸载程序，或按第 5 步清理残留。
+4. **最后手段（🔴 CRITICAL，默认不推荐）**：厂商自己的专用清除工具优先；第三方强卸脚本（如 GitHub 上针对 360 的强卸脚本）只有前面都失败、用户明确要求时才提，必须先让用户（或你逐行）读完脚本内容、建好还原点。**不要从网上直接 `irm | iex` 运行任何脚本。**
+
+**⚠️ 风险**：删错内核驱动可能导致无法开机或断网（有激活工具类驱动把访问重定向到 `tcpip.sys` 的案例，强删会删掉网络驱动）。任何删除驱动的动作都要先有还原点。
+
+---
+
+## 识别卸载器套路
+
+捆绑软件的卸载程序常见这些设计，遇到时停下来读给用户：
+
+- 默认选中"**修复**""**保留**""**我再想想**"，真正的"卸载"按钮小而灰。
+- 多轮挽留弹窗（"卸载后将失去 XX 保护"）。
+- 卸载过程中带勾选的"顺便安装/设为首页"。
+- 卸载完成后打开广告网页，或卸载 A 后又装了 B（第 3 步复扫能发现）。
+- `UninstallString` 指向网页链接、或指向一个名字像"修复工具"的程序：先 `Get-WcoInstalledProgram` 看清楚，再决定是否用 `msiexec /x` 或 winget。
+
+---
+
+## 弹窗定位：3 秒抓现行
+
+屏幕突然弹出广告、不知道是哪个程序时，用模板 `scripts/templates/t20-locate-popup-window.ps1`，或下面的最小版本（`GetForegroundWindow` 取前台窗口所属进程）：
+
+```powershell
+if (-not ('WindowHelper' -as [type])) {
 Add-Type @"
     using System; using System.Runtime.InteropServices;
     public class WindowHelper {
@@ -105,453 +244,188 @@ Add-Type @"
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
     }
 "@
-Write-Host "请在 3 秒内点击或切换到那个广告弹窗窗口..." -ForegroundColor Cyan
+}
+Write-Host "请在 3 秒内点击那个广告弹窗..." -ForegroundColor Cyan
 Start-Sleep -Seconds 3
 $hwnd = [WindowHelper]::GetForegroundWindow()
 $pidRef = 0; [void][WindowHelper]::GetWindowThreadProcessId($hwnd, [ref]$pidRef)
 if ($pidRef -ne 0) {
     $proc = Get-Process -Id $pidRef -ErrorAction SilentlyContinue
-    Write-Host "`n[抓捕成功！弹窗所属进程信息]：" -ForegroundColor Green
-    Write-Host "  进程名: $($proc.Name)"
-    Write-Host "  进程PID: $($proc.Id)"
-    Write-Host "  程序路径: $($proc.Path)"
-} else {
-    Write-Host "未能捕获到活动窗口，请重试。" -ForegroundColor Red
+    "进程: $($proc.Name)  PID: $($proc.Id)  路径: $($proc.Path)"
+    if ($proc.Path) { (Get-AuthenticodeSignature -LiteralPath $proc.Path).SignerCertificate.Subject }
 }
 ```
+
+> 系统通知气泡和不抢焦点的弹窗不会成为前台窗口；抓不到时让用户在弹窗出现时点一下它再运行，或看 设置 › 系统 › 通知 里是哪个应用在发通知。
 
 ---
 
-## Step 3：残留清理（AppData + 注册表 + 服务 + 计划任务）
+## 浏览器劫持修复
 
-> **残留甄别核心原则（借鉴 BCUninstaller 置信度机制）**：
-> - 🟢 **高置信度（安全可清）**：目录名与已卸载软件名完全一致、包含该软件专属 GUID、或位于该软件独立子目录中（如 `%APPDATA%\360safe`）。
-> - 🟡 **低置信度/存疑（强制人工确认）**：目录为大厂公共目录（如 `Tencent`、`Microsoft`、`Adobe`、`Common Files`），里面可能共存其他仍在使用的软件数据，**严禁整目录删除**，必须深入到具体子目录核实。
+**先用浏览器自己的设置**：
+- **Chrome**：设置 › 搜索引擎 → 改回；设置 › 启动时 → 删可疑页面；扩展程序 → 删可疑扩展；必要时 设置 › 重置设置。
+- **Edge**：设置 › 开始、主页和新建标签页；隐私、搜索和服务 › 地址栏和搜索；必要时 设置 › 重置设置。
+- **Firefox**：`about:preferences` 主页、`about:preferences#search`。
 
-### 3.1 AppData 残留
+**设置变灰、显示"由你的组织管理"** → 被写了策略：
 
-`%APPDATA%` 和 `%LOCALAPPDATA%` 下会有配置、缓存、聊天记录。
-
-**审计**（扫描 Roaming + Local）：
-```powershell
-$targets = @("$env:APPDATA", "$env:LOCALAPPDATA")
-foreach ($base in $targets) {
-    Get-ChildItem $base -Directory -Force -EA SilentlyContinue | ForEach-Object {
-        $size = [math]::Round((Get-ChildItem $_.FullName -Recurse -Force -EA SilentlyContinue |
-               Measure-Object Length -Sum -EA SilentlyContinue).Sum / 1MB, 2)
-        if ($size -gt 1) { Write-Host "$size MB  $($_.FullName)" }
-    }
-}
-```
-
-**判断残留**：与 `bloatware-catalog.md` 的 AppData 路径对比，确认是哪个软件。
-
-**清理**（走回收站）：
-```powershell
-Add-Type -AssemblyName Microsoft.VisualBasic
-$paths = @(
-    "$env:APPDATA\360safe",
-    "$env:APPDATA\2345Security",
-    "$env:APPDATA\Kingsoft\WPSUpdate",
-    "$env:LOCALAPPDATA\360safe"
-    # 添加确认的残留路径
-)
-foreach ($p in $paths) {
-    if (Test-Path $p) {
-        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory(
-            $p, 'OnlyErrorDialogs', 'SendToRecycleBin')
-        Write-Host "[OK] -> 回收站: $p"
-    }
-}
-```
-
-### 3.2 ProgramData 残留
-
-`C:\ProgramData\` 是系统级应用数据，部分卸载残留在这里：
+1. `t23-audit-browser-hijack.ps1` 列出 HKLM 和 HKCU 下的 Chrome / Edge / Firefox 策略；或在浏览器打开 `chrome://policy`、`edge://policy`。
+2. 公司/学校的电脑，策略可能是单位下发的，不要动，联系 IT。
+3. 个人电脑：只删被劫持写入的那几个值（`HomepageLocation`、`RestoreOnStartup`、`RestoreOnStartupURLs`、`NewTabPageLocation`、`DefaultSearchProvider*`、可疑的 `ExtensionInstallForcelist` 项），**不要删整个 `...\Policies\Google\Chrome` 或 `...\Microsoft\Edge` 键**——里面可能有用户自己或其他软件的正常策略。删除单个值（先备份、记账、可回退）：
 
 ```powershell
-Get-ChildItem "C:\ProgramData" -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object {
-    $size = [math]::Round((Get-ChildItem $_.FullName -Recurse -Force -ErrorAction SilentlyContinue |
-           Measure-Object Length -Sum -EA SilentlyContinue).Sum / 1MB, 2)
-    if ($size -gt 5) { Write-Host "$size MB  $($_.FullName)" }
-}
+Import-Module .\scripts\lib\Wco.Common.psm1
+$key = 'HKLM\SOFTWARE\Policies\Google\Chrome'; $name = 'HomepageLocation'      # 以 T23 列出的为准
+$s = Get-WcoSession; $bak = Join-Path $s.Dir "reg\browser_policy_$name.reg"
+reg.exe export $key $bak /y
+Remove-ItemProperty -LiteralPath "Registry::$key" -Name $name                    # HKLM 需管理员
+[void](Add-WcoChange -Kind registry -Target "$key\$name" -Before '(见备份)' -After '(已删除)' -Undo "reg.exe import `"$bak`"" -Risk MEDIUM)
+Export-WcoUndo
 ```
 
-### 3.3 注册表残留
-
-**扫描可疑键**（基于已卸载软件的关键词）：
-```powershell
-$keywords = @("360safe", "2345Safe", "2345Live", "Kingsoft", "KSafe", "KSAVSvc", "AlibabaProtect", "DingTalk", "WPS")
-foreach ($kw in $keywords) {
-    $paths = @(
-        "HKCU:\Software\$kw",
-        "HKLM:\Software\$kw",
-        "HKLM:\Software\WOW6432Node\$kw"
-    )
-    foreach ($p in $paths) {
-        if (Test-Path $p) {
-            Write-Host "命中: $p"
-            # 备份
-            New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null   # v2.0：备份不往用户目录丢（踩坑 64）
-            $backup = "$env:TEMP\wco\reg\reg_backup_$($kw)_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
-            reg export $p.Replace('HKCU:\', 'HKCU\').Replace('HKLM:\', 'HKLM\') $backup /y 2>$null
-            # 删除
-            Remove-Item $p -Recurse -Force -EA SilentlyContinue
-            Write-Host "[OK] 删除: $p"
-        }
-    }
-}
-```
-
-**⚠️ 重要警告**：
-- 删除前**必须备份**（`reg export`）
-- **不要批量删**——只删明确是残留的键
-- 涉及 `HKLM` 需管理员权限
-
-### 3.4 计划任务残留
-
-```powershell
-$taskPatterns = @("360SafeUpdate", "*2345*", "AlibabaProtect*", "DingTalk*", "WPS*")
-foreach ($p in $taskPatterns) {
-    Get-ScheduledTask -EA SilentlyContinue |
-        Where-Object { $_.TaskName -like $p } |
-        ForEach-Object {
-            $t = $_
-            if ($t.State -ne 'Disabled') {
-                Disable-ScheduledTask -InputObject $t -EA SilentlyContinue
-            }
-            Unregister-ScheduledTask -InputObject $t -Confirm:$false -EA SilentlyContinue
-            Write-Host "[OK] 删除计划任务: $($t.TaskName)"
-        }
-}
-```
-
-### 3.5 服务残留
-
-```powershell
-$servicePatterns = @("360*", "*2345*", "*KSafe*", "*AlibabaProtect*", "*DingTalk*")
-foreach ($p in $servicePatterns) {
-    Get-Service -EA SilentlyContinue |
-        Where-Object { $_.Name -like $p -or $_.DisplayName -like $p } |
-        ForEach-Object {
-            $svc = $_
-            Write-Host "发现服务: $($svc.Name) ($($svc.DisplayName)) - 状态: $($svc.Status)"
-            # 停用并删除
-            Stop-Service -Name $svc.Name -Force -EA SilentlyContinue
-            sc.exe delete $svc.Name 2>$null
-            Write-Host "[OK] 删除服务: $($svc.Name)"
-        }
-}
-```
-
-> 服务操作**需要管理员权限**——非管理员运行时脚本会失败，需提权重试。
+4. 删了又回来：有程序或驱动在后台写，回到 T24/T25 找来源；驱动级劫持交给安全软件（见 `bloatware-catalog.md` 8b）。
 
 ---
 
-## Step 4：浏览器劫持修复
+## 专项：WPS Office
 
-如果 bloatware 修改了浏览器首页或默认搜索引擎：
+### 卸载
 
-### Chrome
-1. 打开 Chrome → 设置 → 搜索引擎 → 改回 Google / 百度
-2. 设置 → 启动时 → 删除可疑"打开特定页面"
-3. 检查扩展：设置 → 扩展程序 → 删除可疑项
-
-### Edge
-1. 设置 → 开始、主页和新建标签页 → 关闭"由你的组织管理"
-2. 设置 → 隐私、搜索和服务 → 地址栏和搜索 → 改回默认
-
-### Firefox
-1. about:preferences → 主页 → 改回 about:home
-2. about:preferences#search → 改回默认搜索引擎
-
-### 注册表层面修复（兜底）
-
-```powershell
-# Chrome 首页劫持修复
-$chromePolicyKey = "HKCU:\Software\Policies\Google\Chrome"
-if (Test-Path $chromePolicyKey) {
-    New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
-    reg export "HKCU\Software\Policies\Google\Chrome" "$env:TEMP\wco\reg\chrome_policy.reg" /y   # 先备份（v2.0）
-    Remove-Item $chromePolicyKey -Recurse -Force
-    Write-Host "[OK] 清除 Chrome 策略"
-}
-
-# Edge 首页劫持修复
-$edgePolicyKey = "HKCU:\Software\Policies\Microsoft\Edge"
-if (Test-Path $edgePolicyKey) {
-    reg export "HKCU\Software\Policies\Microsoft\Edge" "$env:TEMP\wco\reg\edge_policy.reg" /y   # 先备份（v2.0）
-    Remove-Item $edgePolicyKey -Recurse -Force
-    Write-Host "[OK] 清除 Edge 策略"
-}
-```
-
----
-
-## 专项卸载：WPS Office
-
-**WPS 残留场景**：即使控制面板卸载，`%APPDATA%\Kingsoft\office6` 配置目录、`addons/pool/win-i386/` 旧版插件、`VMCache` 缓存都不会清。
-
-**专项清理流程**：
-
-1. 控制面板卸载 WPS Office（三个入口都要试：WPS Office、WPS 加载项、Kingsoft Components）
-
-2. **检测非标准安装路径（2026-08 实战教训）**。
-   标准位置是 `C:\Program Files (x86)\Kingsoft\WPS Office`，但第三方渠道装的 WPS 常在 `<自定义安装根>/WPS Office/<版本号>/office6/` 或 `D:\Program Files\Kingsoft\`。先查注册表反推真实路径：
+1. 第 0 步盘点：WPS 常有多个条目（WPS Office、WPS 加载项、Kingsoft 组件），且常装在非标准位置（`<自定义安装根>\WPS Office\<版本号>\office6\`、`D:\Program Files\Kingsoft\`）——用 `Get-WcoInstalledProgram -Name '*WPS*'` 找真实路径，不要硬编码。
+2. 让用户先退出 WPS（任务栏和托盘都关掉）。仍有进程时按**确切进程名**结束，不要用宽泛正则：
    ```powershell
-   Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-                    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -EA SilentlyContinue |
-       Where-Object { $_.DisplayName -match 'WPS|Kingsoft' } |
-       Select-Object DisplayName, InstallLocation, DisplayVersion
+   Get-Process -Name wps, wpp, et, wpscloudsvr, ksolaunch -ErrorAction SilentlyContinue | Select-Object Name, Id, Path
+   # 确认都是 WPS 的路径后：
+   Get-Process -Name wps, wpp, et, wpscloudsvr, ksolaunch -ErrorAction SilentlyContinue | Stop-Process
    ```
-   同时扫以下候选根找 `wps.exe` / `ksolaunch.exe`：
-   ```powershell
-   $candidates = @(
-       "C:\Program Files (x86)\Kingsoft\WPS Office",
-       "C:\Program Files\Kingsoft\WPS Office",
-       "C:\Program Files (x86)\WPS Office",
-       "<自定义安装根>/WPS Office",                # 用户自定义安装区
-       "D:\Program Files (x86)\Kingsoft\WPS Office",
-       "D:\Program Files\Kingsoft\WPS Office"
-   )
-   foreach ($p in $candidates) {
-       foreach ($bin in @('office6\wps.exe','office6\ksolaunch.exe')) {
-           $full = Join-Path $p $bin
-           if (Test-Path $full) { Write-Host "找到: $full" }
-       }
-   }
-   ```
+3. 第 1–3 步：官方卸载 → 重启 → 复扫。
+4. 第 4–5 步：`Find-WcoLeftover -Name 'WPS Office' -Publisher '<盘点到的发行主体>'`。常见残留：`%APPDATA%\kingsoft\office6`（配置）、`%APPDATA%\WPS Cloud Files`（云文档缓存，**先问用户里面有没有没同步的文档**）、`%LOCALAPPDATA%\Kingsoft`、`C:\ProgramData\Kingsoft`、任务 `WpsUpdateTask_<用户>` / `WpsUpdateLogonTask_<用户>` / `WpsWakeWnsLogonTask`。
+5. 注册表：只删 WPS 产品子键（如 `HKCU:\Software\Kingsoft\Office`），**不删 `HKCU\Software\Kingsoft` 根键**——同一台机器若还有金山其他软件会被一起删掉，模块也会拒绝。
 
-3. 关闭所有 WPS 相关进程：
-   ```powershell
-   Get-Process | Where-Object { $_.Name -match '^wps|wpscloudsvr|kingsoft' } | Stop-Process -Force
-   ```
+**保留 WPS 只清垃圾**：删 `addons\pool\win-i386\` 下多版本插件中的旧版本（保留最新）、`%LOCALAPPDATA%\Kingsoft\WPS Office\Temp\`，全部走 `t07-safe-recycle.ps1`；在 WPS 设置里关推送与广告。
 
-4. 清理 AppData 残留：
-   ```powershell
-   $paths = @(
-       "$env:APPDATA\kingsoft",         # 配置目录
-       "$env:APPDATA\WPS Cloud Files",  # 云文档缓存
-       "$env:LOCALAPPDATA\Kingsoft",    # 本地缓存
-       "$env:APPDATA\Kingsoft\office6",
-       "$env:APPDATA\Kingsoft\WPSUpdate"
-   )
-   ```
+### 治本：自动升级任务反复复活的三层修复
 
-5. 清理 ProgramData（提权）：
-   ```powershell
-   "C:\ProgramData\Kingsoft"
-   ```
+**症状**：禁用 `WpsUpdateTask_<用户名>` 和 `WpsUpdateLogonTask_<用户名>` 后，下次打开 WPS 又被 `ksolaunch.exe /wpsupdate` 重新写回。
 
-6. 清理计划任务（提权）：
-   ```powershell
-   Disable-ScheduledTask -TaskName "WpsUpdateLogonTask_*" -EA SilentlyContinue
-   Disable-ScheduledTask -TaskName "WpsUpdateTask_*" -EA SilentlyContinue
-   Disable-ScheduledTask -TaskName "WpsWakeWnsLogonTask" -EA SilentlyContinue  # 消息推送中心
-   ```
-
-7. 清理注册表（备份后删）：
-   ```powershell
-   New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
-   reg export "HKCU\Software\Kingsoft" "$env:TEMP\wco\reg\kingsoft_backup.reg" /y
-   Remove-Item "HKCU:\Software\Kingsoft" -Recurse -Force -EA SilentlyContinue
-   ```
-
-**如果只想保留 WPS 但清理垃圾**（不卸载）：
-- 删 `addons/pool/win-i386/` 下**多版本插件中的旧版本**（保留最新）
-- 删 `%LOCALAPPDATA%\Kingsoft\WPS Office\Temp\` 临时文件
-- 关闭 WPS 推送通知与广告
-
-### 治本：禁用 WPS 自动升级 + 关闭反复复活的更新任务（2026-08 实战沉淀）
-
-**症状**：手动禁用 `WpsUpdateTask_<用户名>` 和 `WpsUpdateLogonTask_<用户名>` 后，下次开 WPS 这两个任务又被 `ksolaunch.exe /wpsupdate` 自动重写，任务计划程序里反复复活。
-
-**根因**：WPS 启动器 `ksolaunch.exe` 在每次 WPS 主程序运行时检查并重新注册更新任务。`wpscloudsvr` 服务也会注册 `WpsWakeWnsLogonTask`。
+**根因**：WPS 启动器 `ksolaunch.exe` 每次 WPS 运行时检查并重新注册更新任务；`wpscloudsvr` 服务也会注册 `WpsWakeWnsLogonTask`。
 
 **三层防护**（缺一不可，单独任何一层都会被绕过）：
 
-| 层 | 操作 | 工具/权限 |
+| 层 | 操作 | 权限 |
 |---|---|---|
-| ① 配置层（治本） | 改 `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo\UpdateMode` 从 `auto` → `manual`，同时把 `LastUpdateMode` 也改成 `manual`（防止 WPS 启动时用 LastUpdateMode 覆盖 UpdateMode） | 当前用户，无需管理员 |
-| ② 任务层（兜底） | 禁用 3 个 WPS 任务：`WpsUpdateTask_<user>`、`WpsUpdateLogonTask_<user>`、`WpsWakeWnsLogonTask` | **根目录任务需管理员** |
-| ③ 服务层（兜底） | 禁 `wpscloudsvr` 服务 | **需管理员** |
-
-**完整修复脚本**（保存为 `fix_wps_never_again.ps1`，**非管理员部分可直接运行**）：
+| ① 配置层（治本） | `HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo` 下 `UpdateMode` 从 `auto` 改为 `manual`，同时把 `LastUpdateMode` 也改成 `manual`（否则 WPS 启动时可能用 LastUpdateMode 把 UpdateMode 改回去） | 当前用户 |
+| ② 任务层（兜底） | 禁用 `WpsUpdateTask_<user>`、`WpsUpdateLogonTask_<user>`、`WpsWakeWnsLogonTask` | 根目录任务需管理员 |
+| ③ 服务层（兜底） | `wpscloudsvr` 设为禁用 | 管理员 |
 
 ```powershell
-# === 前置：备份注册表整键 ===
-New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
-reg export "HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo" `
-    "$env:TEMP\wco\reg\wps_update_backup.reg" /y 2>&1 | Out-Null
+Import-Module .\scripts\lib\Wco.Common.psm1
+$k = 'HKCU\Software\Kingsoft\Office\6.0\Common\updateinfo'
+# ① 配置层（普通权限）——Set-WcoRegistryValue 会先 reg export 整个 updateinfo 键
+Set-WcoRegistryValue -Key $k -Name UpdateMode              -Value 'manual' -Type String
+Set-WcoRegistryValue -Key $k -Name LastUpdateMode          -Value 'manual' -Type String
+Set-WcoRegistryValue -Key $k -Name UpdateNewPageAutoShown  -Value 'false'  -Type String
 
-# === 第 1 层（治本）===
-$k = 'HKCU:\Software\Kingsoft\Office\6.0\Common\updateinfo'
-if (Test-Path $k) {
-    Set-ItemProperty -Path $k -Name 'UpdateMode' -Value 'manual' -Type String
-    Set-ItemProperty -Path $k -Name 'LastUpdateMode' -Value 'manual' -Type String
-    Set-ItemProperty -Path $k -Name 'UpdateNewPageAutoShown' -Value 'false' -Type String
-    Write-Host "[OK] WPS UpdateMode=manual（治本层完成）"
-}
-
-# === 第 2 层 + 第 3 层（需管理员，单独跑） ===
-# 单独保存为 fix_wps_never_again_admin.ps1，用户右键以管理员运行
-# 内容：
-# $tasks = @("\WpsUpdateTask_$env:USERNAME", "\WpsUpdateLogonTask_$env:USERNAME", "\WpsWakeWnsLogonTask")
-# foreach ($t in $tasks) {
-#     schtasks /change /tn $t /disable 2>&1 | Out-Null
-#     if ($LASTEXITCODE -eq 0) { Write-Host "[OK] 禁用任务: $t" }
-# }
-# sc.exe config wpscloudsvr start= disabled
-# sc.exe stop wpscloudsvr
+# ② ③（管理员 PowerShell 里跑）
+Get-ScheduledTask | Where-Object { $_.TaskName -like 'Wps*' } | Select-Object TaskPath, TaskName, State   # 先确认实际路径
+Disable-WcoScheduledTask -TaskPath '\' -TaskName "WpsUpdateTask_$env:USERNAME"
+Disable-WcoScheduledTask -TaskPath '\' -TaskName "WpsUpdateLogonTask_$env:USERNAME"
+Disable-WcoScheduledTask -TaskPath '\' -TaskName 'WpsWakeWnsLogonTask'
+Set-WcoServiceStartType -Name wpscloudsvr -StartType disabled
+# 以上都是演练；用户确认后每行加 -Apply 再跑，然后 Export-WcoUndo
 ```
 
-**回退**：双击 `wps_update_backup.reg` 把注册表还原 + 用管理员跑 `schtasks /change /tn <task> /enable` 把任务恢复 + `sc config wpscloudsvr start= auto` 把服务恢复。
+**回退**：运行会话目录里的 `undo.ps1`（注册表从备份导入、任务重新启用、服务恢复原启动类型）。
 
-**注意**：用户找不到 WPS in-app "自动升级" 开关（某些版本菜单藏得深或根本没有）时，注册表改 UpdateMode 是**最快的治本路径**。这个开关 in-app UI 和注册表是**同一配置的不同表现层**。
-
----
-
-## 专项卸载：钉钉 (DingTalk)
-
-**钉钉卸载陷阱**：钉钉装了"钉钉保镖"安全服务，会拒绝标准卸载。
-
-**专项清理流程**：
-
-1. 控制面板卸载钉钉
-2. **手动终止保镖进程**：
-   ```powershell
-   Get-Process | Where-Object { $_.Name -match 'AliApplet|DingTalk|Alibaba' } | Stop-Process -Force
-   ```
-3. 删除安装目录（提权）：
-   ```powershell
-   # 主要路径
-   "C:\Program Files (x86)\DingTalk"
-   "C:\Program Files (x86)\AlibabaProtect"  # 钉钉保镖
-   ```
-4. 清理注册表：
-   ```powershell
-   $keys = @(
-       "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\DingTalk",
-       "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AlibabaProtect",
-       "HKLM:\SYSTEM\CurrentControlSet\Services\alibabaprotect"
-   )
-   New-Item -ItemType Directory "$env:TEMP\wco\reg" -Force | Out-Null
-   foreach ($k in $keys) {
-       if (Test-Path $k) {
-           $native = $k -replace '^HKLM:\\', 'HKLM\' -replace '^HKCU:\\', 'HKCU\'
-           reg export $native "$env:TEMP\wco\reg\$(Split-Path $k -Leaf).reg" /y   # 先备份（v2.0）
-           Remove-Item $k -Recurse -Force
-       }
-   }
-   ```
-5. 删除服务（提权）：
-   ```powershell
-   sc.exe delete alibabaprotect
-   sc.exe delete AlibabaProtect
-   ```
+> 用户找不到 WPS 界面里的"自动升级"开关（有些版本藏得深或没有）时，改 UpdateMode 是最快的治本路径——界面开关和这个注册表值是同一配置。注意：管理员会话里的 `HKCU` 若是另一个管理员账户启动的，会写到那个账户下；配置层请在用户自己的普通 PowerShell 里跑。
 
 ---
 
-## 专项卸载：360 家族（最难）
+## 专项：钉钉 (DingTalk)
 
-360 自我保护最严——**普通标准卸载基本无效**，需要专用工具。
+钉钉会安装"钉钉保镖"（`AlibabaProtect` 服务），有自我保护，标准卸载后可能残留。
 
-### 推荐顺序（v2.0 改：官方卸载优先，第三方强卸脚本降为 🔴 CRITICAL 的最后手段）
+1. 退出钉钉，按第 1 步官方卸载钉钉；"阿里巴巴 PC 安全服务"如有独立卸载条目，也走它自己的卸载程序。
+2. 重启 → 复扫。
+3. 服务仍在：
+   ```powershell
+   Get-CimInstance Win32_Service -Filter "Name='AlibabaProtect'" | Select-Object Name, State, StartMode, PathName
+   Set-WcoServiceStartType -Name AlibabaProtect -StartType disabled -Apply
+   Stop-Service -Name AlibabaProtect
+   Remove-WcoService -Name AlibabaProtect            # 演练；确认后 -Apply
+   ```
+   停不下来（自我保护拒绝）→ 第 6 步（安全模式里处理）。
+4. 目录 `C:\Program Files (x86)\DingTalk`、`C:\Program Files (x86)\AlibabaProtect` 及卸载键残留：`Find-WcoLeftover -Name '钉钉'` 打分后，用 `t07-safe-recycle.ps1` 和 `Remove-WcoRegistryKey` 处理（管理员）。
 
-1. **先关 360 的自我保护**：打开 360 安全卫士 → 设置 → 安全防护中心里关闭"自我保护"（各版本位置略有不同，以界面为准）。不关的话卸载程序常常卡住。
-2. **走官方卸载**：设置 › 应用 › 已安装的应用 → 360 安全卫士 / 360 杀毒 → 卸载；或 `winget uninstall --name "360"` 先看匹配到哪些（加 `--interactive` 让卸载界面出来，不要静默）。卸载过程中出现"保留隔离区/保留配置"之类选项，问用户。
-3. **重启**，再跑下面的"360 残留检测"。内核驱动通常在重启后才真正卸掉，**不要重启前就去删驱动文件**。
-4. **还有残留**：先建还原点（`Checkpoint-Computer -Description "Before360Cleanup"`），再进安全模式处理：设置 › 系统 › 恢复 › 高级启动 › 立即重新启动 → 疑难解答 › 高级选项 › 启动设置 → 4。Windows 10/11 默认**按 F8 进不了安全模式**，v1.x 写错了。
-5. **第三方强卸脚本**（如 GitHub `ROWENxAI/force-uninstall-360`）：🔴 CRITICAL，默认不推荐。只有前四步都失败、用户明确要求时才提，并且必须先让用户（或你逐行）读完脚本内容、建好还原点。不要从网上直接 `irm | iex` 运行。
+---
 
-**⚠️ 风险警告**：360 内核驱动修改系统底层，**错误的删除可能导致系统无法启动**。任何删除驱动的动作都要先有还原点。
+## 专项：360 家族（最难）
 
-### 360 残留检测
+360 自我保护最强，**直接删文件、删服务基本无效且有风险**。按第 6 步的顺序：
+
+1. **先关 360 的自我保护**：360 安全卫士 → 设置 → 安全防护中心里关闭"自我保护"（各版本位置不同，以界面为准）。不关的话卸载程序常常卡住。
+2. **走官方卸载**：设置 › 应用 › 已安装的应用 → 360 安全卫士 / 360 杀毒 → 卸载；或 `winget list --name "360"` 看匹配到哪些，再 `winget uninstall --id <ID> --interactive` 一个一个卸。卸载中出现"保留隔离区/保留配置"之类的选项，问用户。
+3. **重启**，再做下面的残留检测。内核驱动通常重启后才真正卸掉，**重启前不要动驱动文件**。
+4. **还有残留**：建还原点 → 安全模式（设置 › 恢复 › 高级启动，F8 默认无效）→ 在安全模式里重跑卸载或按第 5 步清理。
+5. **第三方强卸脚本**：🔴 CRITICAL，最后手段，规则见第 6 步第 4 条。
+
+**360 残留检测（只读）**：
 
 ```powershell
-# 检查 360 服务
-Get-Service | Where-Object { $_.Name -like '*360*' -or $_.DisplayName -like '*360*' }
-
-# 检查 360 驱动
-$drivers = & pnputil /enum-drivers
-$drivers | Select-String "360"
-
-# 检查 360 启动项
-Get-ScheduledTask | Where-Object { $_.TaskName -like '*360*' }
-Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" |
-    ForEach-Object { $_.PSObject.Properties | Where-Object { $_.Name -like '*360*' } }
+Get-CimInstance Win32_Service      | Where-Object { $_.PathName -match '\\360' } | Select-Object Name, State, PathName
+Get-CimInstance Win32_SystemDriver | Where-Object { $_.Name -match '^360' -or $_.PathName -match '\\360' } | Select-Object Name, State, PathName
+pnputil /enum-drivers | Select-String -Context 0,6 '360'      # 驱动库里的驱动包
+Get-ScheduledTask | Where-Object { $_.TaskName -like '*360*' } | Select-Object TaskPath, TaskName, State
+Find-WcoLeftover -Name '360安全卫士'
 ```
 
+按 `PathName` 判断归属，比按服务显示名匹配可靠（显示名以"360"开头的不一定是 360 公司的软件）。
+
 ---
 
-## 专项卸载：百度网盘 (Baidu Netdisk)
+## 专项：百度网盘 / 迅雷 / 搜狗输入法
 
-**常见残留**：即使在设置中关闭开机自启或卸载网盘，系统服务 `YunDetectService` 与右键菜单 Shell 扩展仍会长驻后台。
+**百度网盘**：退出界面后，`YunDetectService` 服务和右键扩展仍常驻。
+- 还要用网盘：只把服务设为禁用（`Set-WcoServiceStartType -Name YunDetectService -StartType disabled`，可回退），在网盘设置里关开机启动。
+- 不用了：官方卸载 → 重启 → 复扫；服务仍在再按第 5 步 ② 删除；`%APPDATA%\Baidu\BaiduNetdisk` 走 `t07-safe-recycle.ps1`（先问用户里面有没有下载到一半的文件）。注意 `%APPDATA%\Baidu` 可能还装着百度输入法的数据，不整目录删。
 
-**专项清理流程**：
-1. 终止所有百度网盘进程：
+**迅雷**：`XLServicePlatform`、`ThunderNetwork` 服务在退出客户端后仍可能运行（P2P 上传）。
+- 还要用：两个服务设为禁用或手动（`Set-WcoServiceStartType`），迅雷设置里关开机启动和"下载完成后继续上传"类选项。
+- 不用了：官方卸载 → 重启 → 复扫 → 残留服务按第 5 步 ②，`%LOCALAPPDATA%\Thunder Network`、`%APPDATA%\Thunder Network` 走回收站。
+
+**搜狗输入法**：输入法以 IME 形式加载进各个程序，打字时会拉起 `SogouCloud.exe`、`SGDownload.exe`、`PinyinUp.exe`。
+1. 搜狗设置里关闭"云计算候选"和资讯/热点推送。
+2. 禁用其更新任务（先列出，再逐个 `Disable-WcoScheduledTask -TaskPath <路径> -TaskName <名称>`）。
+3. 仍弹窗时可给 `SGDownload.exe` 加出站防火墙规则。`netsh` 的 `program=` 需要**确切路径**（通配符是否支持未核实，很可能不生效），先找真实路径：
    ```powershell
-   Get-Process | Where-Object { $_.Name -match 'baidunetdisk|YunDetect' } | Stop-Process -Force -EA SilentlyContinue
+   Get-ChildItem "${env:ProgramFiles(x86)}\SogouInput" -Recurse -Filter SGDownload.exe -EA SilentlyContinue | Select-Object -ExpandProperty FullName
    ```
-2. 禁用/删除后台常驻守护服务（需管理员）：
    ```cmd
-   sc stop YunDetectService
-   sc config YunDetectService start= disabled
-   sc delete YunDetectService
+   netsh advfirewall firewall add rule name="Block_SGDownload" dir=out action=block program="<上面查到的完整路径>"
+   :: 回退：netsh advfirewall firewall delete rule name="Block_SGDownload"
    ```
-3. 清理计划任务与 AppData 残留：
-   ```powershell
-   Disable-ScheduledTask -TaskName "BaiduNetdiskUpdateTask*" -EA SilentlyContinue
-   # v2.0：文件走回收站（可恢复），先演练再 -Apply
-   .\scripts\templates\t07-safe-recycle.ps1 -Path "$env:APPDATA\Baidu\BaiduNetdisk" -Label "百度网盘残留"
-   ```
+   输入法升级后版本目录会变，规则需要重建。
 
 ---
 
-## 专项卸载：迅雷 (Thunder)
+## 第三方卸载工具
 
-**常见残留**：`XLServicePlatform` 与 `ThunderNetwork` 服务常驻后台进行 P2P 共享连接，消耗上行网络与内存。
+标准流程搞不定、或用户想要图形界面时再用：
 
-**专项清理流程**：
-1. 终止迅雷进程并彻底禁用底层服务（需管理员）：
-   ```cmd
-   taskkill /f /im Thunder.exe /im XLServicePlatform.exe
-   sc stop XLServicePlatform && sc config XLServicePlatform start= disabled && sc delete XLServicePlatform
-   sc stop ThunderNetwork && sc config ThunderNetwork start= disabled && sc delete ThunderNetwork
-   ```
-2. 清理 AppData 缓存与下载引擎残留：
-   ```powershell
-   # v2.0：文件走回收站（可恢复），先演练再 -Apply
-   .\scripts\templates\t07-safe-recycle.ps1 -Path "$env:LOCALAPPDATA\Thunder Network","$env:APPDATA\Thunder Network" -Label "迅雷残留"
-   ```
+| 工具 | 许可 | 特点 | 注意 |
+|------|------|------|------|
+| **BCUninstaller（Bulk Crap Uninstaller）** | 开源，Apache-2.0（[GitHub](https://github.com/BCUninstaller/Bulk-Crap-Uninstaller)） | 残留扫描带置信度（Very Good / Good / Questionable / Bad）；本仓库 `Find-WcoLeftover` 的打分思路参考自它 | 不要用它的"静默卸载"处理捆绑软件（看不到捆绑勾选）；只默认选 Good 以上的残留，Questionable 人工核对；据调研，回收站不可用时它会改为永久删除——先确认回收站可用 |
+| **Geek Uninstaller** | 免费（个人），闭源 | 单文件便携；卸载后扫注册表和文件残留 | "强制删除"会跳过官方卸载程序直接删，只在官方卸载失败时用 |
+| **Revo Uninstaller Free** | 免费版，闭源 | Hunter 模式（拖瞄准镜到窗口定位程序） | 同上 |
+| **HiBit Uninstaller** | 免费，**非开源**（未见公开源码，存疑） | 单文件便携 | 自带"修复注册表"类功能，不要用 |
+
+> 第三方工具的残留扫描结果也要逐项看，不要"全选删除"：厂商公共目录、仍被其他软件使用的目录会被误判。本仓库不再推荐 IObit Uninstaller（该厂商产品常被批评捆绑推广，和本技能"去捆绑"的目标冲突）。
 
 ---
 
-## 专项卸载：搜狗输入法 (Sogou IME)
+## 相关文档
 
-**常见残留**：IME 模块被应用程序加载时唤醒 `SogouCloud.exe`（云计算候选词）、`SGDownload.exe`（弹窗下载器）、`PinyinUp.exe`（升级更新）。
-
-**专项治理流程**：
-1. 搜狗设置关闭「云计算候选」与「今日热点资讯」。
-2. 禁用升级任务：
-   ```powershell
-   Get-ScheduledTask | Where-Object { $_.TaskName -match 'Sogou|Pinyin' } | Disable-ScheduledTask -EA SilentlyContinue
-   ```
-3. 对弹窗可执行文件施加安全权限或出站防火墙阻断：
-   ```cmd
-   netsh advfirewall firewall add rule name="Block_SGDownload" dir=out action=block program="%ProgramFiles(x86)%\SogouInput\*\SGDownload.exe"
-   ```
-
----
-
-## 工具对比
-
-| 工具 | 价格 | 卸载彻底性 | 强制卸载 | 中文 UI | 推荐场景 |
-|------|------|-----------|---------|---------|----------|
-| **Geek Uninstaller** | 免费（个人） | ⭐⭐⭐⭐⭐ | ✅ | ❌ | **首选**——轻量、强制删除 |
-| **HiBit Uninstaller** | 免费 | ⭐⭐⭐⭐⭐ | ✅ | ❌ | Geek 替代品，开源 |
-| **Revo Uninstaller Free** | 免费 | ⭐⭐⭐⭐ | ✅ | ❌ | Hunter Mode（瞄准镜拖到窗口） |
-| **IObit Uninstaller** | 免费（基础） | ⭐⭐⭐ | ✅ | ✅ | 中文用户、批量卸载 |
-| **Wise Program Uninstaller** | 免费 | ⭐⭐⭐ | ❌ | ✅ | 中文用户、简单场景 |
-
-**推荐**：先试 Geek（强制卸载 + 注册表扫描），不行再上 IObit（中文 + 评分）。
+- 识别清单与广告载体 → `bloatware-catalog.md`
+- 只关自启、不卸载 → `startup-audit.md`
+- 服务启动类型与"绝对不能禁用"列表 → `services-optimization.md`
+- 踩坑 → `pitfalls.md`"卸载与流氓软件"一节

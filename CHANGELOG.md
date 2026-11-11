@@ -5,6 +5,54 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [2.1.0] - 2026-11-11
+
+这一版补齐「流氓软件识别、真正卸干净、自启动不漏项」三块，并按微软官方页面（访问于 2026-11-11）修正一批事实错误。无法找到官方依据的内容不改，只标「存疑」。
+
+### 新增
+- **流氓软件特征库** `data/bloatware-catalog.json`（schema 1，61 个家族）：按发布者、签名、进程、服务、计划任务、驱动、商店应用、目录线索匹配；每个家族标风险类型、置信度和来源。缺少可核对来源的标 `low`，命中只算「疑似，需实机确认」。不收录 Windows 组件、WebView2 和运行库；OEM 工具默认保留。
+- **T23 浏览器劫持审计**（只读）：浏览器策略（主页、启动页、搜索、强制安装扩展）、Firefox 策略、Native Messaging、快捷方式参数、WinINet / WinHTTP 代理与 PAC、hosts、DNS、近 180 天新增的根证书（只提示人工确认，不下结论）。
+- **T24 扩展自启动审计**（只读）：对照 Autoruns 类别补齐 RunOnceEx、策略 Run、Winlogon Shell/Userinit、IFEO Debugger 与 SilentProcessExit、AppInit_DLLs、文件关联劫持、Active Setup、BootExecute、LSA 包、打印监视器、Winsock、隐藏计划任务、WMI 订阅、非微软驱动、Win11「重启后恢复应用」、Edge 启动加速、商店应用 StartupTask。
+- **T25 程序盘点**（只读）：已装程序与商店应用对照特征库，按「签名/发布者 → 进程/服务/任务 → 仅名称」分高、中、低三档给证据和下一步命令；≤4 个字符的名称不做模糊匹配。
+- **公共模块新增写操作**（默认只演练，`-Apply` 才执行，全部留痕并写入 `undo.ps1`）：`Set-WcoStartupApproved`、`Disable-WcoScheduledTask`、`Remove-WcoScheduledTask`（先导出 XML）、`Remove-WcoService`（先导出注册表）、`Remove-WcoRegistryKey`（先 `reg export`，拒绝系统键和多产品共用的厂商根键）、`Invoke-WcoUninstall`（厂商卸载程序 / `msiexec /x`，只报告「已启动卸载程序」，之后复扫）、`Remove-WcoAppxPackage`（拒绝框架包和必需组件）、`Find-WcoLeftover`（参照 BCU 思路的残留打分，只有 Good 及以上才建议勾选）。另有只读的 `Get-WcoInstalledProgram`、`Get-WcoStartupItem`、`Get-WcoShellExtension`、`Get-WcoWmiSubscription`、`Get-WcoFileSigner` 等。
+- 新增 Pester 测试 `tests/Wco.Common.V21.Tests.ps1`（StartupApproved 编码、注册表保护清单、短名匹配、商店应用保护、特征库读取）。
+
+### 修复
+- **StartupApproved 启用/禁用字节写反**：首字节 02/06 为启用，03/07 为禁用。T10 和 full_scan 现在显示每项的启用状态，已在任务管理器里禁用的不再算作活跃自启。
+- `Get-ScheduledTask -Path` 改为 `-TaskPath`；「最近运行」按 LastRunTime 倒序；`autorunsc` 用 `-v` 而非 `-vt`。
+- WMI 查询失败时报告「查询失败（需管理员）」，不再显示为干净；T19 现在查齐四类 WMI 对象。
+- T04、T18、T19、T20 定义了函数却从不调用，现在会真正运行。
+- T11 改为读特征库，同时匹配进程、服务和计划任务，并输出证据。
+- T14 运行即切换电源计划并加 Defender 排除 → 改为纯只读，只打印可选命令，推荐「平衡」。
+- T15 内存泄漏判断恒为真 → 改为与上一次基线逐进程对比。
+- T16 壳扩展扫描查错注册表位置 → 改为查 `Classes\CLSID\{guid}\InprocServer32`（HKCU 与 HKLM 两个视图），按微软签名区分。
+- T21、T22 的写操作只在 `-Enable/-Disable/-Cleanup` 加 `-Apply` 且为管理员时执行；不提供 `/ResetBase`。
+- full_scan：目录测量不再跟随 junction（PS 5.1 下会重复计算），含 `[ ]` 的路径改用 `-LiteralPath`，AppData 只遍历一次；控制台编码在结束时恢复；新增 `[EXT]` 段调用 T23–T25。
+- 回收站预检：读不到回收站策略时一律拒绝；超长路径报告为 `LongPath`，不再误报为 `Locked`。
+- 台账只有一条记录时也写成数组。
+
+### 文档（事实修正，依据见各手册内的链接）
+- 传递优化：`Delete-DeliveryOptimizationCache -Force`（不是 `Clear-…`）；策略是「Modify Cache Drive」/`DOModifyCacheDrive`（不存在 `DoCachePath`）。
+- 服务名：`diagnosticshub.standardcollector.service`、DPS 与 diagsvc 分开、CertPropSvc 为证书传播；AppXSvc、WpnService 不再推荐禁用；「永不禁用」清单去掉进程名和已停用的服务。
+- `DisableWindowsSpotlightFeatures` 只对企业版/教育版生效；`powercfg /h /type reduced` 约小 30%（不是 50%）。
+- robocopy 默认保留稀疏文件，`/XJ` 与稀疏无关；Defender 排除支持文件夹通配符。
+- WSL：`--set-sparse` 已被放到 `--allow-unsafe` 之后，改用 `wsl --manage <发行版> --compact` 或 diskpart `compact vdisk`。
+- 微信 4.x 迁移会用硬链接导入旧记录，删除旧 `WeChat Files` 实际释放的空间少于显示；删掉与官方迁移矛盾的「mklink 搬微信」做法。
+- 时效更新：Win10 消费者 ESU 至 2027-10-12；Win11 24H2 家庭版/专业版 2026-10-13 结束服务；KB5089573 后存储页只在打开「临时文件」时弹 UAC；8.63 GB 问题已由 KB5044384 缓解；存储感知默认关闭。
+- 页面文件统一推荐「系统管理」，删除「1–1.5 倍内存」旧经验；无来源的说法标「存疑」。
+- IFEO Debugger 弹窗静音会被 Defender 识别为 `Behavior:Win32/ifeoDebugger.DB`，文档已加警告。
+- `pitfalls.md` 按主题重排为 76 条，并清理相关手册中的旧编号引用。
+- `chat-apps-migration.md` 中未加保护的 `rd /s /q` 已移除。
+
+### 测试与 CI
+- selftest：模板数改为 25；新增特征库结构检查；踩坑条目改为按编号统计；去掉锁死旧措辞的断言（`Clear-DeliveryOptimizationCache`、`set-sparse`、「86.」）。
+- 删除 `tests/test_skill.py`（与 selftest 重复）。
+- CI：`actions/checkout`、`actions/setup-python` 固定到提交 SHA；Pester 固定 5.9.1（原写法会装到 Pester 6）；PSScriptAnalyzer 固定 1.25.0。
+
+### 未验证 / 存疑
+- 新模板与改动的模板只在 Linux 上做过语法、静态检查和冒烟运行，Windows 实机行为以 CI 的 Windows 作业为准。
+- 微信 / QQ / 钉钉 / 企业微信的部分路径、`Weixin.exe` 进程名、剪映与 Adobe 菜单路径、页面文件 1024 MB 下限等仍标「存疑」。
+
 ## [2.0.1] - 2026-11-08
 
 小版本：不加新功能，只修细节、理顺体验。

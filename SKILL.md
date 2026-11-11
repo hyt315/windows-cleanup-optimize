@@ -1,6 +1,6 @@
 ---
 name: windows-cleanup-optimize
-description: Diagnoses and cleans up Windows 10/11 PCs - frees C drive space, removes bloatware and pop-up ads, audits startup items, tunes services/memory/performance, and moves large app data to another drive using official methods first. Scans are read-only; every change is previewed, confirmed by the user, logged, and reversible via a generated undo script. Use when the user says things like "C盘满了/C盘红了", "电脑卡/开机慢", "弹窗广告/流氓软件", "卸不干净", "微信/QQ占空间太大", "把软件搬到D盘", "clean up my PC", "disk full", "slow boot". Not for hardware faults, blue screens, malware incident response, macOS/Linux, or reinstalling Windows.
+description: Diagnoses and cleans up Windows 10/11 PCs - frees C drive space, removes bloatware and pop-up ads, audits startup items, tunes services/memory/performance, and moves large app data to another drive using official methods first. Scans are read-only; every change is previewed, confirmed by the user, logged, and (except uninstalls) reversible via a generated undo script. Use when the user says things like "C盘满了/C盘红了", "电脑卡/开机慢", "弹窗广告/流氓软件", "卸不干净", "微信/QQ占空间太大", "把软件搬到D盘", "clean up my PC", "disk full", "slow boot". Not for hardware faults, blue screens, malware incident response, macOS/Linux, or reinstalling Windows.
 ---
 
 # Windows 清理与优化
@@ -11,11 +11,12 @@ description: Diagnoses and cleans up Windows 10/11 PCs - frees C drive space, re
 
 1. **诊断只读**：阶段 1 的所有脚本不改任何设置、不删不移任何文件。
 2. **先演练、再确认、后执行**：写操作脚本默认只演练（打印"将会做什么、能释放多少"），用户同意后才加 `-Apply`。第一档可以列成清单一次确认、批量执行；第二档按组确认；第三档逐项确认；第四档默认不做。
-3. **删除只进回收站**：统一用 `Invoke-WcoRecycle`（模板 7）。它会拒绝以下三种情况，因为这时"移入回收站"会变成永久删除：所在卷没有回收站、回收站设为直接删除、体积超过回收站上限。不用 `Remove-Item` 删用户文件。
-4. **改动可回退**：服务、注册表、IFEO 的改动都走 `scripts/lib/Wco.Common.psm1`。它会记下原值，写进 `%TEMP%\wco\session_*\changes.json`，并生成 `undo.ps1`。涉及驱动、服务或系统组件时，先建还原点。
-5. **系统目录和安全组件不碰**：`C:\Windows`、`Program Files`、`ProgramData` 只读；不关 Defender、不关 Windows Update、不执行 `/ResetBase`、不清空 `C:\Windows\Installer`。
-6. **官方入口优先**：清理先用"设置 › 系统 › 存储 › 清理建议"；迁移先用软件内置的"更改存储位置"、环境变量或 Dev Drive；mklink 只作兜底。
-7. **拿不准就问**："疑似残留""可能不用了"都先呈报给用户，不擅自批量处理。
+3. **删除只进回收站**：统一用 `Invoke-WcoRecycle`（模板 7）。没有回收站、设为直接删除、超过上限、策略读不到时一律拒绝，因为这时"移入回收站"会变成永久删除。不用 `Remove-Item`、`rd /s /q`、robocopy `/MIR` 删用户文件。
+4. **改动可回退**：服务、注册表、自启、计划任务的改动都走 `scripts/lib/Wco.Common.psm1`（函数表见 `scan-scripts.md` 第九节）。它记下原值，写进 `%TEMP%\wco\session_*\changes.json`，并生成 `undo.ps1`。涉及驱动、服务或系统组件时，先建还原点。
+5. **系统目录和安全组件不碰**：`C:\Windows`、`Program Files`、`ProgramData` 只读；不关 Defender、Windows Update、BitLocker；不执行 `/ResetBase`；不删 WinSxS、`C:\Windows\Installer`、`ProgramData\Package Cache`、`C:\Recovery`；不用注册表清理器、内存清理、hosts 屏蔽表、`irm | iex`。
+6. **卸载如实汇报**：运行卸载程序后只说"已启动卸载程序"，重新扫描确认后才说"已卸载"。
+7. **官方入口优先**：清理先用"设置 › 系统 › 存储 › 清理建议"；迁移先用软件内置的"更改存储位置"、环境变量或 Dev Drive；mklink 只作兜底。
+8. **拿不准就问**："疑似残留""可能不用了"都先呈报给用户，不擅自批量处理。
 
 ## 工作流
 
@@ -71,49 +72,43 @@ description: Diagnoses and cleans up Windows 10/11 PCs - frees C drive space, re
 
 ### 阶段 6：汇报
 
-汇报只写一页，包括：
+汇报只写一页：释放了多少空间、开机前后各几秒、改了哪几项、`undo.ps1` 在哪里，并提醒**清空回收站才真正释放空间**。
 
-- 释放了多少空间；
-- 开机前后各几秒；
-- 改了哪几项；
-- `undo.ps1` 在哪里；
-- 提醒用户**清空回收站才真正释放空间**。
-
-维护建议只给两条：
-
-- 打开存储感知；
-- 每季度跑一次 `full_scan.ps1`。
+维护建议只给两条：打开存储感知；每季度跑一次 `full_scan.ps1`。
 
 ## 路由表（按用户的问题找手册，用到才读）
 
 | 用户的问题 | 先读 | 模板 |
 |---|---|---|
-| C 盘满了、系统文件、Windows.old、WinSxS | `references/system-cleanup.md` | T5、T9、T21、T22 |
+| C 盘满了、系统文件、Windows.old、WinSxS、应用/开发缓存 | `references/system-cleanup.md` | T5、T9、T21、T22 |
 | 软件缓存、更新包、卸载残留 | `references/scan-scripts.md`（模板索引） | T1–T8 |
-| 开机慢、关了还自启 | `references/startup-audit.md`，查不到启动源时读 `references/startup-mechanisms.md` | T0、T10、T19 |
-| 弹窗广告、流氓软件、卸不干净 | `references/bloatware-catalog.md`、`references/software-uninstall.md` | T11、T16、T18、T20 |
+| 开机慢、关了还自启 | `references/startup-audit.md`，查不到启动源时读 `references/startup-mechanisms.md` | T0、T10、T19、T24 |
+| 弹窗广告、流氓软件 | `references/bloatware-catalog.md` | T11、T16、T18、T20、T25 |
+| 卸载软件、卸不干净 | `references/software-uninstall.md` | T25，再 `Find-WcoLeftover` |
+| 主页/搜索被改、浏览器劫持 | `references/startup-audit.md`、`references/bloatware-catalog.md` | T23 |
 | 卡顿、后台多、服务、内存、Copilot/Recall | `references/services-optimization.md`、`references/memory-optimization.md`、`references/performance-tuning.md` | T12–T15 |
 | 搬到 D 盘（含 Dev Drive） | `references/drive-migration-official.md` | — |
 | 微信、QQ、钉钉、企业微信占空间 | `references/chat-apps-migration.md` | — |
 | 官方没有迁移方案，只能 mklink | `references/mklink-migration.md`、`references/migration-cases.md` | T6 |
 | 遇到异常、深水区（DISM、Installer、VSS、云文件） | `references/pitfalls.md` | — |
 
-脚本的位置：
+**关自启的规则**：Run 键 / "启动"文件夹项用 `Set-WcoStartupApproved -Enabled $false`（同任务管理器开关），计划任务用 `Disable-WcoScheduledTask`；删除（`Remove-WcoScheduledTask` / `Remove-WcoService` 等）只在用户明确要求时做。
 
-- 全量扫描：`scripts/full_scan.ps1`
-- 模板：`scripts/templates/tNN-*.ps1`
-- 公共模块：`scripts/lib/Wco.Common.psm1`
-- 易变路径清单（带核实日期）：`data/volatile-paths.json`
+**卸载流程**：`Get-WcoInstalledProgram` 找到确切名称 → `Invoke-WcoUninstall`（`-Apply` 运行厂商卸载程序，提醒留意挽留页和捆绑勾选）→ 重新扫描 → `Find-WcoLeftover` 打分，逐项确认后清残留。
+
+脚本：全量扫描 `scripts/full_scan.ps1`；模板 `scripts/templates/tNN-*.ps1`；公共模块 `scripts/lib/Wco.Common.psm1`；易变路径 `data/volatile-paths.json`；流氓软件目录 `data/bloatware-catalog.json`。
 
 ## 运行环境
 
-- **系统**：Windows 10/11，Windows PowerShell 5.1 或 PowerShell 7。Windows 10 已于 2025-10-14 停止常规支持，这类用户更不能关更新和 Defender。
+- **系统**：Windows 10/11，Windows PowerShell 5.1 或 PowerShell 7。
+  - Windows 10 已于 2025-10-14 停止常规支持；个人版扩展安全更新（ESU，需 22H2）到 **2027-10-12**，在 Windows 更新页注册。这类用户更不能关更新和 Defender。
+  - Windows 11 24H2 家庭版/专业版已于 **2026-10-13** 停止更新，先建议升级到 25H2 或更新版本。
 - **编码**：所有 `.ps1` 和 `.psm1` 都以 UTF-8 BOM 保存，否则 5.1 读中文会乱码。新增脚本必须照做，`selftest` 会检查。
 - **运行方式**：`powershell -NoProfile -ExecutionPolicy Bypass -File <脚本>`。
 - **临时文件**：一律写到 `%TEMP%\wco`，不往用户目录里丢。
 
 ## 回归测试
 
-- `python scripts/selftest.py`：结构、引用、计数、BOM、易变路径时效、PowerShell 语法。没装 PowerShell 时，语法检查跳过并标 SKIP。
-- `Invoke-Pester ./tests`：公共模块的单元测试（回收站预检、留痕、undo 顺序、服务原值）。
+- `python scripts/selftest.py`：结构、引用、模板数（25）、BOM、易变路径时效、PowerShell 语法。没装 PowerShell 时，语法检查跳过并标 SKIP，不算通过。
+- `Invoke-Pester ./tests`（Pester 5）：公共模块的单元测试——回收站预检、台账与 undo 顺序、服务原值、演练不写入、拒绝清单、StartupApproved 字节编码。
 - `evals/`：触发评测与行为评测，改动 SKILL.md 后人工或用 Agent 跑一遍。

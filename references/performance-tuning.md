@@ -67,8 +67,11 @@ powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61
 powercfg /getactivescheme
 ```
 
-**台式机推荐**：高性能（如果 CPU 不是笔记本型号）/ 卓越性能（工作站）
-**笔记本推荐**：插电 → 高性能，电池 → 平衡
+**默认推荐**：**保持"平衡"**（见 1.1，现代 CPU 下与高性能差异极小）。
+**台式机**：用户明确要求、且负载是长时间渲染/编译/游戏时，才改"高性能"/"卓越性能"（工作站）。
+**笔记本**：保持平衡；插电时可在 设置 › 系统 › 电源 的"电源模式"里选"最佳性能"，不改电源计划。
+
+> 模板 14（`t14-show-power-visual.ps1`）从 v2.1 起是**只读报告**：只显示当前电源计划和视觉效果设置，不再自动切换电源计划或加 Defender 排除。
 
 ### 1.4 笔记本 AC/DC 独立设置
 
@@ -113,7 +116,6 @@ Windows 提供了 4 档预设 + 自定义 20 项细项。
 
 ```cmd
 :: 启用最佳性能（保留字体平滑）
-SOURCES:
 :: GUI 方式：右键此电脑 → 属性 → 高级系统设置 → 性能 → 设置 → 选"调整为最佳性能" → 勾选"平滑屏幕字体边缘"
 ```
 
@@ -226,7 +228,7 @@ if ($activeNic) {
   ```
   Windows 11 默认已升级为 `CUBIC` 算法，在高速高丢包网络中吞吐表现远胜于老旧的 NewReno。
 - **网卡节能（EEE）跳 ping 避坑（游戏玩家专项）**：
-  在“设备管理器 → 网络适配器 → 你的有线网卡 → 属性 → 高级”中，找到 **“节能以太网 (Energy Efficient Ethernet)”** 与 **“环保节能 (Green Ethernet)”**，将其设为 **关闭 (Disabled)**。这能彻底杜绝网卡在无密集数据流时自动降频休眠所导致的 10~50ms 突发跳 ping。
+  在“设备管理器 → 网络适配器 → 你的有线网卡 → 属性 → 高级”中，找到 **“节能以太网 (Energy Efficient Ethernet)”** 与 **“环保节能 (Green Ethernet)”**，将其设为 **关闭 (Disabled)**。这可以减少网卡在无密集数据流时自动降频休眠导致的突发跳 ping（效果因网卡和驱动而异，改完观察，不明显就改回）。
 
 ### 4.3 DoH（加密 DNS）
 
@@ -307,12 +309,12 @@ NTFS 日志 (`$LogFile`) 默认 64 MB。增大可减少大事务的元数据写�
 ### 7.1 先用 Dev Drive，不要先加排除
 
 - **Defender 排除 = 这个目录不再被实时扫描**。旧版本说"安全不受影响"是错的：恶意 npm/pip 包、下载到 `D:\code` 的样本都不会被拦截。
-- 微软给开发者的官方方案是 **Dev Drive**（ReFS 卷，Windows 11 22621.2338 及以上，至少 50 GB）：受信任的 Dev Drive 上 Defender 自动用"性能模式"（异步扫描），速度接近排除，但仍在扫描。
-- 创建：设置 › 系统 › 存储 › 高级存储设置 › 磁盘和卷 › 创建 Dev Drive（推荐"新建 VHD"，动态扩展）。已有分区不能原地转换，格式化会清空数据。
-- 查看是否受信任：`fsutil devdrv query D:`。
+- 微软给开发者的官方方案是 **Dev Drive**（ReFS 卷，Windows 11 22621.2338 及以上，至少 50 GB；内存最低 8 GB，建议 16 GB）：Defender 的"性能模式"（异步扫描）**需要同时满足两个条件**——Dev Drive 受信任，**且 Defender 实时保护处于打开状态**。速度接近排除，但仍在扫描。
+- 创建：设置 › 系统 › 存储 › 高级存储设置 › 磁盘和卷 › 创建 Dev Drive（"新建 VHD"更灵活；微软说明独立分区性能更好）。已有分区不能原地转换，格式化会清空数据。
+- 查看是否受信任：`fsutil devdrv query D:`。**VHD 移动、复制到别处或重新挂载后会变成不受信任**，需要管理员执行 `fsutil devdrv trust D:` 重新信任（只信任自己创建的盘）。
 - 包缓存迁过去的做法见 `drive-migration-official.md` 的 Dev Drive 一节。
 
-依据：Microsoft Learn《Set up a Dev Drive on Windows 11》。
+依据：Microsoft Learn《Set up a Dev Drive on Windows 11》https://learn.microsoft.com/en-us/windows/dev-drive/ （访问于 2026-11-11）。
 
 ### 7.2 实在要加排除时（🟠 HIGH，逐项确认）
 
@@ -380,8 +382,9 @@ Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\JetBrains"
 
 **5 分钟可完成的优化**（按收益排序）：
 
-1. **电源计划**改"高性能"（管理员）
+1. **电源计划保持"平衡"**（默认推荐，见 1.1/1.3）。只有台式机用户明确要求时才切换"高性能"：
    ```cmd
+   :: 可选，台式机且用户要求时。回退：powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e（平衡）
    powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
    ```
 
@@ -395,16 +398,16 @@ Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\JetBrains"
    # 见 startup-audit.md
    ```
 
-5. **遥测服务禁用**（管理员）
-   ```cmd
-   sc config DiagTrack start= disabled && sc stop DiagTrack
-   sc config dmwappushservice start= disabled && sc stop dmwappushservice
+5. **遥测服务禁用**（管理员，用 `Set-WcoServiceStartType` 先演练再 `-Apply`，见 `services-optimization.md`）
+   ```powershell
+   Set-WcoServiceStartType -Name DiagTrack -StartType disabled          # 加 -Apply 执行
+   Set-WcoServiceStartType -Name dmwappushservice -StartType disabled   # 公司/学校管理（Intune/MDM）的电脑不要禁用
    ```
 
 **30 分钟完成的优化**：
 - 上述 + 完整自启项审计
 - 视觉效果自定义（保留哪些、禁用哪些）
-- Defender 排除进程列表
+- Defender 排除：只在 Dev Drive 不可行时，按 7.2 逐项确认（🟠 HIGH）
 - WSearch 用 Everything 替代
 
 **1 小时以上深度优化**（仅当上述做完仍感慢）：
@@ -419,8 +422,8 @@ Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\JetBrains"
 | 维度 | 优化前 | 优化后 | 验证方法 |
 |------|--------|--------|----------|
 | 开机时间 | 长 | 短 | 任务管理器 → 启动 |
-| 空闲内存占用 | 高 | 低 | `Get-Counter '\Memory\Available MBytes'` |
+| 空闲内存占用 | 高 | 低 | `(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory`（KB；不用英文计数器路径，中文系统会找不到） |
 | 进程数 | 多 | 少 | `Get-Process \| Measure-Object` |
 | 启动项数 | 多 | 少 | `Get-ScheduledTask \| Where State -ne Disabled` |
 | 后台服务数 | 多 | 少 | `Get-Service \| Where Status -eq Running \| Measure` |
-| 电源计划 | 平衡 | 高性能 | `powercfg /getactivescheme` |
+| 电源计划 | 平衡 | 平衡（台式机按需高性能） | `powercfg /getactivescheme` |
