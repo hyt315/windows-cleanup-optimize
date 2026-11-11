@@ -10,7 +10,7 @@
     跳过最耗时的两项（T2 非系统盘、T4 安装目录递归统计），用于 CI 或快速体检。
 
 .PARAMETER OutDir
-    报告输出目录，默认 $env:TEMP\wco（不往用户目录里丢文件，见踩坑 64）
+    报告输出目录，默认 $env:TEMP\wco（不往用户目录里丢文件，见 pitfalls.md 第 22 条）
 
 .EXAMPLE
     .\full_scan.ps1

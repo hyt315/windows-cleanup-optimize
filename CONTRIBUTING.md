@@ -14,11 +14,12 @@
 1. Fork 本仓库
 2. 创建分支（`git checkout -b feature/xxx` 或 `fix/xxx`）
 3. 同步改动：
-   - 新踩坑 → 在 `references/pitfalls.md` 编号段末尾（"深水区"一节之前）按编号续 +1
+   - 新踩坑 → 放进 `references/pitfalls.md` 对应主题的章节，全文编号保持连续；插在中间时顺延后面的编号，并同步改其他文档里引用的编号
    - 新模板 → 代码放 `scripts/templates/tNN-<名字>.ps1`（**UTF-8 BOM**），在 `references/scan-scripts.md` 加一节说明，并把 selftest 里的 `EXPECTED_TEMPLATE_COUNT` 加 1
    - 写操作 → 必须走 `scripts/lib/Wco.Common.psm1`（默认演练、`-Apply` 执行、自动留痕）
    - 改了软件路径 → 同步 `data/volatile-paths.json` 的 `verified_at`
-   - 新软件专项 → 在 `references/bloatware-catalog.md` 或 `references/software-uninstall.md` 对应章节追加
+   - 新流氓软件特征 → 改 `data/bloatware-catalog.json`（权威来源，填 `confidence` 和 `sources`，没有官方来源就标 `low`），再同步 `references/bloatware-catalog.md` 的摘要表
+   - 新卸载流程 → 在 `references/software-uninstall.md` 对应章节追加
 4. 跑 `python scripts/selftest.py` 和 `Invoke-Pester ./tests`，确保通过；改了 SKILL.md 再按 `evals/README.md` 跑一遍评测
 5. 用 Conventional Commits 格式写提交信息（如 `feat: add WPS update killer for v2`）
 6. 推送到你的 Fork，发起 PR
