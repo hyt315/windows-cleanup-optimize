@@ -1,5 +1,7 @@
 ﻿# 模板 17：detect-ai-model-caches（从 references/scan-scripts.md 抽出，v2.0）
 # 用法见 references/scan-scripts.md 第 17 节。
+# v2.1.2：体积改用 Measure-WcoDirectory（模型目录常被 mklink 迁到别的盘，旧写法在 5.1 下会重复计数）。
+Import-Module (Join-Path $PSScriptRoot '..\lib\Wco.Common.psm1') -Force
 
 function Find-AiDevCache {
     $aiTargets = @(
@@ -13,8 +15,8 @@ function Find-AiDevCache {
         @{ Label = "Gradle 依赖缓存"; Path = "$env:USERPROFILE\.gradle\caches" }
     )
     foreach ($t in $aiTargets) {
-        if (Test-Path $t.Path) {
-            $size = (Get-ChildItem $t.Path -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum -EA SilentlyContinue).Sum
+        if (Test-Path -LiteralPath $t.Path) {
+            $size = (Measure-WcoDirectory -Path $t.Path).Bytes
             if ($size -gt 100MB) {
                 $sizeGB = [math]::Round($size / 1GB, 2)
                 Write-Host ("[AI/Dev] {0,-22} 占用: {1,6} GB -> {2}" -f $t.Label, $sizeGB, $t.Path)

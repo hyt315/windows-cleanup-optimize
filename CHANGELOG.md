@@ -5,6 +5,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [2.1.2] - 2026-11-12
+
+小版本：修残留判定、体积统计和扫描报告里四处与安全底线不符的地方。不新增模板，不改写操作。
+
+### 修复
+- **残留不再划进第一档**：full_scan 的 T3（Roaming）和 T4（安装目录）旧版用双向子串匹配判定残留，却标 🟢 第一档，与「疑似残留先呈报、不批量处理」冲突；`Go` 会因 `Google Chrome` 被算成在用，`QQ` 会因 `QQMusic` 被算成在用。现在 T3、T4 模板和 full_scan 共用公共模块的 `Get-WcoInstalledIndex` + `Get-WcoResidualStatus`：先看已安装程序的安装目录和运行中进程，再按规范化名称比对，≤4 个字符的名称只认完全相等；对不上的一律标 🟡「疑似残留」，需人工核对或卸载后用 `Find-WcoLeftover` 打分。
+- **体积统计不再钻进 junction**：t01、t02、t03、t05、t17 仍用 `Get-ChildItem -Recurse` 统计体积，Windows PowerShell 5.1 会顺着 junction 走进去，迁到 D 盘的数据被重复算进 C 盘。统一改用 `Measure-WcoDirectory`。
+- **`Test-WcoPathUnder` 加根目录保护**：父路径是盘符根（`C:\`、`C:`）或网络共享根时返回 false。此前某个程序的 `InstallLocation` 写成 `C:\`，`Find-WcoLeftover` 就会把任意服务、目录都当成「位于其安装目录下」。该函数现已导出。
+- **失败的段不再显示成「未检测到」**：full_scan 全局 `SilentlyContinue` 会吞掉出错的段。现在每段记录新增错误数和耗时，报告新增 `[CHK] 分段执行情况`：无权限、路径不存在只计数；其他异常标 ⚠️「结果可能不全」并给出首条错误。
+- `full_scan.ps1` 头注释版本号从 v2.0.1 改为与 manifest 一致。
+
+### 测试与 CI
+- 新增 `tests/Wco.Residual.Tests.ps1`：路径包含与根目录保护、残留判定（短名、安装目录、运行中进程、名称规范化、名称比对从不给 🟢）、模板不再用 `-Recurse` 统计体积、full_scan 每段都登记状态。
+- Windows CI 的报告标记检查补上 `[EXT]` 和 `[CHK]`。
+
 ## [2.1.1] - 2026-11-11
 
 小版本：只修文档与注释里和 v2.1.0 改动对不上的地方，脚本行为不变。

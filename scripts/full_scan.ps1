@@ -18,7 +18,7 @@
 
 .NOTES
     作者：windows-cleanup-optimize 团队
-    版本：v2.0.1
+    版本：v2.1.2
     依赖：Windows 10/11 + PowerShell 5.1+ + 标准命令行工具（powercfg）
 #>
 
@@ -72,6 +72,49 @@ function Add-Finding($tpl, $type, $level, $path, $size, $lastWrite, $note) {
     })
 }
 
+# 分段状态：全局 SilentlyContinue 会把出错的段吞掉，显示成"未检测到"。每段开头调用 Enter-ScanSection，
+# 记下这段新增了多少条错误、用了多久，结尾在 [CHK] 里列出来——有异常的段，"未检测到"不能当成"没有"。
+$script:origMaxErr = (Get-Variable -Name MaximumErrorCount -Scope Global -ValueOnly)
+if ($script:origMaxErr -lt 32768) { Set-Variable -Name MaximumErrorCount -Scope Global -Value 32768 }   # 结尾还原
+$script:sections = New-Object 'System.Collections.Generic.List[object]'
+$script:curSection = $null
+function Test-MinorScanError($er) {
+    # 无权限、路径不存在这类读失败是常态，只计数；其他异常才算本段"结果可能不全"
+    $ex = if ($er -is [Exception]) { $er } else { $er.Exception }
+    if ($er -isnot [Exception] -and $er.CategoryInfo -and ([string]$er.CategoryInfo.Category -in @('PermissionDenied', 'ObjectNotFound'))) { return $true }
+    while ($ex) {
+        if ($ex -is [UnauthorizedAccessException] -or $ex -is [IO.IOException] -or $ex -is [Security.SecurityException] -or
+            $ex -is [Management.Automation.ItemNotFoundException]) { return $true }
+        $ex = $ex.InnerException
+    }
+    return $false
+}
+function Exit-ScanSection {
+    $cur = $script:curSection
+    if (-not $cur) { return }
+    $script:curSection = $null
+    $n = $global:Error.Count - $cur.ErrorStart
+    $minor = 0; $major = @()
+    for ($i = 0; $i -lt $n -and $i -lt $global:Error.Count; $i++) {
+        $er = $global:Error[$i]
+        if (Test-MinorScanError $er) { $minor++ } else { $major += $er }
+    }
+    $first = $null
+    if ($major.Count -gt 0) {
+        $last = $major[$major.Count - 1]   # $Error 新的在前，取本段最早的一条
+        $first = if ($last -is [Exception]) { $last.Message } else { [string]$last.Exception.Message }
+        if ($first.Length -gt 120) { $first = $first.Substring(0, 120) + '…' }
+    }
+    $script:sections.Add([PSCustomObject]@{
+        Id = $cur.Id; Seconds = ((Get-Date) - $cur.Start).TotalSeconds
+        Minor = $minor; Major = $major.Count; FirstError = $first
+    })
+}
+function Enter-ScanSection($id) {
+    Exit-ScanSection
+    $script:curSection = [PSCustomObject]@{ Id = $id; Start = (Get-Date); ErrorStart = $global:Error.Count }
+}
+
 Log "===== windows-cleanup-optimize 全量扫描 ====="
 Log "时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Log "机器: $env:COMPUTERNAME / $env:USERNAME"
@@ -87,6 +130,7 @@ if ($os.Version -like '10.0.1*') { Log "提示: 这是 Windows 10（微软已于
 Log ""
 
 # ===== 运行前检查（只读；只提示，不阻断扫描）=====
+Enter-ScanSection 'PRE'
 Log "=== [PRE] 运行前检查 ==="
 $pre = @()
 if (-not $isAdmin) { $pre += "非管理员：部分数据不全。修法：开始菜单搜 PowerShell → 右键「以管理员身份运行」，再执行本脚本。" }
@@ -104,6 +148,7 @@ Log "  扫描只读，可以照常用电脑；通常几分钟，盘越大越久�
 Log ""
 
 # ===== [T0] 开机耗时实测（Diagnostics-Performance 事件 100，需管理员） =====
+Enter-ScanSection 'T0'
 Log "=== [T0] 开机耗时（系统自记，最近 5 次）==="
 try {
     $boots = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 5 -ErrorAction Stop
@@ -120,6 +165,7 @@ try {
 Log ""
 
 # ===== [T9] 磁盘基准 =====
+Enter-ScanSection 'T9'
 Log "=== [T9] 磁盘基准 ==="
 Get-PSDrive -PSProvider FileSystem -EA SilentlyContinue | Where-Object { $_.Used -ne $null -and ($_.Used + $_.Free) -gt 0 } | ForEach-Object {
     $u=[math]::Round($_.Used/1GB,2); $f=[math]::Round($_.Free/1GB,2)
@@ -129,6 +175,7 @@ Get-PSDrive -PSProvider FileSystem -EA SilentlyContinue | Where-Object { $_.Used
 Log ""
 
 # ===== [T1] 用户目录分层 =====
+Enter-ScanSection 'T1'
 $layers = @(
     @{L='USERPROFILE';P=$env:USERPROFILE;ThresholdMB=30;Tpl='T1a'},
     @{L='AppData\Local';P=$env:LOCALAPPDATA;ThresholdMB=50;Tpl='T1b'},
@@ -160,6 +207,7 @@ foreach ($layer in $layers) {
 
 if ($Quick) { Log "=== [T2] 已跳过（-Quick：不递归统计非系统盘和安装目录）==="; Log "" } else {
 # ===== [T2] 非系统盘 =====
+Enter-ScanSection 'T2'
 Log "=== [T2] 非系统盘根目录 ==="
 foreach ($letter in @('D','E','F')) {
     $root = "${letter}:\"
@@ -182,6 +230,7 @@ Log ""
 }
 
 # ===== [T5] 更新包残留（A/B/C/D 四项必跑）=====
+Enter-ScanSection 'T5'
 Log "=== [T5] 更新包残留（4 项必跑）==="
 
 # T5A: AppData 下 update/updater 类
@@ -246,6 +295,7 @@ if (Test-Path -LiteralPath $tempPath) {
 Log ""
 
 # ===== [T5E] AI 模型缓存与虚拟磁盘 =====
+Enter-ScanSection 'T5E'
 Log "=== [T5E] AI 模型缓存与虚拟磁盘 ==="
 $aiTargets = @(
     @{N='Ollama Models'; P="$env:USERPROFILE\.ollama\models"; Note='Ollama本地模型，可通过OLLAMA_MODELS环境变量官方迁移D盘'},
@@ -278,48 +328,55 @@ if (Test-Path -LiteralPath $pkgDir) {
 Log ""
 
 # ===== [T3] Roaming 残留 vs 已安装 =====
+Enter-ScanSection 'T3'
 Log "=== [T3] Roaming 残留 vs 已安装列表 ==="
-$installed = @()
-Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -EA SilentlyContinue |
-    Where-Object { $_.DisplayName } | ForEach-Object { $installed += $_.DisplayName }
-Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -EA SilentlyContinue |
-    Where-Object { $_.DisplayName } | ForEach-Object { $installed += $_.DisplayName }
-Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -EA SilentlyContinue |
-    Where-Object { $_.DisplayName } | ForEach-Object { $installed += $_.DisplayName }
-$installedLower = ($installed | ForEach-Object { $_.ToLower() } | Select-Object -Unique)
+# 已安装程序 + 开始菜单快捷方式名 + 运行中进程路径，T3/T4 共用一份；判定走 Get-WcoResidualStatus（名称比对只给 🟡，不给 🟢）
+$startMenuNames = @()
+foreach ($sm in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs", "$env:ProgramData\Microsoft\Windows\Start Menu\Programs")) {
+    if ($sm -and (Test-Path -LiteralPath $sm)) {
+        $startMenuNames += @(Get-ChildItem -LiteralPath $sm -Recurse -Filter *.lnk -EA SilentlyContinue | ForEach-Object { $_.BaseName })
+    }
+}
+$installedIndex = Get-WcoInstalledIndex -Program @(Get-WcoInstalledProgram -NoSignature) -ExtraName $startMenuNames
+$runningPaths = @(Get-Process -EA SilentlyContinue | ForEach-Object { $_.Path } | Where-Object { $_ })
+$residualNote = '与已安装列表、开始菜单、运行中进程都对不上；疑似残留，需人工核对（或卸载后用 Find-WcoLeftover 打分）'
 
 Get-ChildItem -LiteralPath $env:APPDATA -Directory -Force -EA SilentlyContinue | ForEach-Object {
     $s = Get-DirSize $_.FullName   # 命中 T1c 缓存，不再遍历 Roaming
     if ($s -lt 10MB) { return }
-    $dL = $_.Name.ToLower()
-    $m = $installedLower | Where-Object { $_ -match [regex]::Escape($dL) -or $dL -match [regex]::Escape($_) } | Select-Object -First 1
-    if ($m) {
+    $st = Get-WcoResidualStatus -Name $_.Name -Path $_.FullName -Index $installedIndex -RunningPath $runningPaths
+    if ($st.Status -eq 'Installed') {
         Log ("  [✅INSTALLED] {0,-8}  {1}" -f (MB $s), $_.Name)
     } else {
-        Log ("  [🟢RESIDUAL]  {0,-8}  {1,-40}  (写 {2:yyyy-MM})" -f (MB $s), $_.Name, $_.LastWriteTime)
-        Add-Finding 'T3' 'Roaming残留' '🟢' $_.FullName $s $_.LastWriteTime.ToString('yyyy-MM') '与已安装列表不匹配'
+        Log ("  [🟡疑似残留]  {0,-8}  {1,-40}  (写 {2:yyyy-MM})" -f (MB $s), $_.Name, $_.LastWriteTime)
+        Add-Finding 'T3' 'Roaming疑似残留' '🟡' $_.FullName $s $_.LastWriteTime.ToString('yyyy-MM') $residualNote
     }
 }
 Log ""
 
 if ($Quick) { Log "=== [T4] 已跳过（-Quick：不递归统计非系统盘和安装目录）==="; Log "" } else {
 # ===== [T4] 安装目录残留 =====
+Enter-ScanSection 'T4'
 Log "=== [T4] 安装目录残留 (C:/D:/Program Files) ==="
-$knownSys = @('common files','windows nt','internet explorer','windows defender','microsoft shared','windows media player','reference assemblies','msbuild','dotnet','windows kits','windowsapps','modifiablewindowsapps','windows powershell')
+$knownSys = @('common files','windows nt','internet explorer','windows defender','windows defender advanced threat protection',
+              'microsoft shared','windows media player','windows photo viewer','windows portable devices','windows mail',
+              'windows sidebar','windows security','reference assemblies','msbuild','dotnet','windows kits','windowsapps',
+              'modifiablewindowsapps','windows powershell','windowspowershell','microsoft.net','uninstall information',
+              'microsoft update health tools','windows multimedia platform','package cache')
 $progBases2 = @("C:\Program Files", "C:\Program Files (x86)", "D:\Program Files", "D:\Program Files (x86)", "$env:LOCALAPPDATA\Programs")
 foreach ($pb in $progBases2) {
     if (-not (Test-Path -LiteralPath $pb)) { continue }
     Get-ChildItem -LiteralPath $pb -Directory -Force -EA SilentlyContinue | ForEach-Object {
-        $dL = $_.Name.ToLower()
-        if ($knownSys -contains $dL) { return }
+        if ($knownSys -contains $_.Name.ToLower()) { return }
+        if ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }   # junction：已迁走的目录，不在这里判断
         $s = Get-DirSize $_.FullName
         if ($s -lt 30MB) { return }
-        $m = $installedLower | Where-Object { $_ -match [regex]::Escape($dL) -or $dL -match [regex]::Escape($_) } | Select-Object -First 1
-        if ($m) {
+        $st = Get-WcoResidualStatus -Name $_.Name -Path $_.FullName -Index $installedIndex -RunningPath $runningPaths
+        if ($st.Status -eq 'Installed') {
             Log ("  [✅INSTALLED] {0,-8}  {1}" -f (MB $s), $_.Name)
         } else {
-            Log ("  [🟢RESIDUAL]  {0,-8}  {1,-40}  ({2})" -f (MB $s), $_.Name, $_.FullName)
-            Add-Finding 'T4' '安装目录残留' '🟢' $_.FullName $s $_.LastWriteTime.ToString('yyyy-MM-dd') '与已安装列表不匹配，需人工核对 LastWrite'
+            Log ("  [🟡疑似残留]  {0,-8}  {1,-40}  ({2})" -f (MB $s), $_.Name, $_.FullName)
+            Add-Finding 'T4' '安装目录疑似残留' '🟡' $_.FullName $s $_.LastWriteTime.ToString('yyyy-MM-dd') "$residualNote；先看目录内最近修改时间，公司名目录里可能装着别的在用软件"
         }
     }
 }
@@ -328,6 +385,7 @@ Log ""
 }
 
 # ===== [T17] 本地 AI 框架缓存 =====
+Enter-ScanSection 'T17'
 Log "=== [T17] 本地 AI / 开发框架缓存 ==="
 $aiTargets = @(
     @{L='Ollama';P="$env:USERPROFILE\.ollama\models"},
@@ -364,6 +422,7 @@ foreach ($t in $aiTargets) {
 Log ""
 
 # ===== [T11] Bloatware 进程（完整 catalog）=====
+Enter-ScanSection 'T11'
 Log "=== [T11] Bloatware 进程 ==="
 $bloat = @(
     "360safe","360sd","ZhuDongFangYu","360TSMain","QHWatchdog","360SafeClean",
@@ -387,6 +446,7 @@ if ($bhits) {
 Log ""
 
 # ===== [T10] 自启动项 =====
+Enter-ScanSection 'T10'
 Log "=== [T10] 自启动项 ==="
 # Run / RunOnce / RunOnceEx / Policies\Explorer\Run / 启动文件夹，并对上 StartupApproved（任务管理器「启动应用」开关）
 $approvedLabel = @{ Enabled = '启用'; Disabled = '已禁用'; Absent = '启用(默认)'; Unknown = '未知'; 'n/a' = '无开关' }
@@ -420,6 +480,7 @@ Log "  --- 计划任务（前 20 最近运行）---"
 Log ""
 
 # ===== [T12/T18] 服务 =====
+Enter-ScanSection 'T12/T18'
 Log "=== [T12/T18] 服务快照 ==="
 foreach ($n in @('YunDetectService','XLServicePlatform','ThunderNetwork','wpscloudsvr','AlibabaProtect')) {
     $s = Get-Service -Name $n -EA SilentlyContinue
@@ -433,6 +494,7 @@ Get-Service -EA SilentlyContinue | Where-Object { $_.Name -in $optSvcs -or $_.Na
 Log ""
 
 # ===== [T16] Shell 扩展审计 =====
+Enter-ScanSection 'T16'
 Log "=== [T16] Shell 扩展审计 ==="
 $expectedGood = @(
     'FileSyncEx','EncryptionMenu','EPP','Sharing','WorkFolders',
@@ -488,6 +550,7 @@ foreach ($u in $fUnknown) {
 Log ""
 
 # ===== [T19] WMI 持久化与快捷方式劫持审计 =====
+Enter-ScanSection 'T19'
 Log "=== [T19] WMI 持久化与快捷方式劫持审计 ==="
 # 1. WMI 永久事件订阅（__EventFilter / CommandLine / ActiveScript 消费者 / 绑定）；查询失败绝不报"干净"
 $wmi = Get-WcoWmiSubscription
@@ -531,6 +594,7 @@ if ($hijackedLnks -eq 0) { Log "  ✅ 未发现带可疑推广网址或启动参
 Log ""
 
 # ===== [T13] 内存基线 =====
+Enter-ScanSection 'T13'
 Log "=== [T13] 内存基线 ==="
 $mem = Get-CimInstance Win32_OperatingSystem
 $totGB = [math]::Round($mem.TotalVisibleMemorySize / 1MB, 2)
@@ -543,12 +607,14 @@ Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 15 |
 Log ""
 
 # ===== [T14] 电源计划 =====
+Enter-ScanSection 'T14'
 Log "=== [T14] 电源计划 ==="
 $ps = & powercfg /getactivescheme 2>$null
 Log "  当前: $ps"
 Log ""
 
 # ===== [T21] CompactOS 压缩状态 =====
+Enter-ScanSection 'T21'
 Log "=== [T21] CompactOS 压缩状态 ==="
 $compactQuery = & compact.exe /compactos:query 2>$null
 if ($compactQuery) {
@@ -560,6 +626,7 @@ if ($compactQuery) {
 Log ""
 
 # ===== [EXT] 扩展审计模板（t23/t24/t25，存在才跑）=====
+Enter-ScanSection 'EXT'
 Log "=== [EXT] 扩展审计模板 ==="
 $extTemplates = @(
     @{ L='T23 浏览器劫持审计'; F='t23-audit-browser-hijack.ps1' },
@@ -587,6 +654,7 @@ if ($extFound -eq 0) { Log "  未找到模板，跳过" }
 Log ""
 
 # ===== 自动画像反推 =====
+Enter-ScanSection 'PERSONA'
 Log "===== 画像自动反推 ====="
 $personas = @()
 # 家庭：WPS / 360 / 2345 / 腾讯管家
@@ -616,6 +684,26 @@ if ($personas.Count -gt 0) {
 }
 Log ""
 
+# ===== 分段执行情况 =====
+Exit-ScanSection
+Log "===== [CHK] 分段执行情况 ====="
+foreach ($sec in $script:sections) {
+    if ($sec.Major -gt 0) {
+        Log ("  ⚠️ [{0}] {1:N1} 秒，{2} 条异常，结果可能不全（本段的「未检测到」不代表没有）。首条：{3}" -f $sec.Id, $sec.Seconds, $sec.Major, $sec.FirstError)
+    } elseif ($sec.Minor -gt 0) {
+        Log ("  ✅ [{0}] {1:N1} 秒（{2} 处无权限或路径不存在，已跳过）" -f $sec.Id, $sec.Seconds, $sec.Minor)
+    } else {
+        Log ("  ✅ [{0}] {1:N1} 秒" -f $sec.Id, $sec.Seconds)
+    }
+}
+if ($Quick) { Log "  ⏭️ [T2] [T4] 已按 -Quick 跳过" }
+$badSections = @($script:sections | Where-Object { $_.Major -gt 0 })
+if ($badSections.Count -gt 0) {
+    $hint = if ($isAdmin) { '把这几行附在问题反馈里' } else { '先以管理员身份重跑；仍有异常，把这几行附在问题反馈里' }
+    Log "  有 $($badSections.Count) 段出现异常：$hint。"
+}
+Log ""
+
 # ===== 发现汇总（按档位）=====
 Log "===== [SUM] 发现汇总（按档位）====="
 if ($findings.Count -eq 0) {
@@ -639,5 +727,6 @@ Write-Host "===== 报告已生成 ====="
 Write-Host "路径: $report"
 Write-Host "发现数: $($findings.Count) 项"
 
-# 还原控制台编码
+# 还原控制台编码与错误记录上限
+Set-Variable -Name MaximumErrorCount -Scope Global -Value $script:origMaxErr
 Restore-ConsoleEncoding

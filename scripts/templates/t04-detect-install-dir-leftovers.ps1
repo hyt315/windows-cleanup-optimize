@@ -1,5 +1,6 @@
 ﻿# 模板 4：detect-install-dir-leftovers（从 references/scan-scripts.md 抽出，v2.1）
 # 用法见 references/scan-scripts.md 第 4 节。只读：只列出"疑似残留"，不删除任何东西。
+# v2.1.2：判定改用公共模块 Get-WcoInstalledIndex + Get-WcoResidualStatus，与 T3、full_scan 同一套规则。
 # v2.1：自带已安装程序清单（不再依赖先跑模板 3 留下的 $installedLower），真正输出结果；
 #       名称 ≤4 个字符时只认完全相等（QQ、WPS、Git 这类短名不做模糊匹配）；结果标"疑似残留"，需人工核对后再处置。
 param(
@@ -8,31 +9,15 @@ param(
 )
 Import-Module (Join-Path $PSScriptRoot '..\lib\Wco.Common.psm1') -Force
 
-function ConvertTo-NameKey {
-    # 与 Get-WcoNameMatch 相同思路的简化规范化：小写，只保留字母、数字与中日韩文字
-    param([string]$Text)
-    if (-not $Text) { return '' }
-    return ($Text.ToLower() -replace '[^\p{L}\p{Nd}]', '')
-}
-
-# 步骤 1：收集已安装应用匹配词（Uninstall 注册表 DisplayName / Publisher / 安装目录名 + 开始菜单快捷方式名）
-$programs = @(Get-WcoInstalledProgram -NoSignature)
-$installedLower = @()
-$installLocations = @()
-foreach ($p in $programs) {
-    $installedLower += $p.DisplayName
-    if ($p.Publisher) { $installedLower += $p.Publisher }
-    if ($p.InstallLocation) {
-        $loc = $p.InstallLocation.Trim().Trim('"').TrimEnd('\')
-        if ($loc) { $installLocations += $loc; $installedLower += (Split-Path -Leaf $loc) }
-    }
-}
+# 步骤 1：已安装程序 + 开始菜单快捷方式名 + 运行中进程（与 T3、full_scan 共用 Get-WcoInstalledIndex）
+$startMenuNames = @()
 foreach ($sm in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs", "$env:ProgramData\Microsoft\Windows\Start Menu\Programs")) {
-    if (Test-Path -LiteralPath $sm) {
-        Get-ChildItem -LiteralPath $sm -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object { $installedLower += $_.BaseName }
+    if ($sm -and (Test-Path -LiteralPath $sm)) {
+        $startMenuNames += @(Get-ChildItem -LiteralPath $sm -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName })
     }
 }
-$installedKeys = @($installedLower | ForEach-Object { ConvertTo-NameKey $_ } | Where-Object { $_ } | Select-Object -Unique)
+$index = Get-WcoInstalledIndex -ExtraName $startMenuNames
+$installedLower = @($index.Keys.Keys)   # 兼容旧变量名：规范化后的已安装名称
 $runningPaths = @(Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $_.Path } | Where-Object { $_ })
 
 $knownSys = @('common files','windows nt','internet explorer','windows defender','windows defender advanced threat protection',
@@ -49,23 +34,9 @@ foreach ($pb in ($Base | Where-Object { $_ } | Select-Object -Unique)) {
         $dir = $_
         if ($knownSys -contains $dir.Name.ToLower()) { return }
         if ($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }   # junction：已迁走的目录，不在这里判断
-        $prefix = $dir.FullName.TrimEnd('\') + '\'
-        # 有已安装程序的 InstallLocation 落在该目录内（或就是该目录） → 在用
-        foreach ($loc in $installLocations) {
-            if ($loc -eq $dir.FullName.TrimEnd('\') -or $loc.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return }
-        }
-        # 有正在运行的进程来自该目录 → 在用
-        foreach ($rp in $runningPaths) { if ($rp.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return } }
-        # 名称比对：≤4 个字符只认完全相等，更长的允许互相包含
-        $key = ConvertTo-NameKey $dir.Name
-        if (-not $key) { return }
-        $match = $null
-        foreach ($k in $installedKeys) {
-            if ($k -eq $key) { $match = $k; break }
-            if ([math]::Min($k.Length, $key.Length) -le 4) { continue }
-            if ($k.Contains($key) -or $key.Contains($k)) { $match = $k; break }
-        }
-        if ($match) { return }
+        # 安装目录 / 运行中进程 / 名称比对，规则见 Get-WcoResidualStatus（≤4 个字符只认完全相等）
+        $st = Get-WcoResidualStatus -Name $dir.Name -Path $dir.FullName -Index $index -RunningPath $runningPaths
+        if ($st.Status -eq 'Installed') { return }
         $m = Measure-WcoDirectory -Path $dir.FullName
         $sizeMB = [math]::Round($m.Bytes / 1MB, 1)
         if ($sizeMB -lt $MinSizeMB) { return }

@@ -32,7 +32,13 @@ It avoids "one-click cleanup" and follows these principles:
 - **Use official migration paths first.**
 - **Give every change a risk tier.** Preview it first, apply it only after you confirm, and keep an undo script.
 
-## 🆕 Latest release v2.1.0 (2026-11-11)
+## 🆕 Latest release v2.1.2 (2026-11-12)
+
+- **Leftovers are only "suspected"**: T3/T4 and the full scan now share one check (install locations and running processes first, then names; short names must match exactly). Anything unmatched is 🟡 suspected and never lands in tier 1.
+- **No double-counted sizes**: every scan template uses `Measure-WcoDirectory`, so data moved to D: through a junction is no longer counted on C:.
+- **Failed sections are visible**: the report adds `[CHK]` section status. A section that hit errors is marked ⚠️ instead of reading "nothing found", and a program whose `InstallLocation` is `C:\` no longer skews leftover scoring. See [CHANGELOG.md](CHANGELOG.md).
+
+Highlights of v2.1.0 (2026-11-11):
 
 - **Bloatware detection**: a new catalog `data/bloatware-catalog.json` (matched by publisher, signer, process, service, scheduled task and Store package, each family with a confidence level and sources) plus the T25 program inventory. Name-only matches are flagged as "suspected" with no action suggested.
 - **Uninstall that finishes the job**: new module functions such as `Invoke-WcoUninstall`, `Remove-WcoAppxPackage` and `Find-WcoLeftover`. The flow is inventory → vendor uninstaller → reboot and rescan → leftover scoring → cleanup after you confirm. Services, scheduled tasks and registry keys are exported before removal and restorable via `undo.ps1`.

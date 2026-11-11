@@ -1199,12 +1199,88 @@ function ConvertTo-WcoConfidence {
 }
 
 function Test-WcoPathUnder {
+    <#
+    $Child 是否等于 $Parent 或位于其下（按路径段比较，C:\Foo 不包含 C:\FooBar）。
+    $Parent 是盘符根（C:\、C:）或空路径时一律返回 $false：InstallLocation 写成 C:\ 的程序不能让整盘都算"在它目录下"。
+    #>
     param([string]$Child, [string]$Parent)
     if (-not $Child -or -not $Parent) { return $false }
-    $c = $Child.TrimEnd('\', '/') + '\'
-    $p = $Parent.TrimEnd('\', '/') + '\'
-    $c = $c.Replace('/', '\'); $p = $p.Replace('/', '\')
+    $c = $Child.Trim().Trim('"').Replace('/', '\').TrimEnd('\') + '\'
+    $p = $Parent.Trim().Trim('"').Replace('/', '\').TrimEnd('\') + '\'
+    if ($p -eq '\' -or $p -match '^[A-Za-z]:\\$' -or $p -match '^\\\\[^\\]+\\[^\\]+\\$') { return $false }
     return $c.StartsWith($p, [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-WcoInstalledIndex {
+    <#
+    .SYNOPSIS
+        只读：把已安装程序整理成残留比对用的索引（名称键 + InstallLocation），T3、T4 和 full_scan 共用这一份。
+    .DESCRIPTION
+        名称来源：DisplayName、Publisher、InstallLocation 的最后一级目录名，再加 -ExtraName（如开始菜单快捷方式名）。
+        名称统一经 Get-WcoNameKey 规范化。-Program 不传时读 Get-WcoInstalledProgram -NoSignature。
+    #>
+    param([object[]]$Program, [string[]]$ExtraName)
+    if (-not $PSBoundParameters.ContainsKey('Program')) { $Program = @(Get-WcoInstalledProgram -NoSignature) }
+    $keys = @{}
+    $locs = New-Object 'System.Collections.Generic.List[string]'
+    $names = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($p in @($Program)) {
+        if (-not $p) { continue }
+        foreach ($n in @((Get-WcoProp $p 'DisplayName'), (Get-WcoProp $p 'Publisher'))) { if ($n) { $names.Add([string]$n) } }
+        $loc = [string](Get-WcoProp $p 'InstallLocation')
+        if ($loc) {
+            $loc = $loc.Trim().Trim('"').Replace('/', '\').TrimEnd('\')
+            if ($loc) {
+                $locs.Add($loc)
+                $leaf = $loc.Substring($loc.LastIndexOf('\') + 1)
+                if ($leaf -and $leaf -notmatch '^[A-Za-z]:$') { $names.Add($leaf) }
+            }
+        }
+    }
+    foreach ($n in @($ExtraName)) { if ($n) { $names.Add([string]$n) } }
+    foreach ($n in $names) {
+        $k = Get-WcoNameKey $n
+        if ($k -and -not $keys.ContainsKey($k)) { $keys[$k] = $n }
+    }
+    return [pscustomobject]@{ Keys = $keys; Locations = @($locs | Select-Object -Unique) }
+}
+
+function Get-WcoResidualStatus {
+    <#
+    .SYNOPSIS
+        只读：判断一个目录是不是已卸载软件的残留。只返回 Installed（在用，✅）或 Suspect（疑似残留，🟡）。
+    .DESCRIPTION
+        名称比对永远只是筛选，不给 🟢：软件改名、公司名目录、便携版都会对不上。真正的残留结论用 Find-WcoLeftover 打分。
+        判定顺序：有已安装程序的 InstallLocation 落在该目录内（或就是它）→ 在用；有运行中进程的程序文件在该目录内 → 在用；
+        名称规范化后完全相等 → 在用；双方都长于 4 个字符且互相包含 → 在用；都不满足 → 疑似残留。
+        ≤4 个字符的名称（QQ、Go、WPS）只认完全相等，避免旧版子串匹配把 Go 当成 Google 的一部分。
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Path,
+        [Parameter(Mandatory)]$Index,
+        [string[]]$RunningPath
+    )
+    $installed = { param($why) [pscustomobject]@{ Status = 'Installed'; Level = '✅'; Reason = $why } }
+    if ($Path) {
+        foreach ($loc in @($Index.Locations)) {
+            if (Test-WcoPathUnder $loc $Path) { return (& $installed "已安装程序的安装目录在此：$loc") }
+        }
+        foreach ($rp in @($RunningPath)) {
+            if (Test-WcoPathUnder $rp $Path) { return (& $installed "有运行中的进程来自此目录：$rp") }
+        }
+    }
+    $key = Get-WcoNameKey $Name
+    if ($key) {
+        if ($Index.Keys.ContainsKey($key)) { return (& $installed "名称与已安装程序一致：$($Index.Keys[$key])") }
+        if ($key.Length -gt 4) {
+            foreach ($k in $Index.Keys.Keys) {
+                if ($k.Length -le 4) { continue }
+                if ($k.Contains($key) -or $key.Contains($k)) { return (& $installed "名称与已安装程序相近：$($Index.Keys[$k])") }
+            }
+        }
+    }
+    return [pscustomobject]@{ Status = 'Suspect'; Level = '🟡'; Reason = '与已安装列表、开始菜单、运行中进程都对不上；只是疑似残留，需人工核对' }
 }
 
 function Get-WcoLeftoverRoot {
@@ -1531,4 +1607,5 @@ Export-ModuleMember -Function Test-WcoAdmin, Start-WcoSession, Get-WcoSession, I
     ConvertTo-WcoStartupApprovedData, ConvertFrom-WcoStartupApprovedData, Get-WcoStartupApproved, Set-WcoStartupApproved, Get-WcoStartupItem,
     Disable-WcoScheduledTask, Remove-WcoScheduledTask,
     Get-WcoInstalledProgram, Invoke-WcoUninstall, Remove-WcoAppxPackage, Find-WcoLeftover, Get-WcoNameMatch,
+    Test-WcoPathUnder, Get-WcoInstalledIndex, Get-WcoResidualStatus,
     Get-WcoFileSigner, Get-WcoWmiSubscription, Get-WcoShortcutArgument, Get-WcoShellExtension, Get-WcoBloatwareCatalog
