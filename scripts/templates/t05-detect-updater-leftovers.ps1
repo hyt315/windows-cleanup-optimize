@@ -1,4 +1,4 @@
-﻿# 模板 5：detect-updater-leftovers（v2.0 由伪代码改为可运行的只读脚本）
+﻿# 模板 5：detect-updater-leftovers（v2.0 由伪代码改为可运行的只读脚本；v2.1.2 体积改用 Measure-WcoDirectory）
 # 用法见 references/scan-scripts.md 第 5 节。只读：不删除、不移动任何文件。
 param(
     [int]$AppDataMinMB = 5,
@@ -6,11 +6,12 @@ param(
     [int]$DownloadMinMB = 50
 )
 
+Import-Module (Join-Path $PSScriptRoot '..\lib\Wco.Common.psm1') -Force
+
 function Get-SizeMB([string]$Path) {
-    $sum = (Get-ChildItem $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
-            Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
-            Measure-Object Length -Sum).Sum
-    if ($null -eq $sum) { 0 } else { [math]::Round($sum / 1MB, 1) }
+    # v2.1.2：改用 Measure-WcoDirectory（5.1 下 Get-ChildItem -Recurse 会钻进 junction 重复计数）
+    $m = Measure-WcoDirectory -Path $Path
+    [math]::Round($m.Bytes / 1MB, 1)
 }
 
 $rows = @()
