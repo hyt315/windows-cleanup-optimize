@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""windows-cleanup-optimize 自测脚本（v2.0）
+"""windows-cleanup-optimize 自测脚本（v2.2）
 
 覆盖项：
 1. SKILL.md frontmatter 合法、正文 < 500 行、description ≤ 1024 字符
-2. references 手册齐全，SKILL.md 引用的每个 references/*.md 都存在
+2. references 手册齐全，SKILL.md / README*.md 引用的本地相对路径都存在
 3. 25 个模板脚本齐全，scan-scripts.md 里的模板链接都能找到文件
 4. 文档里手写的"N 个模板"必须等于实际数量（防止数字漂移）
 5. 所有 .ps1 / .psm1 必须带 UTF-8 BOM（Windows PowerShell 5.1 读中文必需）
-6. 内容级深度断言（防止误删关键知识点）
+6. 内容级深度断言（防止误删关键知识点，校验 pitfalls 1..N 连续编号）
 7. data/volatile-paths.json 时效提醒（超期只警告，不失败）
 8. evals/*.json 结构合法
 9. AST 语法门禁：PowerShell Parser（没装 PowerShell 时跳过并标 SKIP）+ Python ast
@@ -61,6 +61,7 @@ REQUIRED_REFS = (
 MODULE_FUNCTIONS = (
     "Test-WcoAdmin", "Start-WcoSession", "Add-WcoChange", "Export-WcoUndo",
     "Get-WcoRecycleBinPolicy", "Invoke-WcoRecycle", "Set-WcoServiceStartType", "Set-WcoRegistryValue",
+    "Get-WcoStartupApprovedGhost",
 )
 
 WARNINGS: list[str] = []
@@ -114,7 +115,17 @@ def validate(root: Path) -> str:
         if not (root / link).is_file():
             return f"scan-scripts.md 链接的模板不存在: {link}"
 
-    # 2b. 文档里手写的模板数量必须与实际一致
+    # 2b. README 本地链接真实存在性与文档内手写模板数量校验
+    for rdoc_name in ("README.md", "README.en.md"):
+        rdoc = root / rdoc_name
+        if rdoc.is_file():
+            for raw_link in re.findall(r"\[[^\]]+\]\(([^)]+)\)", rdoc.read_text(encoding="utf-8")):
+                link = raw_link.strip()
+                if not link or link.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                rel = link.split("#", 1)[0].split("?", 1)[0]
+                if rel and not (root / rel).exists():
+                    return f"{rdoc_name} 引用了不存在的本地路径: {raw_link}"
     for doc in [root / "SKILL.md", root / "README.md", root / "README.en.md", scan]:
         if doc.is_file():
             for n in re.findall(r"(\d+) ?个模板|(\d+) templates", doc.read_text(encoding="utf-8")):
@@ -172,13 +183,15 @@ def validate(root: Path) -> str:
     if not any(not t["should_trigger"] for t in trig):
         return "triggers.json 至少要有一条不应触发的反例"
 
-    # 3. 踩坑条目数断言
+    # 3. 踩坑条目数与连续编号断言
     pitfalls = root / "references" / "pitfalls.md"
     if pitfalls.is_file():
         pit_text = pitfalls.read_text(encoding="utf-8")
         nums = [int(n) for n in re.findall(r"(?m)^(\d+)\. \*\*", pit_text)]
-        if not nums or max(nums) < 70:
-            return "pitfalls.md 踩坑条目不足（v2.1 按主题重排后应至少 70 条）"
+        if not nums or max(nums) < 80:
+            return "pitfalls.md 踩坑条目不足（v2.2 应至少 80 条）"
+        if nums != list(range(1, len(nums) + 1)):
+            return f"pitfalls.md 踩坑编号不连续或存在重号：{nums}"
     else:
         return "references/pitfalls.md 不存在"
 

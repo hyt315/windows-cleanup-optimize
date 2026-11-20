@@ -139,6 +139,8 @@ DISM /Online /Cleanup-Image /StartComponentCleanup   # 清理组件存储（需�
 | **Gradle / Android SDK** | `GRADLE_USER_HOME` / `ANDROID_HOME` | 设用户环境变量 `GRADLE_USER_HOME=D:\gradle-cache`，`ANDROID_HOME=D:\AndroidSDK` | [Gradle 官方配置](https://docs.gradle.org/current/userguide/directory_layout.html) |
 | **Git for Windows** | `HOME` 环境变量 | 设用户环境变量 `HOME=D:\git-home` | [git-config 官方](https://git-scm.com/docs/git-config) |
 | **JetBrains IDE** | `idea.properties` 重定位 | 复制 `<IDE>\bin\idea.properties`，改 `idea.config.path` / `idea.system.path` / `idea.plugins.path` 到 D 盘 | [Tuning the IDE](https://www.jetbrains.com/help/idea/tuning-the-ide.html) |
+| **LM Studio 本地模型** | 应用内 Models 目录或设置 | 在 LM Studio 设置中修改模型存储目录到 D 盘（默认位于 `%USERPROFILE%\.lmstudio\models`） | [LM Studio 文档](https://lmstudio.ai/docs) |
+| **2025–2026 AI IDE & Agent 家族（Cursor / Windsurf / Antigravity / Claude Code / WorkBuddy / DoubaoWork / CatPaw / CodeArts）** | 多为 `%USERPROFILE%\.<agent>` 与 `%APPDATA%\<IDE>\User\workspaceStorage` | 用 `t17-detect-ai-model-caches.ps1` 先盘点占用并结合 `*-updater\pending`（`t05`）清掉旧安装包；仍需使用但无官方迁移项时按 `mklink-migration.md` 预检处理 | 见 `data/volatile-paths.json` 与 `migration-cases.md` |
 
 ### 3.3b 开发者优先：包缓存放 Dev Drive（v2.0，微软官方推荐）
 

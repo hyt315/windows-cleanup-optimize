@@ -241,6 +241,20 @@ DNS over HTTPS 加密 DNS 查询——避免 ISP / 公共 WiFi 监听与域名�
 
 **Win10**：需改注册表或装第三方客户端。
 
+### 4.4 代理/VPN 退出后断网、虚拟网卡路由抢占与笔记本 Wi-Fi 电池节能排查（v2.2）
+
+当用户反馈**"关掉 VPN/代理就打不开网页"、"有时点击网页很卡"**时，模板 23（`t23-audit-browser-hijack.ps1`）会自动核查以下 4 项常见根因：
+
+1. **残留本地死代理（WinINet `ProxyEnable=1`）**：代理客户端异常退出后未关闭系统代理，浏览器仍指向无监听的 `127.0.0.1:<端口>`。恢复系统代理后应同步 P/Invoke 调用 `wininet.dll!InternetSetOption`（选项 39/37）与 `dnsapi.dll!DnsFlushResolverCache()` 通知系统句柄即时生效（仅改注册表会存在延迟）。
+2. **虚拟网卡默认网关 / 低跃点数抢占（🟡 MEDIUM）**：VMware NAT（`VMnet8`）或遗留 `TAP-Windows` / `QMTAP` 虚拟网卡如果配有默认网关（`0.0.0.0/0`）或低 `InterfaceMetric`，关闭代理后默认路由会被黑洞网关接管。正确处理：清除虚拟网卡上的默认网关并设高跃点数（如 `Set-NetIPInterface -InterfaceMetric 500`）；卸载已闲置的 `QMTAP`/`TAP-Windows` 幽灵设备（`pnputil /remove-device`）。
+3. **Edge `SleepingTabsTimeout` 策略过短（🟡 MEDIUM）**：若发现 `HKLM\SOFTWARE\Policies\Microsoft\Edge\SleepingTabsTimeout` 被设为极小值（如 `15` 秒），切换标签后页面迅速冻结导致点击恢复缓慢，可调整为 `900`（15 分钟）或交由默认管理（先备份策略值）。
+4. **笔记本电池模式无线网卡节能过深（🟢 LOW）**：部分 OEM 电源方案在电池（DC）模式下把无线适配器"节能模式"（GUID `12bbebe6-58d6-4636-95bb-3217ef867c1a`）设为 `2`（中等节能）或 `3`（最高节能），建议改为 `1`（低节能）以降低网页首包卡顿：
+   ```cmd
+   powercfg /setdcvalueindex SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 1
+   powercfg /setactive SCHEME_CURRENT
+   ```
+5. **IPv6 直连泄漏评估**：仅在用户明确排查 VPN 仅接管 IPv4 且导致双栈网页泄漏时，才按用户确认评估禁用主网卡 `ms_tcpip6` 绑定（`Disable-NetAdapterBinding -ComponentID ms_tcpip6`）；常规用户保持默认。
+
 ---
 
 ## 五、文件系统优化

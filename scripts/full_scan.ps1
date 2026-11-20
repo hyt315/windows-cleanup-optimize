@@ -18,7 +18,7 @@
 
 .NOTES
     作者：windows-cleanup-optimize 团队
-    版本：v2.1.2
+    版本：v2.2.0
     依赖：Windows 10/11 + PowerShell 5.1+ + 标准命令行工具（powercfg）
 #>
 
@@ -262,10 +262,11 @@ foreach ($pb in $progBases) {
     }
 }
 
-# T5C: 系统级缓存
+# T5C: 系统级与 Win11 24H2 Recall 缓存
 $sysDirs = @(
     @{N='Win Update Download';P='C:\Windows\SoftwareDistribution\Download'},
     @{N='Win Update DeliveryOpt';P='C:\Windows\SoftwareDistribution\DeliveryOptimization'},
+    @{N='Win11 Recall Snapshots (UKG)';P="$env:LOCALAPPDATA\CoreAIPlatform.00\UKG"},
     @{N='NVIDIA';P='C:\NVIDIA'},
     @{N='AMD';P='C:\AMD'},
     @{N='Intel';P='C:\Intel'}
@@ -389,13 +390,25 @@ Enter-ScanSection 'T17'
 Log "=== [T17] 本地 AI / 开发框架缓存 ==="
 $aiTargets = @(
     @{L='Ollama';P="$env:USERPROFILE\.ollama\models"},
+    @{L='LM Studio';P="$env:USERPROFILE\.lmstudio\models"},
     @{L='HuggingFace';P="$env:USERPROFILE\.cache\huggingface"},
     @{L='PyTorch 权重缓存';P="$env:USERPROFILE\.cache\torch"},
     @{L='uv 包缓存';P="$env:LOCALAPPDATA\uv\cache"},
     @{L='Android AVD 镜像';P="$env:USERPROFILE\.android\avd"},
+    @{L='Cursor WorkspaceStorage';P="$env:APPDATA\Cursor\User\workspaceStorage"},
+    @{L='Windsurf WorkspaceStorage';P="$env:APPDATA\Windsurf\User\workspaceStorage"},
     @{L='Trae-CN 隐藏';P="$env:USERPROFILE\.trae-cn"},
     @{L='TRAE SOLO CN';P="$env:APPDATA\TRAE SOLO CN"},
-    @{L='WorkBuddy 数据';P="$env:LOCALAPPDATA\Programs\WorkBuddy"},
+    @{L='WorkBuddy 主目录';P="$env:USERPROFILE\.workbuddy"},
+    @{L='WorkBuddy AI';P="$env:USERPROFILE\.workbuddy-ai"},
+    @{L='WorkBuddy 安装';P="$env:LOCALAPPDATA\Programs\WorkBuddy"},
+    @{L='CatPaw (.meituan-catpaw)';P="$env:USERPROFILE\.meituan-catpaw"},
+    @{L='DoubaoWork';P="$env:LOCALAPPDATA\DoubaoWork"},
+    @{L='DeepSeek Harness (.dsh)';P="$env:USERPROFILE\.dsh"},
+    @{L='MiniMax';P="$env:USERPROFILE\.minimax"},
+    @{L='Mavis';P="$env:USERPROFILE\.mavis"},
+    @{L='CodeArts';P="$env:USERPROFILE\.codearts"},
+    @{L='CodeArts Doer';P="$env:USERPROFILE\.codeartsdoer"},
     @{L='Qoder 国际';P="$env:APPDATA\Qoder"},
     @{L='QoderWork CN';P="$env:APPDATA\QoderWork CN"},
     @{L='QoderCN';P="$env:APPDATA\QoderCN"},
@@ -403,6 +416,7 @@ $aiTargets = @(
     @{L='Qoder CN stable';P="$env:APPDATA\com.qodercn.app.stable"},
     @{L='OpenCode';P="$env:LOCALAPPDATA\Programs\OpenCode"},
     @{L='Antigravity';P="$env:LOCALAPPDATA\Programs\antigravity"},
+    @{L='Claude Code';P="$env:USERPROFILE\.claude"},
     @{L='Codex CLI';P="$env:USERPROFILE\.codex"},
     @{L='Gemini CLI';P="$env:USERPROFILE\.gemini"},
     @{L='CherryStudio';P="$env:USERPROFILE\.cherrystudio"},
@@ -411,7 +425,7 @@ $aiTargets = @(
     @{L='本地 Python';P="$env:LOCALAPPDATA\Programs\Python"}
 )
 foreach ($t in $aiTargets) {
-    if (Test-Path -LiteralPath $t.P) {
+    if ($t.P -and (Test-Path -LiteralPath $t.P)) {
         $s = Get-DirSize $t.P
         if ($s -ge 5MB) {
             Log ("  [T17] {0,-8}  {1,-30}  {2}" -f (MB $s), $t.L, $t.P)
@@ -433,8 +447,20 @@ $bloat = @(
     "360Desktop","360DesktopLite","KingsoftDesktop","MojingWallpaper","HaoZhuoDao",
     "360se","360chrome","QQBrowser","SogouExplorer","UCBrowser",
     "FlashCenter","FlashHelperService","TodayHot","NewsPush","HotNews",
-    "KuaiZip","BaiduNetdisk","Meitu"
+    "KuaiZip","BaiduNetdisk","Meitu","edrAgent","Edrservice"
 )
+$catProcs = @()
+try {
+    $cat = Get-WcoBloatwareCatalog
+    foreach ($fam in @($cat.families)) {
+        foreach ($pr in @($fam.processes)) {
+            if ($pr) { $catProcs += ([string]$pr -replace '(?i)\.exe$', '') }
+        }
+    }
+    if ($catProcs.Count -gt 0) { $bloat = @($catProcs + $bloat | Select-Object -Unique) }
+} catch {
+    Write-Verbose "加载 bloatware-catalog.json 失败，使用内置名单：$($_.Exception.Message)"
+}
 $whitelist = @("DeskGo","DesktopMgr64","Steam","wallpaper32","WallpaperEngine","HuorongEs")
 $bhits = Get-Process -EA SilentlyContinue | Where-Object { $bloat -contains $_.ProcessName -and $_.ProcessName -notin $whitelist }
 if ($bhits) {
@@ -466,23 +492,30 @@ if ($startupItems.Count -eq 0) {
     $activeCnt = @($startupItems | Where-Object { $_.Approved -ne 'Disabled' }).Count
     Log ("  合计 {0} 项，其中生效 {1} 项（已在任务管理器禁用的 {2} 项不算生效）" -f $startupItems.Count, $activeCnt, ($startupItems.Count - $activeCnt))
 }
-Log "  --- 计划任务（前 20 最近运行）---"
-@(Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.State -ne 'Disabled' } | ForEach-Object {
+$saGhosts = @(Get-WcoStartupApprovedGhost)
+if ($saGhosts.Count -gt 0) {
+    Log ("  [StartupApproved 幽灵] 共 {0} 项（对应的 Run 值或启动文件已不存在）" -f $saGhosts.Count)
+    foreach ($sg in ($saGhosts | Select-Object -First 10)) {
+        Log ("    幽灵: [{0}] {1} ({2})" -f $sg.Scope, $sg.Name, $sg.State)
+    }
+}
+Log "  --- 第三方计划任务（非 \Microsoft\*，前 20 最近运行）---"
+@(Get-ScheduledTask -EA SilentlyContinue | Where-Object { $_.State -ne 'Disabled' -and $_.TaskPath -notlike '\Microsoft\*' } | ForEach-Object {
     $info = $_ | Get-ScheduledTaskInfo -EA SilentlyContinue
     $lrt = $null
     if ($info -and $info.LastRunTime -and ([datetime]$info.LastRunTime).Year -ge 2000) { $lrt = [datetime]$info.LastRunTime }
     $last = if ($lrt) { $lrt.ToString('yyyy-MM-dd HH:mm') } else { '从未' }
     # 从未运行的任务 LastRunTime 常为 1999-11-30，按"从未"处理并排在最后
     $sortKey = if ($lrt) { $lrt } else { [datetime]::MinValue }
-    [PSCustomObject]@{ Name=$_.TaskName; State=$_.State; Last=$last; SortKey=$sortKey }
+    [PSCustomObject]@{ Name="$($_.TaskPath)$($_.TaskName)"; State=$_.State; Last=$last; SortKey=$sortKey }
 }) | Sort-Object SortKey -Descending | Select-Object -First 20 |
-    ForEach-Object { Log ("    {0,-12} {1,-50} 上次 {2}" -f $_.State, $_.Name, $_.Last) }
+    ForEach-Object { Log ("    {0,-12} {1,-55} 上次 {2}" -f $_.State, $_.Name, $_.Last) }
 Log ""
 
 # ===== [T12/T18] 服务 =====
 Enter-ScanSection 'T12/T18'
 Log "=== [T12/T18] 服务快照 ==="
-foreach ($n in @('YunDetectService','XLServicePlatform','ThunderNetwork','wpscloudsvr','AlibabaProtect')) {
+foreach ($n in @('YunDetectService','XLServicePlatform','ThunderNetwork','wpscloudsvr','AlibabaProtect','Edrservice','npggsvc','WeGameProcService')) {
     $s = Get-Service -Name $n -EA SilentlyContinue
     if ($s) { Log ("  [T18 顽固] {0,-18} 状态={1,-10} 启动={2}" -f $n, $s.Status, $s.StartType) }
 }
@@ -496,56 +529,21 @@ Log ""
 # ===== [T16] Shell 扩展审计 =====
 Enter-ScanSection 'T16'
 Log "=== [T16] Shell 扩展审计 ==="
-$expectedGood = @(
-    'FileSyncEx','EncryptionMenu','EPP','Sharing','WorkFolders',
-    'New','NvCplDesktopContext','EnhancedStorageShell',
-    'Open With kwpsshellext','Open With qingshellext',
-    'QingNseContextMenu','qkdesktopshellext',
-    'CF444751-60FC-48B8-AC0F-363063EB2A9E',
-    # === Win11 新增系统组件（v1.5.0 补充）===
-    'Previous Versions','PreviousVersions','Portable Devices','PortableDevices',
-    'CD Burning','CDBurning','Search','ModernSharing','PinTo','PinToStart',
-    'Microsoft','OneDrive','Defender','Windows','Shell','Explorer'
-)
 $bloatPatterns = @('360','2345','HaoZip','KuaiZip','FlashCenter',
                    'SogouService','QQPCMgr','LDSMain','BaiduNetdisk',
                    'MojingWallpaper','HaoZhuoDao','TodayHot','NewsPush',
                    'Meitu','AlibabaProtect','KSafe','KXETray')
-$roots = @(
-    'HKLM:\Software\Classes\Directory\shellex\ContextMenuHandlers',
-    'HKLM:\Software\Classes\Directory\Background\shellex\ContextMenuHandlers',
-    'HKLM:\Software\Classes\Drive\shellex\ContextMenuHandlers',
-    'HKCU:\Software\Classes\Directory\Background\shellex\ContextMenuHandlers',
-    'HKCU:\Software\Classes\Directory\shellex\ContextMenuHandlers'
-)
-$allClsids = @()
-foreach ($root in $roots) {
-    Get-ChildItem $root -EA SilentlyContinue | ForEach-Object {
-        $allClsids += (Split-Path $_.PSPath -Leaf)
-    }
+$shellExts = @(Get-WcoShellExtension -BloatPattern $bloatPatterns)
+$fGood = @($shellExts | Where-Object { $_.Category -eq 'Microsoft' })
+$fThird = @($shellExts | Where-Object { $_.Category -eq 'ThirdParty' })
+$fBloat = @($shellExts | Where-Object { $_.Category -eq 'Bloat' })
+$fUnknown = @($shellExts | Where-Object { $_.Category -eq 'Unknown' })
+Log ("  微软签名: {0}  第三方已签名: {1}  疑似 bloatware: {2}  未知/未签名: {3}" -f $fGood.Count, $fThird.Count, $fBloat.Count, $fUnknown.Count)
+foreach ($b in $fBloat) {
+    Log ("    [疑似Bloat] {0} {1} -> {2}" -f $b.Handler, $b.Name, $b.Impl)
 }
-$allClsids = $allClsids | Where-Object { $_ -match '^\{[\w-]+\}$' } | Select-Object -Unique
-$fGood = 0; $fBloat = 0; $fUnknown = @()
-foreach ($c in $allClsids) {
-    $nm = (Get-ItemProperty "HKLM:\Software\Classes\$c" -EA SilentlyContinue)."(default)"
-    $inproc = (Get-ItemProperty "HKLM:\Software\Classes\$c\InprocServer32" -EA SilentlyContinue)."(default)"
-    $locsvr = (Get-ItemProperty "HKLM:\Software\Classes\$c\LocalServer32" -EA SilentlyContinue)."(default)"
-    $impl  = if ($inproc) { $inproc } elseif ($locsvr) { $locsvr } else { '?' }
-    $isGood = $false
-    foreach ($g in $expectedGood) {
-        if ($c -like "*$g*" -or "$nm" -like "*$g*") { $isGood = $true; break }
-    }
-    $isBloat = $false
-    foreach ($b in $bloatPatterns) {
-        if ($impl -match $b -or "$nm" -match $b) { $isBloat = $true; break }
-    }
-    if ($isBloat) { $fBloat++ }
-    elseif ($isGood) { $fGood++ }
-    else { $fUnknown += [PSCustomObject]@{ CLSID=$c; Name=$nm; Impl=$impl } }
-}
-Log ("  良性: {0}  疑似 bloatware: {1}  未知/待定: {2}" -f $fGood, $fBloat, $fUnknown.Count)
-foreach ($u in $fUnknown) {
-    Log ("    未知: {0,-40} {1,-30} -> {2}" -f $u.CLSID, $u.Name, $u.Impl)
+foreach ($u in ($fUnknown | Select-Object -First 20)) {
+    Log ("    [未知] {0,-38} {1,-26} -> {2}" -f $u.Handler, $u.Name, $u.Impl)
 }
 Log ""
 
@@ -629,9 +627,9 @@ Log ""
 Enter-ScanSection 'EXT'
 Log "=== [EXT] 扩展审计模板 ==="
 $extTemplates = @(
-    @{ L='T23 浏览器劫持审计'; F='t23-audit-browser-hijack.ps1' },
-    @{ L='T24 扩展自启动审计'; F='t24-audit-autostart-extended.ps1' },
-    @{ L='T25 已安装程序清单'; F='t25-inventory-programs.ps1' }
+    @{ L='T23 浏览器劫持审计'; F='t23-audit-browser-hijack.ps1'; Args=@{} },
+    @{ L='T24 扩展自启动审计'; F='t24-audit-autostart-extended.ps1'; Args=@{} },
+    @{ L='T25 已安装程序清单'; F='t25-inventory-programs.ps1'; Args=@{ NoSignature = $true } }
 )
 $extFound = 0
 foreach ($et in $extTemplates) {
@@ -641,11 +639,18 @@ foreach ($et in $extTemplates) {
     Log "  --- $($et.L) ($($et.F)) ---"
     $t0 = Get-Date
     try {
-        $out = @(& $tp)
-        Log ("    完成（屏幕明细见上方）：返回 {0} 个结果对象，用时 {1:N1} 秒" -f $out.Count, ((Get-Date) - $t0).TotalSeconds)
-        $preview = @($out | Select-Object -First 3 | ForEach-Object { if ($_ -is [string]) { $_ } else { ($_ | Out-String -Width 160).Trim() } })
-        foreach ($pl in $preview) { foreach ($ln in ($pl -split "`r?`n" | Select-Object -First 4)) { Log "    $ln" } }
-        if ($out.Count -gt 3) { Log "    …（其余 $($out.Count - 3) 条见该模板单独运行的输出）" }
+        $extArgs = $et.Args
+        $rawOut = @(& $tp @extArgs 6>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.InformationRecord] -and $_.MessageData) { [string]$_.MessageData }
+            elseif ($_ -is [string]) { $_ }
+            else { ($_ | Out-String -Width 160).Trim() }
+        })
+        $linesOut = @($rawOut | ForEach-Object { $_ -split "`r?`n" } | Where-Object { $_.Trim() -ne '' })
+        Log ("    完成：采集 {0} 行诊断输出，用时 {1:N1} 秒" -f $linesOut.Count, ((Get-Date) - $t0).TotalSeconds)
+        $focusLines = @($linesOut | Where-Object { $_ -match '^(===|== )|\[(关注|高|中|待核实|警告|未检查|闲置|StartupApproved幽灵)\]|^\s+- |需关注|已盘点|合计|关注 ' })
+        if ($focusLines.Count -eq 0) { $focusLines = @($linesOut | Select-Object -First 15) }
+        foreach ($ln in ($focusLines | Select-Object -First 40)) { Log "    $ln" }
+        if ($focusLines.Count -gt 40) { Log "    …（其余 $($focusLines.Count - 40) 行关注/汇总输出可单独运行 $($et.F) 查看完整明细）" }
     } catch {
         Log "    ⚠️  运行失败：$($_.Exception.Message)"
     }
@@ -653,7 +658,7 @@ foreach ($et in $extTemplates) {
 if ($extFound -eq 0) { Log "  未找到模板，跳过" }
 Log ""
 
-# ===== 自动画像反推 =====
+# ===== [PERSONA] 画像自动反推 =====
 Enter-ScanSection 'PERSONA'
 Log "===== 画像自动反推 ====="
 $personas = @()
@@ -663,11 +668,12 @@ if ($wpsFamily) { $personas += '🏠 家庭用户（装了 WPS/360/2345/腾讯�
 # 开发者：直接看常见开发工具目录是否存在（不只看残留列表）
 $devMarkers = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code", "$env:USERPROFILE\.vscode", "$env:LOCALAPPDATA\JetBrains",
                 "$env:LOCALAPPDATA\Programs\Python", "$env:APPDATA\npm", "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.gradle",
-                "$env:ProgramFiles\Docker", "$env:USERPROFILE\.codex", "$env:USERPROFILE\.gemini")
+                "$env:ProgramFiles\Docker", "$env:USERPROFILE\.codex", "$env:USERPROFILE\.gemini", "$env:USERPROFILE\.claude",
+                "$env:APPDATA\Cursor", "$env:APPDATA\Windsurf")
 $devPaths = $devMarkers | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
-if ($devPaths) { $personas += '👨‍💻 开发者（装了 VS Code/JetBrains/Python 等开发工具）' }
+if ($devPaths) { $personas += '👨‍💻 开发者（装了 VS Code/JetBrains/Cursor/Python 等开发工具）' }
 # AI 创作者 / 虚拟化用户：本地大模型、WSL2、Docker、AVD 镜像
-$aiPaths = $findings | Where-Object { $_.Type -eq 'AI与虚拟化缓存' -or $_.Path -match 'ollama|huggingface|modelscope|\.android\\avd|\.vhdx' }
+$aiPaths = $findings | Where-Object { $_.Type -in @('AI与虚拟化缓存','AI框架缓存') -or $_.Path -match 'ollama|huggingface|modelscope|workbuddy|\.android\\avd|\.vhdx' }
 if ($aiPaths) { $personas += '🤖 AI创作者/虚拟化用户（存在本地大模型/WSL/Docker/AVD虚拟磁盘）' }
 # 游戏玩家
 $steamProc = Get-Process Steam -EA SilentlyContinue

@@ -10,7 +10,7 @@
 4. [自启动](#四自启动)（42–50）
 5. [卸载与流氓软件](#五卸载与流氓软件)（51–56）
 6. [迁移](#六迁移)（57–65）
-7. [性能与内存误区](#七性能与内存误区)（66–76）
+7. [性能与内存误区](#七性能与内存误区)（66–82）
 
 ---
 
@@ -201,3 +201,15 @@
 75. **DoH（DNS over HTTPS）可能让解析变慢。** 改之前后各测一次常用网站的打开速度，变慢就改回。
 
 76. **很多"优化"收益为零而风险不小。** 禁用保留存储、搜索索引、IPv6、合并 svchost、把服务全部改手动——副作用难排查（更新失败、搜索失效、网络问题），本技能不做。
+
+77. **代理或 VPN 关闭后网页打不开：系统代理未撤销（指向死端口）、WinINet 缓存未刷新，或 IPv6 双栈泄漏。** 不少系统代理模式客户端异常退出后会把 `HKCU\...\Internet Settings\ProxyEnable` 留在 `1` 并指向已经无人监听的 `127.0.0.1:<端口>`；仅改注册表而不通知系统句柄也会滞后，恢复后应同步调用 `wininet.dll!InternetSetOption`（39 / 37）与 `DnsFlushResolverCache()` 通知浏览器生效；若代理仅接管 IPv4 且用户排查确认存在 IPv6 直连泄漏，再按需评估主网卡 `ms_tcpip6` 绑定。详见 `performance-tuning.md` §4.4。
+
+78. **虚拟机网卡（VMnet8 / VirtualBox）配置了错误默认网关或过低跃点数，导致关掉 VPN 后流量被抢占断网。** VMware NAT（`VMnet8`）或已卸载留下的 `TAP-Windows`/`QMTAP` 若带有默认网关（如 `192.168.x.2`）或较低的 `InterfaceMetric`，开启代理时流量还能经本地代理转发，一旦关闭 VPN 直连就被黑洞网关吞掉。修复：清除虚拟网卡上的默认网关，并将虚拟网卡跃点数调高（如 `Metric=500`）。
+
+79. **浏览器点击网页/切标签慢：Edge `SleepingTabsTimeout` 策略被设为极短秒数（如 15 秒），或笔记本电池模式下无线网卡处于"中等/最高节能"。** `HKLM\SOFTWARE\Policies\Microsoft\Edge\SleepingTabsTimeout = 15` 会让刚切换离开的标签页 15 秒即休眠重载；同时笔记本用电池时，电源方案里的无线适配器节能索引（GUID `12bbebe6-58d6-4636-95bb-3217ef867c1a`）设为 2/3（中等/最高节能）也会让网页首包明显延迟（建议直流电池调为 `1` 低节能）。
+
+80. **软件卸载后仍后台常驻：独立安全/反作弊子组件（抖音安全组件 `edrAgent`/`Edrservice`、WeGame `WeGameProcService`/`WeGameDriver764`、GameGuard `npggsvc`）、孤儿计划任务与 `StartupApproved` 幽灵记录。** 这类组件往往注册成独立服务、独立卸载条目或隐藏内核驱动，主程序卸载时不会连带清掉；需用 T24 检出目标文件已缺失的任务/服务/驱动，并核对 `StartupApproved` 幽灵记录与未连接到设备的 `TAP-Windows`/`QMTAP` 虚拟网卡。
+
+81. **自建开机/登录计划任务每次开机弹出黑色终端框：直接运行 `powershell.exe`/`pwsh.exe` 会先由 `conhost.exe` 分配控制台窗口，改用 `wscript.exe //B` 启动 `.vbs` 包装器可彻底零窗口运行。** 即使给 PowerShell 传 `-WindowStyle Hidden`，触发瞬间仍会闪出黑框（`pwsh.exe` 空载内存常达 140 MB）；通过 `wscript.exe //B //NoLogo wrapper.vbs` 调用 `WScript.Shell.Run ..., 0, False` 并配合互斥锁防重入，可做到零黑框且内存仅约 25 MB。详见 `startup-audit.md`。
+
+82. **Windows 11 24H2 Recall 快照（`%LOCALAPPDATA%\CoreAIPlatform.00\UKG`）与 2025–2026 AI Agent 隐藏目录（`.workbuddy`、`.zcode`、`.meituan-catpaw`、`DoubaoWork`、`*-updater`）静默占用数十 GB。** Copilot+ PC 的 Recall 快照与新一代 AI 编程助手的工作区/更新器缓存大多不在旧版磁盘扫描视野内；清理前须与用户确认哪些 AI 工具仍在使用，优先删除 `*-updater\pending` 已装完安装包并通过官方设置关闭 Recall 快照。

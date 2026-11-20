@@ -223,6 +223,10 @@ foreach ($t in $hits) { Disable-WcoScheduledTask -TaskPath $t.TaskPath -TaskName
 
 > 删除任务（`Remove-WcoScheduledTask`，先导出 XML、拒绝 `\Microsoft\` 下的任务）只用于卸载后的残留清理，见 `software-uninstall.md`。
 
+**自建后台守护任务的零窗口实践（v2.2）**：若用户自己写了登录触发的 PowerShell 后台守护脚本，直接让计划任务启动 `powershell.exe`/`pwsh.exe` 每次都会闪出终端黑框（即使用 `-WindowStyle Hidden` 也会先创建控制台进程）。正确做法是用 `wscript.exe //B //NoLogo "<脚本>\wrapper.vbs"` 静默启动（`CreateObject("WScript.Shell").Run "...", 0, False`），配合 `powershell.exe` + 命名互斥锁（`Threading.Mutex`）防重入，可做到零弹窗且空载内存大幅降低。
+
+**StartupApproved 幽灵记录检测（v2.2）**：软件卸载时只删了 `Run` 键值或启动文件夹快捷方式，但往往会在 `...\Explorer\StartupApproved\Run*` 下遗留历史开关记录。运行 `t10-audit-startup.ps1` / `t24-audit-autostart-extended.ps1`（或直接调用 `Get-WcoStartupApprovedGhost`）可检出这些无宿主幽灵项并按需清理。
+
 ### 方法 4：服务
 
 见 `services-optimization.md`：`Set-WcoServiceStartType -Name <服务> -StartType disabled`（记录原启动类型，含"自动(延迟启动)"）。

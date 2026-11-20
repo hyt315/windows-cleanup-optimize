@@ -8,7 +8,7 @@
       "path": "%USERPROFILE%\\xwechat_files 或 Documents\\xwechat_files",
       "official_move": "设置 › 账号和存储 › 存储位置",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "微信 4.x",
@@ -16,7 +16,7 @@
       "path": "%APPDATA%\\Tencent\\xwechat",
       "official_move": "无，只能应用内清理",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "微信 3.x（旧）",
@@ -24,7 +24,7 @@
       "path": "Documents\\WeChat Files 与 %APPDATA%\\Tencent\\WeChat",
       "official_move": "确认已迁到 4.x 后再清",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "企业微信",
@@ -32,7 +32,7 @@
       "path": "Documents\\WXWork 与 %APPDATA%\\Tencent\\WXWork",
       "official_move": "设置 › 文档/文件管理 › 更改文件存储位置",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "QQ NT",
@@ -40,7 +40,7 @@
       "path": "Documents\\Tencent Files\\<QQ号>",
       "official_move": "设置 › 存储管理（聊天记录）；设置 › 文件管理（接收文件）",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "钉钉",
@@ -48,7 +48,7 @@
       "path": "%LOCALAPPDATA%\\DingTalk_91",
       "official_move": "设置 › 通用 › 文件存储",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "TRAE SOLO CN",
@@ -56,7 +56,15 @@
       "path": "%APPDATA%\\TRAE SOLO CN 与 %USERPROFILE%\\.trae-cn",
       "official_move": "无，mklink 兜底",
       "doc": "references/migration-cases.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
+    },
+    {
+      "app": "2025-2026 AI IDE 与 Agent（Cursor / Windsurf / Antigravity / Claude Code / OpenCode / WorkBuddy / DoubaoWork / CatPaw / CodeArts）",
+      "kind": "AI 工作区缓存、模型代理数据与 Electron 更新器残留",
+      "path": "%USERPROFILE%\\.workbuddy* / .meituan-catpaw / .zcode / .dsh / .minimax / .codearts* / .claude / .codex / .gemini 与 %LOCALAPPDATA%\\DoubaoWork / *-updater",
+      "official_move": "优先应用内设置或环境变量，历史工作区缓存/pending 更新包按确认走回收站",
+      "doc": "references/drive-migration-official.md",
+      "verified_at": "2026-11-20"
     },
     {
       "app": "Ollama",
@@ -64,7 +72,7 @@
       "path": "默认模型目录（以 Ollama 官方 FAQ 为准）",
       "official_move": "环境变量 OLLAMA_MODELS",
       "doc": "references/drive-migration-official.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "Hugging Face",
@@ -72,7 +80,7 @@
       "path": "%USERPROFILE%\\.cache\\huggingface",
       "official_move": "环境变量 HF_HOME",
       "doc": "references/drive-migration-official.md",
-      "verified_at": "2026-09-06"
+      "verified_at": "2026-11-20"
     },
     {
       "app": "npm / pip / NuGet / Cargo / Gradle",
@@ -80,7 +88,15 @@
       "path": "见文档",
       "official_move": "Dev Drive + 环境变量（微软官方）",
       "doc": "references/drive-migration-official.md",
-      "verified_at": "2026-11-08"
+      "verified_at": "2026-11-20"
+    },
+    {
+      "app": "Windows 11 24H2 Recall",
+      "kind": "快照缓存（CoreAIPlatform.00 UKG）",
+      "path": "%LOCALAPPDATA%\\CoreAIPlatform.00\\UKG",
+      "official_move": "设置 › 隐私和安全性 › Recall 和快照（或可选功能停用 Recall）",
+      "doc": "references/system-cleanup.md",
+      "verified_at": "2026-11-20"
     }
   ]
 }

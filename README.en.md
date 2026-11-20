@@ -6,8 +6,9 @@
 
 <div align="center">
 
-**A Windows cleanup skill that runs a read-only diagnosis first, then proposes a tiered plan. It ships 14 reference manuals and 25 script templates. Every change is previewed first, applied only after you confirm, logged, and reversible through a generated undo script.**
+**A Windows cleanup skill that runs a read-only diagnosis first, then proposes a tiered plan. It ships 14 reference manuals, 25 script templates, and 82 real-world pitfalls. Every change is previewed first, applied only after you confirm, logged, and reversible through a generated undo script.**
 
+[![Version](https://img.shields.io/badge/Version-v2.2.0-10b981)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/hyt315/windows-cleanup-optimize?sort=semver)](CHANGELOG.md)
 [![CI](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml)
@@ -32,19 +33,18 @@ It avoids "one-click cleanup" and follows these principles:
 - **Use official migration paths first.**
 - **Give every change a risk tier.** Preview it first, apply it only after you confirm, and keep an undo script.
 
-## 🆕 Latest release v2.1.2 (2026-11-12)
+## 🆕 Latest release v2.2.0 (2026-11-20)
 
-- **Leftovers are only "suspected"**: T3/T4 and the full scan now share one check (install locations and running processes first, then names; short names must match exactly). Anything unmatched is 🟡 suspected and never lands in tier 1.
-- **No double-counted sizes**: every scan template uses `Measure-WcoDirectory`, so data moved to D: through a junction is no longer counted on C:.
-- **Failed sections are visible**: the report adds `[CHK]` section status. A section that hit errors is marked ⚠️ instead of reading "nothing found", and a program whose `InstallLocation` is `C:\` no longer skews leftover scoring. See [CHANGELOG.md](CHANGELOG.md).
+- **Native Win32 fast directory sizing**: `Measure-WcoDirectory` now uses compiled Win32 `FindFirstFileExW` (with `\\?\` long-path support, skipping `ReparsePoint` & OneDrive cloud placeholders, and bottom-up cache reuse) while retaining the cross-platform PowerShell fallback for Linux CI.
+- **Proxy dead-port, virtual NIC routing & Wi-Fi power audits**: T23 now detects dead local proxy listeners (`127.0.0.1:<port>` left behind when a VPN/proxy exits abnormally), overly short Edge `SleepingTabsTimeout` policies (`< 300s`), virtual NIC (`VMnet8`/`TAP`/`QMTAP`) default-gateway hijacks / disconnected adapters, and aggressive battery Wi-Fi power-saving indices (`DC >= 2`).
+- **Orphaned autostart, service/driver & `StartupApproved` ghost detection**: `Wco.Common.psm1` exports `Get-WcoStartupApprovedGhost`; T10/T24 and `full_scan.ps1` now surface orphaned `StartupApproved` toggles as well as scheduled tasks, services, and drivers pointing to missing binaries (catalog expanded to 64 families including `edrAgent`, `WeGameProcService`, and `npggsvc`).
+- **2025–2026 AI IDEs/Agents & Win11 24H2 Recall**: T17/T5C now detect Cursor, Windsurf, Antigravity, Claude Code, WorkBuddy, CatPaw, DoubaoWork, CodeArts, MiniMax, LM Studio, and Recall (`CoreAIPlatform.00\UKG`) snapshot caches; `full_scan.ps1` fixes `[T16]` via `Get-WcoShellExtension`, filters `\Microsoft\*` tasks in `[T10]`, and captures `[EXT]` summaries cleanly into reports. See [CHANGELOG.md](CHANGELOG.md).
 
-Highlights of v2.1.0 (2026-11-11):
+Highlights of v2.1.0–v2.1.2:
 
-- **Bloatware detection**: a new catalog `data/bloatware-catalog.json` (matched by publisher, signer, process, service, scheduled task and Store package, each family with a confidence level and sources) plus the T25 program inventory. Name-only matches are flagged as "suspected" with no action suggested.
-- **Uninstall that finishes the job**: new module functions such as `Invoke-WcoUninstall`, `Remove-WcoAppxPackage` and `Find-WcoLeftover`. The flow is inventory → vendor uninstaller → reboot and rescan → leftover scoring → cleanup after you confirm. Services, scheduled tasks and registry keys are exported before removal and restorable via `undo.ps1`.
-- **Startup coverage**: new T24 enumerates the Autoruns categories read-only (RunOnceEx, Winlogon, IFEO/SilentProcessExit, AppInit, Active Setup, LSA, print monitors, Winsock, hidden scheduled tasks, WMI, non-Microsoft drivers, Win11 "restart apps", and more). Items are turned off through the StartupApproved switch first; deletion needs explicit confirmation.
-- **Browser hijacks**: new T23 checks browser policies (homepage, search, force-installed extensions), Native Messaging hosts, shortcut arguments, proxy/PAC, hosts, DNS and recently added root certificates.
-- **Fixes**: reversed StartupApproved bytes, Delivery Optimization cmdlet and policy names, three service names, Spotlight policy editions, WSL `--compact`, and more; T14 is now read-only and T15/T16 logic is fixed. See [CHANGELOG.md](CHANGELOG.md).
+- **Bloatware & reversible uninstall**: `data/bloatware-catalog.json` + T25 inventory + `Invoke-WcoUninstall` / `Remove-WcoAppxPackage` / `Find-WcoLeftover` (services, tasks, and registry keys are exported before removal and restorable via `undo.ps1`; name-only leftover matches stay 🟡 suspected).
+- **Autoruns-grade autostart & browser-hijack audits**: T24 covers 16 persistence categories (RunOnceEx, Winlogon, IFEO/SilentProcessExit, AppInit, LSA, Winsock, hidden tasks, WMI, non-Microsoft drivers, Win11 `RestartApps`, etc.); T23 audits browser policies, forced extensions, hosts, DNS, and root certificates.
+- **Sectioned error transparency & unified measurement**: `[CHK]` reports section status without hiding failures as "clean"; every template uses `Measure-WcoDirectory` to prevent double-counting across junctions.
 
 ---
 
@@ -53,13 +53,13 @@ Highlights of v2.1.0 (2026-11-11):
 | Core Module | Capabilities | Value Delivered |
 |---|---|---|
 | **🛡️ Reversible by design** | Write operations dry-run by default and apply only with `-Apply`. Changes are logged to `changes.json`, and an `undo.ps1` is generated. Services are restored to their original start type | Every step is visible and can be undone |
-| **🗑️ Truly recoverable deletes** | Deletes go to the Recycle Bin only. Deletion is refused on volumes without a bin (USB, network), when the bin is set to delete immediately, or when the item exceeds the bin's size limit | Nothing is "sent to the bin" and silently gone for good |
-| **🔍 One scan entry point** | `full_scan.ps1` runs every read-only template in one pass. It infers the user profile automatically (home / developer / AI / gamer / laptop), checks admin rights, and measures boot time | No questionnaire first; the health card comes straight from the scan |
-| **🧹 Bloatware detection & removal** | Catalog matched by publisher / signer / process / service / scheduled task; browser-hijack audit; vendor uninstaller → reboot and rescan → leftover scoring → cleanup after you confirm; IFEO pop-up silencing and a 3-second pop-up locator; 360 / 2345 / WPS playbooks | Every uninstall is checked by a rescan, and leftover cleanup is reversible |
-| **🤖 Dev & AI environment migration** | Dev Drive for package caches (npm / pip / NuGet / Cargo / Gradle). Environment variables for Ollama, Hugging Face, ModelScope, uv and Android AVD. WSL2 virtual disk compaction (`wsl --manage --compact`) | Tens of GB freed without turning off Defender |
-| **⚡ Win11 modern tuning** | 50+ services tuned by profile, Widgets background tuning (WebView2 is kept), Copilot / Recall switches, Balanced power plan by default, SSD TRIM | Each item cites its official source and cost; anything unsourced is marked "unverified" |
+| **🗑️ Truly recoverable deletes** | Deletes go to the Recycle Bin only. Deletion is refused on volumes without a bin (USB, network), when the bin is set to delete immediately, or when exceeding bin capacity; long paths report `LongPath` | Nothing is "sent to the bin" and silently gone for good |
+| **🔍 One scan entry point** | `full_scan.ps1` runs every read-only check with native Win32 sizing (incl. `[EXT]` T23–T25 summaries and `[CHK]` section health), infers the user profile, checks admin rights, and measures boot time | No questionnaire first; the health card comes straight from the scan |
+| **🧹 Bloatware & orphan detection** | 64-family catalog matched by publisher / signer / process / service / task / driver; browser policy & dead-proxy audit; `StartupApproved` ghost & missing-binary task/service/driver checks; IFEO pop-up silencing | Every uninstall is checked by a rescan, and leftover cleanup is reversible |
+| **🤖 2026 Dev & AI environment tuning** | Dev Drive for package caches + npm/pnpm/uv/pip/NuGet/Go/Docker official CLI purge matrix; 2025–2026 AI IDE/Agent caches & Ollama/HF/AVD/LM Studio env vars; WSL2 compaction (`wsl --manage --compact`) | Tens of GB freed without turning off Defender |
+| **⚡ Win11 24H2 modern tuning** | 50+ services tuned by profile, Widgets tuning, Copilot / Recall (`UKG` snapshots), vNIC route/metric & battery Wi-Fi power-saving checks, Balanced power plan, SSD TRIM | Each item cites its official source and cost; anything unsourced is marked "unverified" |
 | **🔄 Official data migration** | Windows Cleanup recommendations and Storage Sense first. WeChat 4.x / WeCom / QQ NT / DingTalk move through in-app settings. `mklink` is a last resort | App updates keep working |
-| **📋 14 reference manuals** | Disk cleanup, Windows.old, uninstalling, services, startup mechanisms, chat-app migration, 76 pitfalls grouped by topic | The agent reads only the manual the problem needs |
+| **📋 14 reference manuals** | Disk cleanup, Windows.old, uninstalling, services, startup mechanisms, chat-app migration, 82 pitfalls grouped by topic | The agent reads only the manual the problem needs |
 
 ---
 
@@ -161,16 +161,16 @@ Invoke-Pester ./tests                                                         # 
 | Reference Guide | Core Focus | When to Read | Estimated Time |
 |---|---|---|---|
 | 📑 [**Scan Scripts Index (`scan-scripts.md`)**](references/scan-scripts.md) | What each of the 25 templates does and when to use it; code lives in `scripts/templates/` | When running scans & cleanup | 2 mins |
-| 🛡️ [**Pitfalls (`pitfalls.md`)**](references/pitfalls.md) | 76 pitfalls grouped by topic (safety baseline, deletion and permissions, false positives, startup, uninstall, migration, performance) | Before making a plan | 5 mins |
-| 🚀 [**Startup Audit (`startup-audit.md`)**](references/startup-audit.md) | Startup audit; policy-level shutdown of Edge / Chrome startup boost and background mode | Slow boot | 3 mins |
+| 🛡️ [**Pitfalls (`pitfalls.md`)**](references/pitfalls.md) | 82 pitfalls grouped by topic (safety baseline, deletion and permissions, false positives, startup, uninstall, migration, performance & proxy/vNIC) | Before making a plan | 5 mins |
+| 🚀 [**Startup Audit (`startup-audit.md`)**](references/startup-audit.md) | Startup & `StartupApproved` ghost audit; Edge / Chrome policies; `wscript.exe //B` windowless background tasks | Slow boot | 3 mins |
 | 🧩 [**Startup Mechanisms (`startup-mechanisms.md`)**](references/startup-mechanisms.md) | Startup points mapped to every Autoruns category, the template that checks each, and how to turn it off reversibly | Stubborn autostarts | 3 mins |
-| 🧹 [**Bloatware Catalog (`bloatware-catalog.md`)**](references/bloatware-catalog.md) | Process signatures for 360 / 2345 / Sogou / Baidu suites, IFEO pop-up silencing | Pop-up adware | 3 mins |
+| 🧹 [**Bloatware Catalog (`bloatware-catalog.md`)**](references/bloatware-catalog.md) | Signatures for 360 / 2345 / Sogou / Baidu suites & standalone security leftovers, IFEO pop-up silencing | Pop-up adware | 3 mins |
 | 🗑️ [**Software Uninstall (`software-uninstall.md`)**](references/software-uninstall.md) | winget inventory, deep leftovers, WPS / 360 / DingTalk playbooks (official uninstaller first) | Removing stubborn apps | 4 mins |
-| 💾 [**System Cleanup (`system-cleanup.md`)**](references/system-cleanup.md) | Windows Cleanup recommendations first, Windows.old, cleanmgr, DISM, driver store, hibernation | Reclaiming C drive | 4 mins |
+| 💾 [**System Cleanup (`system-cleanup.md`)**](references/system-cleanup.md) | Windows Cleanup recommendations, Windows.old, cleanmgr, DISM, driver store, Win11 24H2 Recall & CLI cache purge matrix | Reclaiming C drive | 4 mins |
 | ⚙️ [**Services (`services-optimization.md`)**](references/services-optimization.md) | 50+ services by profile, Copilot / Recall switches, rollback to original values | Reducing background load | 4 mins |
 | 🧠 [**Memory (`memory-optimization.md`)**](references/memory-optimization.md) | Real leak detection, memory compression, working-set analysis | High RAM usage | 3 mins |
-| ⚡ [**Performance (`performance-tuning.md`)**](references/performance-tuning.md) | Power plans, visual effects, TRIM; Dev Drive before any Defender exclusion | Responsiveness | 3 mins |
-| 📂 [**Official Migration (`drive-migration-official.md`)**](references/drive-migration-official.md) | Migration decision tree, Dev Drive package caches, AI model env vars | Moving dev & model folders | 4 mins |
+| ⚡ [**Performance (`performance-tuning.md`)**](references/performance-tuning.md) | Power plans, visual effects, TRIM, Dev Drive, plus VPN-exit proxy recovery, vNIC metrics & battery Wi-Fi tuning | Responsiveness | 3 mins |
+| 📂 [**Official Migration (`drive-migration-official.md`)**](references/drive-migration-official.md) | Migration decision tree, Dev Drive package caches, Ollama/HF & 2025–2026 AI IDE/Agent directories | Moving dev & model folders | 4 mins |
 | 💬 [**Chat Apps (`chat-apps-migration.md`)**](references/chat-apps-migration.md) | Official migration and cache cleanup for WeChat 4.x / WeCom / QQ NT / DingTalk | Huge chat-app folders | 3 mins |
 | 🔗 [**Junction Fallback (`mklink-migration.md`)**](references/mklink-migration.md) | `mklink /J` limits, preflight checks, failure cases | When only a junction will do | 3 mins |
 | 📚 [**Migration Cases (`migration-cases.md`)**](references/migration-cases.md) | End-to-end real cases, including TRAE / VS Code AI IDEs | Reviewing whole workflows | 4 mins |
@@ -189,18 +189,20 @@ windows-cleanup-optimize/
 ├── CONTRIBUTING.md                   # Contribution guide
 ├── CODE_OF_CONDUCT.md                # Code of conduct
 ├── SECURITY.md                       # Security policy
+├── PSScriptAnalyzerSettings.psd1     # PSScriptAnalyzer rules config
 ├── manifest.json                     # Skill manifest
+├── assets/banner.svg                 # Repository hero banner
 ├── .github/workflows/ci.yml          # Ubuntu + Windows CI
 ├── scripts/
 │   ├── full_scan.ps1                 # One-shot read-only scan
 │   ├── templates/                    # 25 templates (tNN-*.ps1)
-│   ├── lib/Wco.Common.psm1           # Recycle-bin checks, change log, undo, uninstall and startup switches
+│   ├── lib/Wco.Common.psm1           # Win32 fast dir sizing, recycle checks, undo, uninstall & autostart
 │   └── selftest.py                   # Automated regression test runner
 ├── data/volatile-paths.json          # Fast-changing app paths with review dates
-├── data/bloatware-catalog.json       # Bloatware catalog with sources and confidence
+├── data/bloatware-catalog.json       # Bloatware & security-leftover catalog (64 families)
 ├── evals/                            # Trigger and behavior evals
 ├── tests/                            # Pester unit tests
-└── references/                       # 14 reference manuals
+└── references/                       # 14 reference manuals (incl. 82 pitfalls)
 ```
 
 ---

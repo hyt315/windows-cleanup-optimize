@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
-    windows-cleanup-optimize 公共模块（v2.1）：权限检测、体积统计、回收站预检、变更留痕与一键回退、
-    启动项开关、计划任务/服务/注册表键删除、已安装程序清单、卸载、商店应用移除、残留评分。
+    windows-cleanup-optimize 公共模块（v2.2）：权限检测、原生高速体积统计、回收站预检、变更留痕与一键回退、
+    启动项开关与孤儿记录检测、计划任务/服务/注册表键删除、已安装程序清单、卸载、商店应用移除、残留评分。
 .DESCRIPTION
     所有写操作函数默认只演练（返回 Status=DryRun 与将要执行的 Plan），传 -Apply 才真正执行。
     每次真正执行都写入会话目录下的 changes.json，并可用 Export-WcoUndo 生成 undo.ps1。
@@ -301,10 +301,157 @@ function Export-WcoUndo {
 }
 
 # ---------------------------------------------------------------- 体积统计
+function Initialize-WcoNativeDirSizer {
+    <# 在 Windows 上按需编译 Win32 FindFirstFileExW 目录体积统计器（跳过重解析点/云占位符，支持超长路径并自底向上填充缓存）。 #>
+    if (-not $script:IsWin) { return $false }
+    if ('Wco.NativeDirSizer' -as [type]) { return $true }
+    $src = @'
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+namespace Wco {
+    public sealed class DirMeasureResult {
+        public long Bytes;
+        public int Files;
+        public int ReparseSkipped;
+        public int Errors;
+        public int LongPath;
+    }
+
+    public static class NativeDirSizer {
+        private static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
+        private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+        private const uint SKIP_ATTR_MASK = 0x401400; // ReparsePoint (0x400) | Offline (0x1000) | RecallOnDataAccess (0x400000)
+        private const int FindExInfoBasic = 1;
+        private const int FindExSearchNameMatch = 0;
+        private const int FIND_FIRST_EX_LARGE_FETCH = 2;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FILETIME_RAW {
+            public uint Low;
+            public uint High;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct WIN32_FIND_DATAW {
+            public uint dwFileAttributes;
+            public FILETIME_RAW ftCreationTime;
+            public FILETIME_RAW ftLastAccessTime;
+            public FILETIME_RAW ftLastWriteTime;
+            public uint nFileSizeHigh;
+            public uint nFileSizeLow;
+            public uint dwReserved0;
+            public uint dwReserved1;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string cFileName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
+            public string cAlternateFileName;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr FindFirstFileExW(
+            string lpFileName,
+            int fInfoLevelId,
+            out WIN32_FIND_DATAW lpFindFileData,
+            int fSearchOp,
+            IntPtr lpSearchFilter,
+            int dwAdditionalFlags);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool FindNextFileW(IntPtr hFindFile, out WIN32_FIND_DATAW lpFindFileData);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool FindClose(IntPtr hFindFile);
+
+        private sealed class Frame {
+            public string Path;
+            public Frame Parent;
+            public bool Visited;
+            public long Bytes;
+        }
+
+        private static string ToLongSearchPattern(string dirPath) {
+            string p = dirPath.TrimEnd('\\');
+            if (p.Length == 2 && p[1] == ':') p += "\\";
+            string lp;
+            if (p.StartsWith(@"\\?\")) lp = p;
+            else if (p.StartsWith(@"\\")) lp = @"\\?\UNC\" + p.Substring(2);
+            else lp = @"\\?\" + p;
+            return lp.EndsWith("\\") ? lp + "*" : lp + "\\*";
+        }
+
+        public static DirMeasureResult Measure(string fullPath, IDictionary cache) {
+            DirMeasureResult res = new DirMeasureResult();
+            string normRoot = fullPath.Length > 3 ? fullPath.TrimEnd('\\') : fullPath;
+            Stack<Frame> stack = new Stack<Frame>();
+            stack.Push(new Frame { Path = normRoot, Parent = null, Visited = false, Bytes = 0 });
+
+            while (stack.Count > 0) {
+                Frame frame = stack.Pop();
+                if (frame.Visited) {
+                    if (cache != null) cache[frame.Path] = frame.Bytes;
+                    if (frame.Parent != null) frame.Parent.Bytes += frame.Bytes;
+                    else res.Bytes = frame.Bytes;
+                    continue;
+                }
+
+                frame.Visited = true;
+                stack.Push(frame);
+
+                string prefix = (frame.Path.Length == 3 && frame.Path[1] == ':') ? frame.Path : frame.Path + "\\";
+                string pattern = ToLongSearchPattern(frame.Path);
+                WIN32_FIND_DATAW fd;
+                IntPtr h = FindFirstFileExW(pattern, FindExInfoBasic, out fd, FindExSearchNameMatch, IntPtr.Zero, FIND_FIRST_EX_LARGE_FETCH);
+                if (h == INVALID_HANDLE_VALUE) {
+                    int err = Marshal.GetLastWin32Error();
+                    if (err != 2 && err != 18) res.Errors++;
+                    continue;
+                }
+
+                try {
+                    do {
+                        string name = fd.cFileName;
+                        if (name == "." || name == "..") continue;
+                        string child = prefix + name;
+                        if (child.Length > 260) res.LongPath++;
+                        if ((fd.dwFileAttributes & SKIP_ATTR_MASK) != 0) {
+                            res.ReparseSkipped++;
+                            continue;
+                        }
+                        if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+                            if (cache != null && cache.Contains(child)) {
+                                frame.Bytes += Convert.ToInt64(cache[child]);
+                            } else {
+                                stack.Push(new Frame { Path = child, Parent = frame, Visited = false, Bytes = 0 });
+                            }
+                        } else {
+                            frame.Bytes += (((long)fd.nFileSizeHigh << 32) | (long)fd.nFileSizeLow);
+                            res.Files++;
+                        }
+                    } while (FindNextFileW(h, out fd));
+                } finally {
+                    FindClose(h);
+                }
+            }
+            return res;
+        }
+    }
+}
+'@
+    try {
+        Add-Type -TypeDefinition $src -Language CSharp -ErrorAction Stop
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Measure-WcoDirectory {
     <#
     .SYNOPSIS
-        统计目录体积。手动栈遍历，遇到 junction / 符号链接 / 云占位符等重解析点一律不进入、不计数。
+        统计目录体积。Windows 上优先用原生 Win32 FindFirstFileExW（比 GetFileSystemInfos 快 5-10 倍），遇重解析点或云占位符一律跳过；非 Windows 回退纯栈遍历。
     .DESCRIPTION
         Windows PowerShell 5.1 的 Get-ChildItem -Recurse 会顺着 junction 走进去（PowerShell 6.0 起才默认不跟随），
         已经 mklink 迁到 D 盘的数据会被重复算到 C 盘，所以统一用本函数。路径按字面处理（[ ] 不当通配符）。
@@ -325,6 +472,19 @@ function Measure-WcoDirectory {
         return $r
     }
     if ($root.Attributes -band $rp) { $r.ReparseSkipped = 1; return $r }
+    if (Initialize-WcoNativeDirSizer) {
+        try {
+            $nr = [Wco.NativeDirSizer]::Measure($full, $Cache)
+            $r.Bytes = $nr.Bytes
+            $r.Files = $nr.Files
+            $r.ReparseSkipped = $nr.ReparseSkipped
+            $r.Errors = $nr.Errors
+            $r.LongPath = $nr.LongPath
+            return $r
+        } catch {
+            Write-Verbose "NativeDirSizer 回退到 PowerShell 栈遍历：$($_.Exception.Message)"
+        }
+    }
     $stack = New-Object System.Collections.Stack
     $stack.Push($root)
     while ($stack.Count -gt 0) {
@@ -739,6 +899,26 @@ function Test-WcoStartupSource {
     return $false
 }
 
+function Get-WcoStartupApprovedGhost {
+    <# 只读：找出 StartupApproved 中的孤儿（幽灵）记录（对应的 Run 键值或启动文件夹快捷方式已不存在）。 #>
+    param([string[]]$Scope = @($script:WcoStartupApprovedKeys.Keys))
+    $ghosts = @()
+    foreach ($entry in @(Get-WcoStartupApproved -Scope $Scope)) {
+        if (-not $entry.Name) { continue }
+        if (-not (Test-WcoStartupSource -Scope $entry.Scope -Name $entry.Name)) {
+            $ghosts += [pscustomobject]@{
+                Scope      = $entry.Scope
+                Key        = $script:WcoStartupApprovedKeys[$entry.Scope]
+                Name       = $entry.Name
+                State      = $entry.State
+                DisabledAt = $entry.DisabledAt
+                Hex        = $entry.Hex
+            }
+        }
+    }
+    return $ghosts
+}
+
 function Set-WcoStartupApproved {
     <#
     .SYNOPSIS
@@ -1141,10 +1321,13 @@ function Remove-WcoAppxPackage {
 }
 
 # ---------------------------------------------------------------- 残留评分（思路参考 BCUninstaller 的置信度模型，代码自写）
+$script:WcoNameKeyCache = @{}
+
 function Get-WcoNameKey {
     <# 规范化名称：小写、去版本号/位数/括号内容/公司后缀、只保留字母数字与中日韩文字。 #>
     param([string]$Text)
     if (-not $Text) { return '' }
+    if ($script:WcoNameKeyCache.ContainsKey($Text)) { return $script:WcoNameKeyCache[$Text] }
     $t = $Text.ToLower()
     $t = $t -replace '\(.*?\)|（.*?）|\[.*?\]', ' '
     $t = $t -replace '\b(x64|x86|amd64|arm64|64-bit|32-bit|64位|32位)\b', ' '
@@ -1152,6 +1335,7 @@ function Get-WcoNameKey {
     $t = $t -replace '\b(co\.?,?\s*ltd\.?|inc\.?|llc|corporation|corp\.?|gmbh|limited|ltd\.?)\b', ' '
     $t = $t -replace '(有限公司|股份有限公司|有限责任公司)', ''
     $t = $t -replace '[^\p{L}\p{Nd}]', ''
+    $script:WcoNameKeyCache[$Text] = $t
     return $t
 }
 
@@ -1185,7 +1369,7 @@ function Get-WcoNameMatch {
     if (-not $a -or -not $b) { return 'None' }
     if ($a -eq $b) { return 'Exact' }
     if ([math]::Min($a.Length, $b.Length) -le 4) { return 'None' }
-    if ((Get-WcoEditDistance $a $b) -le 1) { return 'Exact' }
+    if ([math]::Abs($a.Length - $b.Length) -le 1 -and (Get-WcoEditDistance $a $b) -le 1) { return 'Exact' }
     if ($a.Contains($b) -or $b.Contains($a)) { return 'Fuzzy' }
     return 'None'
 }
@@ -1601,10 +1785,10 @@ function Get-WcoBloatwareCatalog {
     return ($json | ConvertFrom-Json)
 }
 
-Export-ModuleMember -Function Test-WcoAdmin, Start-WcoSession, Get-WcoSession, Import-WcoSession, Add-WcoChange, Export-WcoUndo,
+Export-ModuleMember -Function Get-WcoProp, Test-WcoAdmin, Start-WcoSession, Get-WcoSession, Import-WcoSession, Add-WcoChange, Export-WcoUndo,
     Measure-WcoDirectory, Get-WcoRecycleBinPolicy, Get-WcoItemSizeMB, Invoke-WcoRecycle,
     Set-WcoServiceStartType, Remove-WcoService, Set-WcoRegistryValue, Remove-WcoRegistryKey, Test-WcoProtectedRegistryKey,
-    ConvertTo-WcoStartupApprovedData, ConvertFrom-WcoStartupApprovedData, Get-WcoStartupApproved, Set-WcoStartupApproved, Get-WcoStartupItem,
+    ConvertTo-WcoStartupApprovedData, ConvertFrom-WcoStartupApprovedData, Get-WcoStartupApproved, Get-WcoStartupApprovedGhost, Set-WcoStartupApproved, Get-WcoStartupItem,
     Disable-WcoScheduledTask, Remove-WcoScheduledTask,
     Get-WcoInstalledProgram, Invoke-WcoUninstall, Remove-WcoAppxPackage, Find-WcoLeftover, Get-WcoNameMatch,
     Test-WcoPathUnder, Get-WcoInstalledIndex, Get-WcoResidualStatus,

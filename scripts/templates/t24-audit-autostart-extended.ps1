@@ -1,8 +1,8 @@
-﻿# 模板 24：audit-autostart-extended（v2.1，纯只读）
+﻿# 模板 24：audit-autostart-extended（v2.2，纯只读）
 # 用法：
 #   .\t24-audit-autostart-extended.ps1                                   # 只在屏幕输出
 #   .\t24-audit-autostart-extended.ps1 -OutFile "$env:TEMP\wco\t24.txt"  # 另存报告（只允许写到 %TEMP%\wco 下）
-# 覆盖 16 类自启/持久化位置，详见 references/scan-scripts.md 第 24 节。
+# 覆盖 16 类自启/持久化位置 + 孤儿任务/孤儿服务/StartupApproved 幽灵检测，详见 references/scan-scripts.md 第 24 节。
 # 本模板不修改任何注册表、任务、驱动或文件；每段独立 try/catch，权限不足写"需管理员，未检查"，绝不写"干净"。
 # 判读：IFEO、Winlogon、LSA、驱动类发现属于 HIGH，只报告，交给用户和安全软件判断。
 param(
@@ -219,6 +219,10 @@ try {
         Add-Finding $sec $level "[$($it.Source)] $($it.Name)" "$stateText | $($it.Command) | $(Get-SignerText $cs.Signer)"
     }
     Write-Report "  共 $($items.Count) 项（Policies\Explorer\Run 用户在任务管理器里关不掉，出现即标关注）"
+    $saGhosts = @(Get-WcoStartupApprovedGhost)
+    foreach ($sg in $saGhosts) {
+        Add-Finding $sec '信息' "[StartupApproved幽灵] [$($sg.Scope)] $($sg.Name)" "状态：$($sg.State) | 注册表键：$($sg.Key)（对应 Run 值或启动文件夹文件已不存在）"
+    }
 } catch {
     Write-SectionError $sec $_ '登录启动位置'
 }
@@ -548,10 +552,25 @@ try {
             if ($info.LastRunTime -and $info.LastRunTime.Year -gt 2000) { $last = $info.LastRunTime }
         } catch { $last = $null }
         $acts = @()
+        $missingTargets = @()
         foreach ($a in @($t.Actions)) {
             if ($null -eq $a) { continue }
             $exe = [string](Get-WcoProp $a 'Execute')
-            if ($exe) { $acts += ("$exe " + [string](Get-WcoProp $a 'Arguments')).Trim() }
+            $arg = [string](Get-WcoProp $a 'Arguments')
+            if ($exe) {
+                $acts += ("$exe " + $arg).Trim()
+                $exePath = Resolve-TargetPath $exe
+                if ($exePath -and $exePath -match '^[A-Za-z]:\\' -and -not (Test-Path -LiteralPath $exePath)) {
+                    $missingTargets += $exePath
+                }
+                if ($arg -and $exe -match '(?i)(powershell|pwsh|wscript|cscript|cmd)(\.exe)?$') {
+                    $mArg = [regex]::Match([Environment]::ExpandEnvironmentVariables($arg), '(?i)(?:-File\s+|^|\s)("?)([A-Za-z]:\\[^"]*?\.(?:ps1|vbs|bat|cmd|exe))\1')
+                    if ($mArg.Success) {
+                        $scriptTarget = $mArg.Groups[2].Value
+                        if (-not (Test-Path -LiteralPath $scriptTarget)) { $missingTargets += $scriptTarget }
+                    }
+                }
+            }
             else { $acts += "COM: $([string](Get-WcoProp $a 'ClassId'))" }
         }
         $trs = @()
@@ -560,7 +579,7 @@ try {
             $cn = [string]$tr.CimClass.CimClassName
             $trs += ($cn -replace '^MSFT_Task', '' -replace 'Trigger$', '')
         }
-        $rows += [pscustomobject]@{ Task = $t; LastRun = $last; Actions = ($acts -join ' ; '); Triggers = (($trs | Select-Object -Unique) -join ',') }
+        $rows += [pscustomobject]@{ Task = $t; LastRun = $last; Actions = ($acts -join ' ; '); Triggers = (($trs | Select-Object -Unique) -join ','); MissingTargets = @($missingTargets | Select-Object -Unique) }
     }
     $rows = @($rows | Sort-Object -Property @{ Expression = { if ($_.LastRun) { $_.LastRun } else { [datetime]::MinValue } }; Descending = $true })
     foreach ($r in $rows) {
@@ -570,7 +589,12 @@ try {
         if (-not $trText) { $trText = '无触发器' }
         $lvl = '信息'
         if ($r.Task.State -ne 'Disabled' -and $r.Triggers -match 'Logon|Boot|Idle|SessionStateChange') { $lvl = '关注' }
-        Add-Finding $sec $lvl "$($r.Task.TaskPath)$($r.Task.TaskName)" "状态：$($r.Task.State) | 触发：$trText | 上次：$lastText | 执行：$($r.Actions)"
+        $detail = "状态：$($r.Task.State) | 触发：$trText | 上次：$lastText | 执行：$($r.Actions)"
+        if ($r.MissingTargets.Count -gt 0) {
+            $lvl = '关注'
+            $detail += " | [目标文件已不存在，疑似卸载残留孤儿任务: $($r.MissingTargets -join ', ')]"
+        }
+        Add-Finding $sec $lvl "$($r.Task.TaskPath)$($r.Task.TaskName)" $detail
     }
     Write-Report "  非微软任务共 $($rows.Count) 个（登录/开机/空闲/会话切换触发且未禁用的标关注）"
 } catch {
@@ -642,12 +666,13 @@ try {
 }
 Complete-Section $sec '查询成功，没有第三方 WMI 订阅'
 
-# ================================================================ 13. 非微软驱动
+# ================================================================ 13. 非微软驱动与孤儿服务/驱动
 $sec = '13 驱动'
 Write-Report ''
-Write-Report "=== $sec（运行中的内核/文件系统筛选驱动，非微软签名的）==="
+Write-Report "=== $sec（运行中非微软内核/筛选驱动，以及程序文件已不存在的孤儿服务/驱动）==="
 try {
-    $drivers = @(Get-CimInstance -ClassName Win32_SystemDriver -Filter "State='Running'" -ErrorAction Stop)
+    $allDrivers = @(Get-CimInstance -ClassName Win32_SystemDriver -ErrorAction Stop)
+    $drivers = @($allDrivers | Where-Object { $_.State -eq 'Running' })
     $nonMs = 0
     foreach ($d in $drivers) {
         $path = Resolve-TargetPath ([string]$d.PathName)
@@ -659,10 +684,28 @@ try {
         Add-Finding $sec $lvl "$($d.Name)（$($d.ServiceType)）" "$path | $(Get-SignerText $sg)"
     }
     Write-Report "  运行中驱动 $($drivers.Count) 个，非微软签名 $nonMs 个（未签名/签名无效/文件缺失的标关注）"
+    # 检查已注册但目标文件已不存在的非系统孤儿服务与驱动
+    $allServices = @(Get-CimInstance -ClassName Win32_Service -ErrorAction SilentlyContinue)
+    foreach ($svcObj in @($allServices + $allDrivers)) {
+        if (-not $svcObj.PathName) { continue }
+        $rawPath = [string]$svcObj.PathName
+        if ($rawPath -match '(?i)svchost\.exe|DriverData') { continue }
+        $targetExe = Resolve-TargetPath $rawPath
+        if (-not $targetExe -or $targetExe -notmatch '^[A-Za-z]:\\') { continue }
+        if ($svcObj.State -eq 'Running') { continue }
+        if ($targetExe -match '^(?i)[A-Z]:\\Windows\\System32\\drivers\\' -and ([string]$svcObj.ServiceType -match 'Kernel|File System')) {
+            # 系统目录下的第三方已停用孤儿驱动同样检出，跳过微软常见前缀以减少内置占位驱动误报
+            if ($svcObj.Name -match '^(?i)(ACPI|AFD|Amd|Beep|CSC|Disk|EhStor|File|FltMgr|Fs|Gpu|Hid|HTTP|Intel|KSec|mrx|Ms|NDIS|Net|Ntfs|Null|PartMgr|Pci|rdbss|Serial|srv|Tcpip|Usb|Vol|Wdf|Wd)') { continue }
+        }
+        if (-not (Test-Path -LiteralPath $targetExe -PathType Leaf)) {
+            $kindLabel = if ($svcObj.ServiceType -match 'Kernel|File System') { '驱动' } else { '服务' }
+            Add-Finding $sec '关注' "疑似孤儿$kindLabel（文件不存在）：$($svcObj.Name)" "状态：$($svcObj.State)/$($svcObj.StartMode) | 缺失路径：$targetExe | 原始 PathName：$rawPath"
+        }
+    }
 } catch {
     Write-SectionError $sec $_ 'Win32_SystemDriver'
 }
-Complete-Section $sec '运行中的驱动均为微软签名'
+Complete-Section $sec '运行中的驱动均为微软签名，且无孤儿服务/驱动'
 
 # ================================================================ 14. Win11 重新启动应用
 $sec = '14 RestartApps'

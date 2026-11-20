@@ -101,3 +101,33 @@ Describe '模板与 full_scan 静态检查' {
         $fs | Should -Match '\[CHK\]'
     }
 }
+
+Describe 'Get-WcoStartupApprovedGhost 与 v2.2 特征库' {
+    It '仅返回对应 Run/启动文件已不存在的 StartupApproved 幽灵记录' {
+        Mock -ModuleName Wco.Common Get-WcoStartupApproved {
+            @(
+                [pscustomobject]@{ Scope = 'HKCU-Run'; Name = 'LiveApp'; State = 'Enabled'; DisabledAt = $null; Hex = '02' }
+                [pscustomobject]@{ Scope = 'HKCU-Run'; Name = 'DeadGhostApp'; State = 'Disabled'; DisabledAt = $null; Hex = '03' }
+                [pscustomobject]@{ Scope = 'HKLM-Run32'; Name = 'RemovedSuite'; State = 'Disabled'; DisabledAt = $null; Hex = '03' }
+            )
+        }
+        Mock -ModuleName Wco.Common Test-WcoStartupSource {
+            param($Scope, $Name)
+            $null = $Scope
+            return ($Name -eq 'LiveApp')
+        }
+        $ghosts = @(Get-WcoStartupApprovedGhost)
+        $ghosts.Count | Should -Be 2
+        ($ghosts | ForEach-Object { $_.Name }) | Should -Contain 'DeadGhostApp'
+        ($ghosts | ForEach-Object { $_.Name }) | Should -Contain 'RemovedSuite'
+        ($ghosts | ForEach-Object { $_.Name }) | Should -Not -Contain 'LiveApp'
+    }
+
+    It 'bloatware-catalog.json 收录 v2.2 真实安全/反作弊独立残留家族' -Skip:(-not (Test-Path (Join-Path $PSScriptRoot '..\data\bloatware-catalog.json'))) {
+        $cat = Get-WcoBloatwareCatalog
+        $ids = @($cat.families | ForEach-Object { $_.id })
+        $ids | Should -Contain 'bytedance-edr-agent'
+        $ids | Should -Contain 'wegame-leftover'
+        $ids | Should -Contain 'inca-gameguard'
+    }
+}

@@ -1,6 +1,7 @@
-﻿# 模板 23：audit-browser-hijack（只读，v2.0）
-# 排查浏览器主页/搜索/新标签页被策略锁定、强制安装扩展、Native Messaging、快捷方式网址参数、
-# 代理、hosts、DNS、近期新增根证书。全程只读：不修改注册表、文件、证书或网络设置。
+﻿# 模板 23：audit-browser-hijack（只读，v2.2）
+# 排查浏览器主页/搜索/新标签页/休眠标签被策略锁定、强制安装扩展、Native Messaging、快捷方式网址参数、
+# 代理（含死端口检测）、hosts、DNS、近期新增根证书、虚拟网卡路由抢占与无线网卡电池节能。
+# 全程只读：不修改注册表、文件、证书或网络设置。
 # 用法：powershell -ExecutionPolicy Bypass -File t23-audit-browser-hijack.ps1 [-OutFile report.txt]
 #   -OutFile 仅接受文件名，报告写入 %TEMP%\wco\ 下（唯一的写操作）。
 
@@ -89,7 +90,8 @@ $policyRoots = @(
     @{ Name = 'Edge(HKCU)'; Path = 'HKCU:\SOFTWARE\Policies\Microsoft\Edge' }
 )
 $policyValues = @('HomepageLocation', 'HomepageIsNewTabPage', 'RestoreOnStartup', 'NewTabPageLocation',
-    'DefaultSearchProviderEnabled', 'DefaultSearchProviderSearchURL', 'DefaultSearchProviderName', 'ExtensionSettings')
+    'DefaultSearchProviderEnabled', 'DefaultSearchProviderSearchURL', 'DefaultSearchProviderName', 'ExtensionSettings',
+    'SleepingTabsEnabled', 'SleepingTabsTimeout')
 $attentionValues = @('HomepageLocation', 'NewTabPageLocation', 'DefaultSearchProviderSearchURL', 'DefaultSearchProviderName', 'ExtensionSettings')
 Add-Count $sec 0
 foreach ($root in $policyRoots) {
@@ -108,6 +110,12 @@ foreach ($root in $policyRoots) {
                     Write-Line ("    {0} = {1}" -f $v, $val) -Color Yellow
                     Add-Count $sec
                     if ($attentionValues -contains $v) { Add-Attention ("{0} 策略 {1} = {2}" -f $root.Name, $v, $val) }
+                    if ($v -eq 'SleepingTabsTimeout') {
+                        $secNum = 0
+                        if ([int]::TryParse($val, [ref]$secNum) -and $secNum -gt 0 -and $secNum -lt 300) {
+                            Add-Attention ("{0} 策略 SleepingTabsTimeout = {1} 秒（低于 300 秒易导致页面点击或切标签卡顿）" -f $root.Name, $secNum)
+                        }
+                    }
                 } else {
                     Write-Line ("    {0}：未设置" -f $v)
                 }
@@ -272,9 +280,13 @@ foreach ($pk in $proxyKeys) {
         try {
             $names = @($o.Key.GetValueNames())
             Write-Line ("  [{0}]" -f $pk.Name)
+            $proxyEnableVal = ''
+            $proxyServerVal = ''
             foreach ($v in @('ProxyEnable', 'ProxyServer', 'ProxyOverride', 'AutoConfigURL')) {
                 if ($names -contains $v) {
                     $val = Format-RegValue $o.Key.GetValue($v)
+                    if ($v -eq 'ProxyEnable') { $proxyEnableVal = $val }
+                    if ($v -eq 'ProxyServer') { $proxyServerVal = $val }
                     Write-Line ("    {0} = {1}" -f $v, $val)
                     $isOn = ($v -eq 'ProxyEnable' -and $val -eq '1') -or ($v -eq 'AutoConfigURL' -and $val)
                     if ($isOn) {
@@ -283,6 +295,21 @@ foreach ($pk in $proxyKeys) {
                     }
                 } else {
                     Write-Line ("    {0}：未设置" -f $v)
+                }
+            }
+            if ($proxyEnableVal -eq '1' -and $proxyServerVal -match '(?:127\.0\.0\.1|localhost):(\d+)') {
+                $localPort = [int]$Matches[1]
+                try {
+                    $listeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+                    $alive = @($listeners | Where-Object { $_.Port -eq $localPort }).Count -gt 0
+                    if (-not $alive) {
+                        Write-Line ("    [警告] 本机代理端口 {0} 无进程监听，可能引起关代理后无法上网" -f $localPort) -Color Red
+                        Add-Attention ("{0} ProxyEnable=1 指向 {1}，但端口 {2} 未在监听（疑似 VPN/代理退出未恢复导致断网）" -f $pk.Name, $proxyServerVal, $localPort)
+                    } else {
+                        Write-Line ("    本机代理端口 {0} 当前处于监听状态（代理运行中）" -f $localPort)
+                    }
+                } catch {
+                    Write-Line ("    本机端口 {0} 状态读取失败：{1}" -f $localPort, $_.Exception.Message) -Color Yellow
                 }
             }
         } finally { $o.Key.Close() }
@@ -377,6 +404,80 @@ foreach ($store in @('Cert:\LocalMachine\Root', 'Cert:\CurrentUser\Root')) {
     } catch {
         Write-Line ("  {0}：读取失败：{1}" -f $store, $_.Exception.Message) -Color Yellow
     }
+}
+
+# === 9. 虚拟网卡路由抢占、闲置虚拟网卡与无线电池节能 ===
+$sec = '网络与虚拟网卡健康'
+Write-Line "`n=== 9. 虚拟网卡路由抢占、闲置 TAP 网卡与无线网卡电池节能（只读）==="
+Add-Count $sec 0
+try {
+    if (Get-Command Get-NetAdapter -ErrorAction SilentlyContinue) {
+        $vPattern = 'VMware|VirtualBox|TAP|TUN|Wintun|Sangfor|QMTAP|Hyper-V|vEthernet'
+        $vAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceDescription -match $vPattern -or $_.Name -match $vPattern })
+        $defRoutes = @()
+        if (Get-Command Get-NetRoute -ErrorAction SilentlyContinue) {
+            $defRoutes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue)
+        }
+        $ipIfs = @{}
+        if (Get-Command Get-NetIPInterface -ErrorAction SilentlyContinue) {
+            foreach ($nf in @(Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue)) {
+                $ipIfs[$nf.InterfaceIndex] = $nf
+            }
+        }
+        foreach ($va in $vAdapters) {
+            $gw = @($defRoutes | Where-Object { $_.InterfaceIndex -eq $va.ifIndex } | ForEach-Object { $_.NextHop }) -join ', '
+            $nf = $ipIfs[$va.ifIndex]
+            $met = if ($nf) { $nf.InterfaceMetric } else { $null }
+            $line = ("  虚拟网卡 [{0}] ({1}) 状态={2}" -f $va.Name, $va.InterfaceDescription, $va.Status)
+            if ($null -ne $met) { $line += (" Metric={0}" -f $met) }
+            if ($gw) { $line += (" 默认网关={0}" -f $gw) }
+            Write-Line $line
+            if ($gw) {
+                Add-Count $sec
+                Add-Attention ("虚拟网卡 {0} 配有 IPv4 默认网关 {1}，关闭代理或 VPN 后可能抢占默认路由导致断网" -f $va.Name, $gw)
+            } elseif ($va.Status -eq 'Up' -and $null -ne $met -and $met -lt 50) {
+                Add-Count $sec
+                Add-Attention ("虚拟网卡 {0} 跃点数过低（Metric={1} < 50），可能抢占主网卡流量" -f $va.Name, $met)
+            }
+        }
+        if ($vAdapters.Count -eq 0) { Write-Line "  （未发现常见虚拟机或 VPN 虚拟网卡）" }
+    }
+} catch {
+    Write-Line ("  虚拟网卡路由检查失败：{0}" -f $_.Exception.Message) -Color Yellow
+}
+
+try {
+    if (Get-Command Get-PnpDevice -ErrorAction SilentlyContinue) {
+        $ghostNics = @(Get-PnpDevice -Class Net -ErrorAction SilentlyContinue | Where-Object {
+            $_.FriendlyName -match 'TAP-Windows|QMTAP' -and $_.Status -ne 'OK'
+        })
+        foreach ($gn in $ghostNics) {
+            Write-Line ("  [闲置/断开] 虚拟网卡：{0} ({1}) 状态={2}" -f $gn.FriendlyName, $gn.InstanceId, $gn.Status) -Color Yellow
+            Add-Count $sec
+            Add-Attention ("存在未连接/残留的虚拟网卡：{0}（{1}）" -f $gn.FriendlyName, $gn.InstanceId)
+        }
+    }
+} catch {
+    Write-Line ("  PnP 虚拟网卡检查失败：{0}" -f $_.Exception.Message) -Color Yellow
+}
+
+try {
+    if (Get-Command powercfg.exe -ErrorAction SilentlyContinue) {
+        $pwOut = @(& powercfg.exe /q SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 2>&1)
+        foreach ($l in $pwOut) {
+            $ls = [string]$l
+            if ($ls -match '(DC|直流).*0x([0-9a-fA-F]+)') {
+                $dcIdx = [Convert]::ToInt32($Matches[2], 16)
+                Write-Line ("  无线网卡电池(DC)节能模式索引：{0}（0=最高性能 1=低节能 2=中等节能 3=最高节能）" -f $dcIdx)
+                if ($dcIdx -ge 2) {
+                    Add-Count $sec
+                    Add-Attention ("无线网卡电池(DC)节能模式索引={0}（中等/最高节能），不插电时易出现网页卡顿或高延迟" -f $dcIdx)
+                }
+            }
+        }
+    }
+} catch {
+    Write-Line ("  无线网卡电源策略检查失败：{0}" -f $_.Exception.Message) -Color Yellow
 }
 
 # === 汇总 ===

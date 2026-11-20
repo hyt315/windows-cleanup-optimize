@@ -5,6 +5,33 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [2.2.0] - 2026-11-20
+
+实机优化深度融合版：补齐代理/VPN 退出断网、虚拟网卡路由抢占、浏览器休眠阈值与无线电池节能诊断，新增 `StartupApproved` 幽灵与孤儿任务/服务/驱动检出，扩充 2025–2026 AI IDE/Agent 与 Win11 24H2 Recall 覆盖，并用 Win32 原生枚举大幅加速目录测量与全量扫描。
+
+### 新增
+- **Win32 原生高速目录测量**（`scripts/lib/Wco.Common.psm1`）：Windows 上 `Measure-WcoDirectory` 新增 `Initialize-WcoNativeDirSizer`（C# P/Invoke `FindFirstFileExW` + `\\?\` 超长路径支持），自动跳过 `ReparsePoint`、`Offline` 与 OneDrive 云占位符（`RecallOnDataAccess`），记录 `>260` 字符超长路径数并自底向上回填 `-Cache`；非 Windows 环境自动回退纯 PowerShell 栈遍历以兼容 Linux CI。
+- **网络与代理健康诊断**（`t23-audit-browser-hijack.ps1`）：
+  - 检测 Edge / Chrome `SleepingTabsTimeout` 策略，若低于 300 秒（如被设为 15 秒导致点击卡顿）主动标出关注；
+  - 检测 `WinINet ProxyEnable=1` 指向的本机端口（如 `127.0.0.1:<端口>`）是否仍有进程监听，捕捉 VPN/代理异常退出导致的“死代理断网”；
+  - 新增第 9 节：审计虚拟网卡（`VMware`/`VirtualBox`/`TAP`/`QMTAP`/`Wintun`/`Sangfor`）错误默认网关与低 `InterfaceMetric` 抢占、未连接的闲置 `TAP-Windows`/`QMTAP` 设备，以及笔记本电池（DC）模式下无线网卡节能模式索引（≥2 时提示优化）。
+- **孤儿自启、孤儿服务/驱动与 `StartupApproved` 幽灵检出**：
+  - `Wco.Common.psm1` 新增并导出 `Get-WcoStartupApprovedGhost`，`t10`、`t24`、`full_scan.ps1` 同步报告 `Run` 键或启动文件夹文件已删但开关记录仍在的幽灵条目；
+  - `t24-audit-autostart-extended.ps1` 第 11 节检查非微软计划任务的目标程序 / `-File` 脚本文件是否仍在磁盘上；第 13 节检查已停用但本地可执行文件/驱动文件已不存在的孤儿服务与驱动。
+- **2025–2026 AI 工具链、Win11 24H2 Recall 与独立残留家族**：
+  - `t17-detect-ai-model-caches.ps1`、`full_scan.ps1`、`data/volatile-paths.json` 与 `references/drive-migration-official.md` 扩充覆盖 Cursor、Windsurf、Antigravity、Claude Code、Codex CLI、OpenCode、WorkBuddy（`.workbuddy`/`.workbuddy-ai`）、CatPaw（`.meituan-catpaw`）、DoubaoWork、CodeArts、DeepSeek Harness（`.dsh`）、MiniMax、LM Studio 等；`[T5C]` 新增 Win11 24H2 Recall 快照目录（`%LOCALAPPDATA%\CoreAIPlatform.00\UKG`）扫描；
+  - `data/bloatware-catalog.json` 增补至 64 个家族（新增抖音安全组件 `bytedance-edr-agent`、WeGame 残留 `wegame-leftover`、GameGuard `inca-gameguard`）；
+  - `references/pitfalls.md` 扩充至 82 条，`references/system-cleanup.md` 增补开发包管理器官方 CLI 清理矩阵，`references/performance-tuning.md` 与 `startup-audit.md` 同步补充网络/节能与 `wscript.exe //B` 零黑框计划任务方案。
+
+### 修复与性能
+- **`full_scan.ps1` 与公共模块修复与提速**：
+  - `[T16]` 改用公共模块 `Get-WcoShellExtension`，修复直接查 `HKLM:\Software\Classes\{GUID}` 漏掉 `\CLSID\` 导致解析全为 `?` 的问题；
+  - `[T11]` 改为动态读取 `Get-WcoBloatwareCatalog`（保留内置回退名单）；
+  - `[T10]` 在调用 `Get-ScheduledTaskInfo` 前先排除 `\Microsoft\*` 内置任务，避免数百次无效 RPC 耗时；
+  - `[EXT]` 通过 `6>&1` 捕获 `t23`/`t24`/`t25` 的 `Write-Host` 摘要与关注项并写入报告文件，同时为全量扫描里的 `t25` 传入 `-NoSignature` 提速；
+  - `Wco.Common.psm1` 补齐导出 `Get-WcoProp`（修复 `t24` 第 11 节在 Windows 上报错未检查），并为 `Get-WcoNameKey` 增加缓存、`Get-WcoNameMatch` 增加长度差 `≤1` 短路以大幅提速 `t25` 程序盘点。
+- **`selftest.py` 与 Pester 测试增强**：新增 README 本地链接零死链校验、`pitfalls.md` `1..N` 连续编号校验，并在 `tests/Wco.Residual.Tests.ps1` 增加 `Get-WcoStartupApprovedGhost` 与 v2.2 特征库单元测试；`tests/Wco.Common.Tests.ps1` 在 Windows 上改用无需管理员权限的 Junction 夹具测试重解析点拒绝逻辑。
+
 ## [2.1.2] - 2026-11-12
 
 小版本：修残留判定、体积统计和扫描报告里四处与安全底线不符的地方。不新增模板，不改写操作。

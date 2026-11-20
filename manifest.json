@@ -1,7 +1,7 @@
 {
   "name": "windows-cleanup-optimize",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "owner": "hyt315",
-  "updated_at": "2026-11-12",
-  "description": "Windows 10/11 cleanup & optimization skill: read-only diagnosis (incl. bloatware catalog, browser-hijack and extended autostart audits), tiered plan, dry-run by default, recycle-bin safety checks, change log with generated undo script, official-first migration (incl. Dev Drive)."
+  "updated_at": "2026-11-20",
+  "description": "Windows 10/11 cleanup & optimization skill: Win32 native fast read-only diagnosis (incl. bloatware catalog, browser-hijack/proxy-dead-port/vNIC audits, orphaned autostart/service/driver detection, and 2025-2026 AI IDE/Recall caches), tiered plan, dry-run by default, recycle-bin safety checks, change log with generated undo script, official-first migration (incl. Dev Drive)."
 }

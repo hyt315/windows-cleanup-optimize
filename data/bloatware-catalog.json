@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "verified_at": "2026-11-11",
+  "verified_at": "2026-11-20",
   "note": "流氓/捆绑/广告/OEM/商店预装软件识别目录，供 T11/T25 使用；references/bloatware-catalog.md 是给人看的摘要，冲突时以本文件为准。processes/services 为不含 .exe 的名称（drivers 可含 .sys），tasks/appx 支持通配符，dirs 为常见位置或目录名线索（不能作为'不存在'的判据）。confidence=low 的条目来自历史报告或社区名单、缺少可核对来源，命中只能算'疑似'，需实机确认。publishers 取自 winget 清单时与 ARP 中写法可能不同。不收录：Windows/Microsoft 核心组件、WebView2、VC++/.NET 等运行库、正规硬件厂商驱动与运行时；用户主动选择的火绒、腾讯 DeskGo、Wallpaper Engine、Steam 也不收录。同一发行主体可能同时有正常软件与广告组件（金山 WPS/毒霸、腾讯 QQ/电脑管家、360 各产品），不按发行主体一刀切；共用目录/注册表根键只删具体产品子键。",
   "families": [
     {
@@ -1382,6 +1382,80 @@
       "risk": "store",
       "sources": [],
       "confidence": "low"
+    },
+    {
+      "id": "bytedance-edr-agent",
+      "name": "抖音安全组件（edrAgent / Edrservice）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "edrAgent",
+        "Edrservice"
+      ],
+      "services": [
+        "Edrservice"
+      ],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [
+        "%ProgramFiles(x86)%\\edrAgent"
+      ],
+      "uninstall_notes": "⚠️ 常随抖音 PC 版安装，主程序卸载后经常独立常驻后台。若已卸载抖音，建议优先运行安装目录下的 unins000.exe 官方卸载，重启后复扫 Edrservice。",
+      "risk": "bundle",
+      "sources": [
+        "实机排查记录（C:\\Program Files (x86)\\edrAgent\\unins000.exe / Edrservice）"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "wegame-leftover",
+      "name": "WeGame 独立守护与驱动残留",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "WeGameProcService"
+      ],
+      "services": [
+        "WeGameProcService"
+      ],
+      "tasks": [],
+      "drivers": [
+        "WeGameDriver764",
+        "WeGameDriver764.sys"
+      ],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 若仍在使用腾讯 WeGame 请保留；若已卸载 WeGame 但 WeGameProcService 或 WeGameDriver764 仍在加载/注册，先禁用观察再按 Find-WcoLeftover 与 Remove-WcoService 清理。",
+      "risk": "bundle",
+      "sources": [
+        "实机排查记录（WeGameProcService / WeGameDriver764.sys）"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "inca-gameguard",
+      "name": "nProtect GameGuard 反作弊组件（npggsvc）",
+      "publishers": [],
+      "signers": [],
+      "processes": [
+        "npggsvc",
+        "GameMon",
+        "GameMon.des"
+      ],
+      "services": [
+        "npggsvc"
+      ],
+      "tasks": [],
+      "drivers": [],
+      "appx": [],
+      "dirs": [],
+      "uninstall_notes": "⚠️ 部分网游自带反作弊服务，仍在游玩对应游戏时保留；若对应游戏已卸载而 npggsvc 服务（或指向已不存在的 GameMon.des）仍残留，可安全停用后删除服务。",
+      "risk": "bundle",
+      "sources": [
+        "实机排查记录（npggsvc / GameMon.des）"
+      ],
+      "confidence": "medium"
     }
   ]
 }

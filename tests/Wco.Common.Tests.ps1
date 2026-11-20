@@ -90,7 +90,8 @@ Describe 'Invoke-WcoRecycle 预检' {
         $target = Join-Path $script:tmp ('t_' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $target | Out-Null
         $link = Join-Path $script:tmp ('l_' + [guid]::NewGuid().ToString('N'))
-        New-Item -ItemType SymbolicLink -Path $link -Target $target -ErrorAction Stop | Out-Null
+        $linkType = if ($env:OS -eq 'Windows_NT') { 'Junction' } else { 'SymbolicLink' }
+        New-Item -ItemType $linkType -Path $link -Target $target -ErrorAction Stop | Out-Null
         (Invoke-WcoRecycle -Path $link -Apply).Status | Should -Be 'Blocked'
         Test-Path $target | Should -BeTrue
     }

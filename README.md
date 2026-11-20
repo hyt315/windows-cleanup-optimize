@@ -6,10 +6,11 @@
 
 <div align="center">
 
-**先只读诊断、再分档给方案的 Windows 清理技能：14 份参考手册，25 个脚本模板。每个改动都先演练、经你确认才执行、自动留痕，并生成一键回退脚本。**
+**先只读诊断、再分档给方案的 Windows 清理技能：14 份参考手册，25 个脚本模板，82 条实战避坑。每个改动都先演练、经你确认才执行、自动留痕，并生成一键回退脚本。**
 
-**Read-only diagnosis first, then a tiered plan: 14 reference manuals and 25 script templates. Every change is previewed, applied only after you confirm, logged, and reversible through a generated undo script.**
+**Read-only diagnosis first, then a tiered plan: 14 reference manuals, 25 script templates, and 82 real-world pitfalls. Every change is previewed, applied only after you confirm, logged, and reversible through a generated undo script.**
 
+[![Version](https://img.shields.io/badge/Version-v2.2.0-10b981)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/hyt315/windows-cleanup-optimize?sort=semver)](CHANGELOG.md)
 [![CI](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml)
@@ -34,19 +35,18 @@ C 盘爆红、开机变慢、弹窗屡禁不止、后台卡顿——**Windows �
 - 迁移数据优先用官方方案；
 - 每一项改动都标风险等级，先演练、经你确认才执行，并留下回退脚本。
 
-## 🆕 最新版本 v2.1.2（2026-11-12）
+## 🆕 最新版本 v2.2.0（2026-11-20）
 
-- **残留只标「疑似」**：T3/T4 与全量扫描改用同一套判定（先看安装目录和运行中进程，再比名称，短名只认完全相等），对不上的标 🟡 疑似残留，不再进第一档。
-- **体积不重复计算**：所有扫描模板统一用 `Measure-WcoDirectory`，不再顺着 junction 把迁到 D 盘的数据算进 C 盘。
-- **扫描失败看得见**：报告新增 `[CHK]` 分段执行情况，出错的段标 ⚠️，不再显示成「未检测到」；`InstallLocation` 写成 `C:\` 的程序不再干扰残留打分。完整列表见 [CHANGELOG.md](CHANGELOG.md)。
+- **Win32 原生极速扫盘**：`Measure-WcoDirectory` 在 Windows 上启用 P/Invoke `FindFirstFileExW`（带 `\\?\` 超长路径支持、跳过 `ReparsePoint` 与 OneDrive 云占位符，自底向上缓存），显著缩短全盘目录体积扫描耗时。
+- **代理死端口、虚拟网卡路由与节能排查**：T23 新增本机代理死端口检测、Edge `SleepingTabsTimeout` 过短告警、虚拟网卡（`VMnet8`/`TAP`/`QMTAP`）默认网关/跃点数抢占检查与笔记本电池 Wi-Fi 节能索引诊断，根治"关掉 VPN 后打不开网页""点击网页卡顿"。
+- **孤儿自启、孤儿服务/驱动与 `StartupApproved` 幽灵**：公共模块新增 `Get-WcoStartupApprovedGhost`，T10/T24/全量扫描同步检出无主启动开关记录及目标文件已缺失的任务、服务与驱动（`edrAgent`/`WeGameProcService`/`npggsvc` 等扩充至 64 个特征家族）。
+- **2025–2026 AI 工具链与 Win11 24H2 Recall**：T17/T5C 扩充覆盖 Cursor、Windsurf、Antigravity、Claude Code、WorkBuddy、CatPaw、DoubaoWork、CodeArts、MiniMax、LM Studio 及 Recall（`CoreAIPlatform.00\UKG`）快照缓存；`full_scan.ps1` 修复 T16 CLSID 解析、过滤 T10 微软内置任务并捕获 T23–T25 汇总进报告。完整列表见 [CHANGELOG.md](CHANGELOG.md)。
 
-v2.1.0（2026-11-11）的主要更新：
+v2.1.0–v2.1.2 的主要能力沉淀：
 
-- **流氓软件识别**：新增特征库 `data/bloatware-catalog.json`（按发布者、签名、进程、服务、计划任务、商店应用匹配，每个家族标置信度和来源），以及程序盘点模板 T25；只凭名字相似的结果只标「疑似」，不建议动手。
-- **真正卸干净**：公共模块新增 `Invoke-WcoUninstall`、`Remove-WcoAppxPackage`、`Find-WcoLeftover` 等函数，流程为「盘点 → 官方卸载程序 → 重启复扫 → 残留打分 → 确认后清理」；服务、计划任务、注册表键删除前先导出备份，可用 `undo.ps1` 还原。
-- **自启动补全**：新增 T24，对照 Autoruns 各类别只读枚举（RunOnceEx、Winlogon、IFEO/SilentProcessExit、AppInit、Active Setup、LSA、打印监视器、Winsock、隐藏计划任务、WMI、非微软驱动、Win11「重启后恢复应用」等）；关闭优先走 StartupApproved 开关，删除需显式确认。
-- **浏览器劫持**：新增 T23，检查浏览器策略主页/搜索/强制扩展、Native Messaging、快捷方式参数、代理/PAC、hosts、DNS 和近期新增的根证书。
-- **修正**：StartupApproved 启用/禁用字节写反、传递优化 cmdlet 与策略名、三个服务名、Spotlight 策略适用版本、WSL 改用 `--compact` 等；T14 改为只读，T15、T16 逻辑修复；完整列表见 [CHANGELOG.md](CHANGELOG.md)。
+- **流氓软件与可回退卸载**：特征库 `data/bloatware-catalog.json` + 程序盘点 T25 + `Invoke-WcoUninstall` / `Remove-WcoAppxPackage` / `Find-WcoLeftover`（服务/任务/注册表删前导出备份、可用 `undo.ps1` 还原；残留名称比对一律只标 🟡 疑似）。
+- **Autoruns 级扩展自启动与浏览器劫持审计**：T24 覆盖 RunOnceEx、Winlogon、IFEO/SilentProcessExit、AppInit、LSA、Winsock、隐藏任务、WMI 订阅、非微软驱动等 16 类启动点；T23 审查浏览器策略、强制扩展、代理/hosts/DNS/根证书。
+- **扫描可靠性与统一口径**：全量扫描输出 `[CHK]` 分段执行状态（出错标 ⚠️，不把失败当干净）；体积统计统一走 `Measure-WcoDirectory`，不跟随 junction 重复计数。
 
 ---
 
@@ -55,13 +55,13 @@ v2.1.0（2026-11-11）的主要更新：
 | 核心模块 | 覆盖功能 | 带来价值 |
 |---|---|---|
 | **🛡️ 可回退的安全保障** | 写操作默认只演练，加 `-Apply` 才执行；改动写入 `changes.json` 并自动生成 `undo.ps1`；服务恢复成原启动类型 | 每一步都能看清、能撤回 |
-| **🗑️ 真正可恢复的删除** | 删除只进回收站；遇到以下三种情况拒绝执行：无回收站的卷（U 盘、网络盘）、回收站设为直接删除、体积超过回收站上限 | 避免"以为进了回收站，其实永久删了" |
-| **🔍 一个扫描入口** | `full_scan.ps1` 一次跑完全部只读模板，自动反推用户画像（家庭 / 开发者 / AI / 游戏 / 笔记本）；检测管理员权限；实测开机耗时 | 不用先回答问题，扫完直接出体检卡 |
-| **🧹 流氓软件识别与卸载** | 特征库按发布者 / 签名 / 进程 / 服务 / 计划任务匹配；浏览器劫持审计；官方卸载 → 重启复扫 → 残留打分 → 确认后清理；IFEO 弹窗静音、3 秒定位弹窗进程；360 / 2345 / WPS 专项 | 卸完有复扫核对，残留清理可回退 |
-| **🤖 开发者与 AI 环境换盘** | Dev Drive 放包缓存（npm / pip / NuGet / Cargo / Gradle）；Ollama、Hugging Face、ModelScope、uv、Android AVD 环境变量迁移；WSL2 虚拟磁盘压缩（`wsl --manage --compact`） | 腾出几十 GB，而且不用关 Defender |
-| **⚡ 深度优化与 Win11 适配** | 50+ 服务按画像精简；Win11 小组件后台调优（保留 WebView2）；Copilot / Recall 开关；电源计划默认「平衡」；SSD TRIM | 每项注明官方依据和代价，没依据的标「存疑」 |
+| **🗑️ 真正可恢复的删除** | 删除只进回收站；遇到以下三种情况拒绝执行：无回收站的卷（U 盘、网络盘）、回收站设为直接删除、体积超过回收站上限，超长路径报 `LongPath` | 避免"以为进了回收站，其实永久删了" |
+| **🔍 一个扫描入口** | `full_scan.ps1` Win32 原生高速跑完全部只读诊断（含 `[EXT]` T23–T25 摘要与 `[CHK]` 分段健康检查），自动反推用户画像（家庭 / 开发者 / AI / 游戏 / 笔记本） | 不用先回答问题，扫完直接出体检卡 |
+| **🧹 流氓软件与孤儿残留识别** | 64 个家族特征库按发布者 / 签名 / 进程 / 服务 / 任务 / 驱动匹配；浏览器策略与死代理审计；`StartupApproved` 幽灵与孤儿任务/驱动检出；IFEO 弹窗静音、3 秒定位弹窗进程 | 卸完有复扫打分核对，残留清理可回退 |
+| **🤖 2026 开发与 AI 环境治理** | Dev Drive 放包缓存 + npm/pnpm/uv/pip/NuGet/Go/Docker 官方 CLI 清理矩阵；2025–2026 主流 AI IDE & Agent 缓存及 Ollama/HF/AVD/LM Studio 迁移；WSL2 磁盘压缩（`wsl --manage --compact`） | 腾出几十 GB，而且不用关 Defender |
+| **⚡ 深度优化与 Win11 24H2 适配** | 50+ 服务按画像精简；Win11 小组件调优；Copilot / Recall（`UKG` 快照）开关与检测；虚拟网卡路由/跃点数与无线电池节能排查；平衡电源计划 + SSD TRIM | 每项注明官方依据和代价，没依据的标「存疑」 |
 | **🔄 官方原生数据迁移** | 先用 Windows "清理建议"与存储感知；微信 4.x / 企业微信 / QQ NT / 钉钉走应用内迁移；`mklink` 只作兜底 | 不破坏软件升级机制 |
-| **📋 14 份参考手册** | 磁盘清理、Windows.old、软件卸载、服务精简、自启动机制、聊天软件迁移，76 条按主题归类的踩坑 | Agent 按问题只读需要的那一份 |
+| **📋 14 份参考手册** | 磁盘清理、Windows.old、软件卸载、服务精简、自启动机制、聊天软件迁移，82 条按主题归类的避坑 | Agent 按问题只读需要的那一份 |
 
 ---
 
@@ -160,16 +160,16 @@ Invoke-Pester ./tests                                                         # 
 | 参考手册 | 核心内容 | 推荐阅读时机 | 预估耗时 |
 |---|---|---|---|
 | 📑 [**扫描脚本索引 (`scan-scripts.md`)**](references/scan-scripts.md) | 25 个模板各做什么、何时用；代码在 `scripts/templates/` | 执行具体检测与清理时 | 2 分钟 |
-| 🛡️ [**避坑指南 (`pitfalls.md`)**](references/pitfalls.md) | 76 条按主题归类的踩坑（安全底线、删除与权限、误判、自启动、卸载、迁移、性能） | 制定方案前必查 | 5 分钟 |
-| 🚀 [**自启动审计 (`startup-audit.md`)**](references/startup-audit.md) | 自启动项审计，Edge / Chrome 启动加速与后台模式的策略级关闭 | 治理开机慢时 | 3 分钟 |
+| 🛡️ [**避坑指南 (`pitfalls.md`)**](references/pitfalls.md) | 82 条按主题归类的踩坑（安全底线、删除与权限、误判、自启动、卸载、迁移、性能与代理网络） | 制定方案前必查 | 5 分钟 |
+| 🚀 [**自启动审计 (`startup-audit.md`)**](references/startup-audit.md) | 自启动项与 `StartupApproved` 幽灵审计，Edge/Chrome 策略关闭及 `wscript.exe //B` 零黑框守护技巧 | 治理开机慢时 | 3 分钟 |
 | 🧩 [**自启动机制 (`startup-mechanisms.md`)**](references/startup-mechanisms.md) | 对照 Autoruns 全类别的自启动点、检查模板与可回退的关闭方式 | 排查顽固启动项时 | 3 分钟 |
-| 🧹 [**流氓软件识别库 (`bloatware-catalog.md`)**](references/bloatware-catalog.md) | 360 / 2345 / 搜狗 / 百度等软件的进程特征，IFEO 弹窗静音 | 查杀弹窗广告时 | 3 分钟 |
+| 🧹 [**流氓软件识别库 (`bloatware-catalog.md`)**](references/bloatware-catalog.md) | 360 / 2345 / 搜狗 / 百度等软件与独立安全子组件特征，IFEO 弹窗静音 | 查杀弹窗广告时 | 3 分钟 |
 | 🗑️ [**软件安全卸载 (`software-uninstall.md`)**](references/software-uninstall.md) | winget 盘点、深层残留清理、WPS / 360 / 钉钉专项（官方卸载优先） | 卸载软件时 | 4 分钟 |
-| 💾 [**系统深度清理 (`system-cleanup.md`)**](references/system-cleanup.md) | 官方"清理建议"优先、Windows.old、cleanmgr、DISM、驱动库、休眠文件 | 腾 C 盘空间时 | 4 分钟 |
+| 💾 [**系统深度清理 (`system-cleanup.md`)**](references/system-cleanup.md) | 官方"清理建议"、Windows.old、cleanmgr、DISM、驱动库、Win11 24H2 Recall 与开发 CLI 清理矩阵 | 腾 C 盘空间时 | 4 分钟 |
 | ⚙️ [**服务精简指南 (`services-optimization.md`)**](references/services-optimization.md) | 50+ 服务按画像精简，Copilot / Recall 开关，记原值回退 | 优化后台时 | 4 分钟 |
 | 🧠 [**内存优化 (`memory-optimization.md`)**](references/memory-optimization.md) | 真实内存泄漏识别、内存压缩、工作集分析 | 内存占用偏高时 | 3 分钟 |
-| ⚡ [**性能调优 (`performance-tuning.md`)**](references/performance-tuning.md) | 电源计划、视觉效果、TRIM；Defender 排除只作最后手段，优先用 Dev Drive | 提升响应速度时 | 3 分钟 |
-| 📂 [**官方大目录迁移 (`drive-migration-official.md`)**](references/drive-migration-official.md) | 迁移决策树，Dev Drive 放包缓存，AI 模型目录的环境变量 | 搬开发与模型目录时 | 4 分钟 |
+| ⚡ [**性能调优 (`performance-tuning.md`)**](references/performance-tuning.md) | 电源计划、视觉效果、TRIM、Dev Drive，以及代理退出断网/虚拟网卡跃点数与无线电池节能排查 | 提升响应速度时 | 3 分钟 |
+| 📂 [**官方大目录迁移 (`drive-migration-official.md`)**](references/drive-migration-official.md) | 迁移决策树、Dev Drive 包缓存、Ollama/HF 与 2025–2026 AI IDE/Agent 目录治理 | 搬开发与模型目录时 | 4 分钟 |
 | 💬 [**通讯软件迁移 (`chat-apps-migration.md`)**](references/chat-apps-migration.md) | 微信 4.x / 企业微信 / QQ NT / 钉钉的官方迁移与缓存清理 | 清理聊天记录占用时 | 3 分钟 |
 | 🔗 [**目录联接兜底 (`mklink-migration.md`)**](references/mklink-migration.md) | `mklink /J` 兜底迁移：官方限制、安全预检、失败案例 | 只能用联接兜底时 | 3 分钟 |
 | 📚 [**迁移实战案例 (`migration-cases.md`)**](references/migration-cases.md) | 端到端真实案例，含 TRAE / VS Code 等 AI IDE 专项 | 学习整体思路时 | 4 分钟 |
@@ -188,18 +188,20 @@ windows-cleanup-optimize/
 ├── CONTRIBUTING.md                   # 社区贡献指南
 ├── CODE_OF_CONDUCT.md                # 行为准则
 ├── SECURITY.md                       # 安全策略
+├── PSScriptAnalyzerSettings.psd1     # PSScriptAnalyzer 静态检查规则配置
 ├── manifest.json                     # 技能元数据清单
+├── assets/banner.svg                 # 项目横幅
 ├── .github/workflows/ci.yml          # Ubuntu + Windows 双平台 CI
 ├── scripts/
 │   ├── full_scan.ps1                 # 一键只读全量扫描
 │   ├── templates/                    # 25 个模板（tNN-*.ps1）
-│   ├── lib/Wco.Common.psm1           # 回收站预检、留痕、undo、卸载与自启动开关
+│   ├── lib/Wco.Common.psm1           # Win32 高速测体积、回收站预检、留痕、undo 与自启动/卸载
 │   └── selftest.py                   # 自动化回归自测
 ├── data/volatile-paths.json          # 易变路径清单（带核实日期）
-├── data/bloatware-catalog.json       # 流氓软件特征库（带来源与置信度）
+├── data/bloatware-catalog.json       # 流氓与独立残留特征库（64 个家族）
 ├── evals/                            # 触发评测与行为评测
 ├── tests/                            # Pester 单元测试
-└── references/                       # 14 份参考手册
+└── references/                       # 14 份参考手册（含 82 条避坑）
 ```
 
 ---

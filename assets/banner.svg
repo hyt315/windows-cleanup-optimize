@@ -87,9 +87,9 @@
   <g transform="translate(265, 58)">
     <!-- Header Top Pill -->
     <g transform="translate(0, 0)">
-      <rect width="365" height="28" rx="14" fill="url(#badgeGrad)" stroke="#10b981" stroke-width="1" stroke-opacity="0.5" />
+      <rect width="420" height="28" rx="14" fill="url(#badgeGrad)" stroke="#10b981" stroke-width="1" stroke-opacity="0.5" />
       <circle cx="16" cy="14" r="4.5" fill="#10b981" />
-      <text x="30" y="18.5" class="header-pill">WINDOWS 10 / 11 TUNING • DRY-RUN FIRST • UNDO</text>
+      <text x="30" y="18.5" class="header-pill">WINDOWS 10 / 11 TUNING • v2.2 • DRY-RUN FIRST • UNDO</text>
     </g>
 
     <!-- Main Title -->
