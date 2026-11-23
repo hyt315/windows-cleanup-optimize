@@ -146,8 +146,9 @@ Describe '计划任务闭环' -Skip:(-not $script:canApply) {
 
 Describe '启动项开关闭环' -Skip:(-not $script:canApply) {
     It '关掉一个 Run 项 → undo 后开关记录回到「没有记录」（默认启用）' {
-        Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'wco-ci-run' -Value "`"$env:SystemRoot\System32\cmd.exe`" /c exit"
-        $sa = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        if (-not (Test-Path -LiteralPath $runKey)) { New-Item -Path $runKey -Force | Out-Null }
+        Set-ItemProperty -Path $runKey -Name 'wco-ci-run' -Value "`"$env:SystemRoot\System32\cmd.exe`" /c exit"
         New-Session | Out-Null
         (Set-WcoStartupApproved -Name 'wco-ci-run' -Scope HKCU-Run -Enabled $false -Apply).Status | Should -Be 'Changed'
         (Get-WcoStartupApproved -Scope HKCU-Run | Where-Object Name -eq 'wco-ci-run').State | Should -Be 'Disabled'
