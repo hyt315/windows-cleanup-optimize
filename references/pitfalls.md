@@ -10,7 +10,7 @@
 4. [自启动](#四自启动)（42–50）
 5. [卸载与流氓软件](#五卸载与流氓软件)（51–56）
 6. [迁移](#六迁移)（57–65）
-7. [性能与内存误区](#七性能与内存误区)（66–82）
+7. [性能与内存误区](#七性能与内存误区)（66–84）
 
 ---
 
@@ -106,7 +106,7 @@
 
 40. **Python 全局环境会膨胀。** 全局 `site-packages` 可能累积到几 GB。建议改用虚拟环境（如 `uv venv`），而不是反复清理全局包。
 
-41. **WSL2 虚拟磁盘不会自动缩小。** `ext4.vhdx` 在 WSL 里删了文件也不会变小。做法：WSL 内先 `sudo fstrim -av`；较新的 WSL 提供 `wsl --manage <发行版> --compact`（较新版本才有，存疑：以 `wsl --help` 为准）；否则 `wsl --shutdown` 后用 diskpart `compact vdisk`。稀疏 VHD（`sparseVhd` / `--set-sparse true`）有数据损坏报告，较新版本已加门槛，不作默认推荐（存疑，见 `drive-migration-official.md`）。
+41. **WSL2 虚拟磁盘不会自动缩小。** `ext4.vhdx` 在 WSL 里删了文件也不会变小。做法：WSL 内先 `sudo fstrim -av`；WSL 稳定版 3.0.1 起提供 `wsl --manage <发行版> --compact`（`wsl --version` 看版本，`wsl --help` 里有 `--compact` 才能用）；否则 `wsl --shutdown` 后用 diskpart `compact vdisk`。稀疏 VHD（`sparseVhd` / `--set-sparse true`）曾有数据损坏报告，2.5.6–3.0.1 要求 `--allow-unsafe`，3.0.2 起改为「实验功能」提示；仍不作默认推荐（见 `drive-migration-official.md`，核实于 2026-11-23）。
 
 ---
 
@@ -212,4 +212,8 @@
 
 81. **自建开机/登录计划任务每次开机弹出黑色终端框：直接运行 `powershell.exe`/`pwsh.exe` 会先由 `conhost.exe` 分配控制台窗口，改用 `wscript.exe //B` 启动 `.vbs` 包装器可彻底零窗口运行。** 即使给 PowerShell 传 `-WindowStyle Hidden`，触发瞬间仍会闪出黑框（`pwsh.exe` 空载内存常达 140 MB）；通过 `wscript.exe //B //NoLogo wrapper.vbs` 调用 `WScript.Shell.Run ..., 0, False` 并配合互斥锁防重入，可做到零黑框且内存仅约 25 MB。详见 `startup-audit.md`。
 
-82. **Windows 11 24H2 Recall 快照（`%LOCALAPPDATA%\CoreAIPlatform.00\UKG`）与 2025–2026 AI Agent 隐藏目录（`.workbuddy`、`.zcode`、`.meituan-catpaw`、`DoubaoWork`、`*-updater`）静默占用数十 GB。** Copilot+ PC 的 Recall 快照与新一代 AI 编程助手的工作区/更新器缓存大多不在旧版磁盘扫描视野内；清理前须与用户确认哪些 AI 工具仍在使用，优先删除 `*-updater\pending` 已装完安装包并通过官方设置关闭 Recall 快照。
+82. **Windows 11 24H2 Recall 快照（`%LOCALAPPDATA%\CoreAIPlatform.00\UKP\{GUID}`）与 2025–2026 AI Agent 隐藏目录（`.workbuddy`、`.zcode`、`.meituan-catpaw`、`DoubaoWork`、`*-updater`）静默占用数十 GB。** Copilot+ PC 的 Recall 快照与新一代 AI 编程助手的工作区/更新器缓存大多不在旧版磁盘扫描视野内；清理前须与用户确认哪些 AI 工具仍在使用，优先删除 `*-updater\pending` 已装完安装包并通过官方设置关闭 Recall 快照。
+
+83. **关掉代理或次日开机后浏览器仍断网，但 `ProxyEnable` 已经是 `0`：`Connections` 二进制单连接标志位（`byte[8]`）或 PPPoE 拨号项代理未复位。** 现代代理与网络加速插件常通过 `RasEnumEntriesW` 配合 `InternetSetOptionW(75)` 把代理标志写入 `HKCU\...\Internet Settings\Connections` 下的 `DefaultConnectionSettings`、`SavedLegacySettings` 及各宽带/PPPoE 拨号项，或因直接关机未触发清理；此时仅将 `ProxyEnable` 设为 `0` 无效，浏览器仍会读取 `Connections` 的 `byte[8]`（`0x02`/`0x04`/`0x08`）或失效 PAC URL，甚至直到重新打开代理客户端初始化直连模式时才恢复。排查时应核查 `Connections` 各二进制项标志位、清理编码损坏的连接项名，并调用 `InternetSetOptionW(75)` 对每个连接复位直连（详见 `performance-tuning.md` §4.4）。
+
+84. **有线网卡接桥接光猫（需 PPPoE 拨号）却自动获取了 DHCP 默认网关，或遗留虚拟化 TCP 静态排除端口，导致系统设置主页转圈卡顿与本地端口绑定失败。** 当主机主要通过无线网卡联网、有线网口接入桥接光猫或内部交换机时，有线口通过 DHCP 获取的不可路由假网关（如 `192.168.1.1`）与较低跃点数会抢占默认路由，表现为打开 Windows 设置主页、拨号刷新或云连接长时间转圈超时；此外，卸载虚拟机或大数据/容器组件后常遗留绑定在物理网卡上的 `vmware_bridge` 协议、`hosts` 废旧条目以及带 `*` 标记的 `netsh` 管理员静态 TCP 排除端口段。需核查多默认网关与 `excludedportrange`，经用户确认并备份配置后清理假网关、无用虚拟网卡绑定及静态排除端口。

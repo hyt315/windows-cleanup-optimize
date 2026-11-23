@@ -70,6 +70,12 @@ description: Diagnoses and cleans up Windows 10/11 PCs - frees C drive space, re
 | 开机 | 再跑一次 T0，对比开机秒数 | `undo.ps1` |
 | 迁移 | 软件内显示的新路径；一周后看 C 盘是否回涨 | 见对应迁移手册 |
 
+### 卡住时
+
+- **扫描结果里某段标了 ⚠️「结果可能不全」**（`[CHK]`）：这一段的「未检测到」不能当成「没有」。按提示补权限（管理员窗口）或单独跑对应模板，再下结论。
+- **写操作返回 `Blocked` / `LongPath` / `Error`**：把 `Reason` 原样告诉用户，并给出它建议的下一步；不换别的命令绕过去。这些拒绝守的是「不变成永久删除」「不动系统组件」「没备份不改」。
+- **`undo.ps1` 结束时报「失败 N 步」**（退出码 1）：其余步骤已经还原。先看列出的失败原因，常见是没用管理员窗口；修好后可以再运行一次，脚本可重复执行。
+
 ### 阶段 6：汇报
 
 汇报只写一页：释放了多少空间、开机前后各几秒、改了哪几项、`undo.ps1` 在哪里，并提醒**清空回收站才真正释放空间**。
@@ -102,13 +108,14 @@ description: Diagnoses and cleans up Windows 10/11 PCs - frees C drive space, re
 
 - **系统**：Windows 10/11，Windows PowerShell 5.1 或 PowerShell 7。
   - Windows 10 已于 2025-10-14 停止常规支持；个人版扩展安全更新（ESU，需 22H2）到 **2027-10-12**，在 Windows 更新页注册。这类用户更不能关更新和 Defender。
-  - Windows 11 24H2 家庭版/专业版已于 **2026-10-13** 停止更新，先建议升级到 25H2 或更新版本。
+  - Windows 11 24H2 家庭版/专业版已于 **2026-10-13** 停止更新，先建议升级到仍在服务期的版本（2026-11 时为 25H2、26H2；以「Windows 11 版本信息」页为准）。
 - **编码**：所有 `.ps1` 和 `.psm1` 都以 UTF-8 BOM 保存，否则 5.1 读中文会乱码。新增脚本必须照做，`selftest` 会检查。
 - **运行方式**：`powershell -NoProfile -ExecutionPolicy Bypass -File <脚本>`。
 - **临时文件**：一律写到 `%TEMP%\wco`，不往用户目录里丢。
 
 ## 回归测试
 
-- `python scripts/selftest.py`：结构、引用、模板数（25）、BOM、易变路径时效、PowerShell 语法。没装 PowerShell 时，语法检查跳过并标 SKIP，不算通过。
-- `Invoke-Pester ./tests`（Pester 5）：公共模块的单元测试——回收站预检、台账与 undo 顺序、服务原值、演练不写入、拒绝清单、StartupApproved 字节编码。
+- `python scripts/selftest.py`：结构、引用、计数（模板、手册、避坑、家族数都从文件本身数出，文档里的数字须一致）、引用的函数与模板编号真实存在、BOM、易变路径时效、PowerShell 语法。没装 PowerShell 时，语法检查跳过并标 SKIP，不算通过。
+- `Invoke-Pester ./tests`（Pester 5）：公共模块单元测试，每条拒绝条件都有「只让这一个条件不满足」的用例和对照用例。`Wco.Reversibility.Windows.Tests.ps1` 做「执行 → undo → 对比原状」闭环，只在设置了 `WCO_CI_APPLY=1` 的 Windows 管理员环境（CI runner）运行。
+- `python tests/negative_controls.py`：负对照，逐条关掉安全检查，确认有测试失败；新增检查时在 `tests/negative_controls.json` 加一项。
 - `evals/`：触发评测与行为评测，改动 SKILL.md 后人工或用 Agent 跑一遍。

@@ -86,7 +86,7 @@ Describe 'Invoke-WcoRecycle 预检' {
         Test-Path $script:f | Should -BeTrue
     }
 
-    It 'junction / 符号链接直接拒绝' -Skip:($IsWindows -eq $false -and -not (Get-Command ln -ErrorAction SilentlyContinue)) {
+    It 'junction / 符号链接直接拒绝' -Skip:(-not (($env:OS -eq 'Windows_NT') -or $IsWindows -or (Get-Command ln -ErrorAction SilentlyContinue))) {
         $target = Join-Path $script:tmp ('t_' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $target | Out-Null
         $link = Join-Path $script:tmp ('l_' + [guid]::NewGuid().ToString('N'))

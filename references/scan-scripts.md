@@ -252,7 +252,7 @@ v2.1：直接运行即输出结果（旧版只定义函数不调用）。模板 
 
 > 代码：[`scripts/templates/t23-audit-browser-hijack.ps1`](../scripts/templates/t23-audit-browser-hijack.ps1)（只读模板可直接运行；写操作模板默认演练，加 `-Apply` 才执行）
 
-检查：Chrome / Edge / Firefox 在 HKLM 和 HKCU 下的策略（主页、启动页、新标签页、默认搜索引擎、强制安装扩展 `ExtensionInstallForcelist` / `ExtensionSettings`）、Native Messaging 宿主、快捷方式（.lnk）目标后附加的网址参数、WinINet 代理与自动配置脚本（`AutoConfigURL`）、hosts 文件里的非注释行、各网卡的 DNS 服务器、本机/当前用户受信任根证书（按颁发者和生效时间倒序列出，**近 180 天新增的标出来**）。`Secure Preferences` 不解析，只提示"如果改回又被改，用浏览器自带的'重置设置'"。
+检查：Chrome / Edge / Firefox 在 HKLM 和 HKCU 下的策略（主页、启动页、新标签页、默认搜索引擎、强制安装扩展 `ExtensionInstallForcelist` / `ExtensionSettings`、Edge `SleepingTabsTimeout`）、Native Messaging 宿主、快捷方式（.lnk）目标后附加的网址参数、WinINet 代理与自动配置脚本（`AutoConfigURL` / 本地死端口监听检测 / `Connections` 二进制单连接与拨号项 `byte[8]` 标志及编码异常连接名）、WinHTTP 代理、hosts 文件非注释行、各网卡 DNS 服务器、本机/当前用户受信任根证书（**近 180 天新增标出**）、虚拟网卡（VMware/VirtualBox/TAP/Wintun/QMTAP）默认网关与低跃点数抢占、多物理网卡竞争默认网关（如桥接光猫假网关）、管理员级 TCP 静态排除端口段，以及笔记本电池模式下无线网卡节能索引。`Secure Preferences` 不解析，只提示"如果改回又被改，用浏览器自带的'重置设置'"。
 
 判读：策略项用户在浏览器里删不掉，是劫持的强信号；但公司电脑的策略可能是 IT 下发的，先问用户。主页改了又被改回，可能是驱动级锁首页，提示用户用安全软件处理，不要反复改注册表。
 
@@ -260,7 +260,7 @@ v2.1：直接运行即输出结果（旧版只定义函数不调用）。模板 
 
 > 代码：[`scripts/templates/t24-audit-autostart-extended.ps1`](../scripts/templates/t24-audit-autostart-extended.ps1)（只读模板可直接运行；写操作模板默认演练，加 `-Apply` 才执行）
 
-覆盖：所有登录启动位置（Run / RunOnce / RunOnceEx / WOW6432Node / Policies\Explorer\Run / 用户和公共"启动"文件夹）及其 `StartupApproved` 状态；Winlogon 的 Shell / Userinit 与默认值对比；IFEO 的 Debugger 与 SilentProcessExit；AppInit_DLLs；exe/htm/bat/cmd 文件关联的打开命令；Active Setup；BootExecute；LSA 包；非默认打印监视器；Winsock 目录里的非微软提供程序；非微软计划任务（含"注册表里有、`Get-ScheduledTask` 看不到"的疑似隐藏任务）；WMI 事件订阅（过滤器、CommandLine / ActiveScript 消费者、绑定；查询失败与"没有"分开写）；非微软内核/筛选驱动（含签名）；Win11"重新启动应用"（RestartApps）；Edge 启动加速/后台运行策略；商店应用的 StartupTask（尽力而为）。
+覆盖：所有登录启动位置（Run / RunOnce / RunOnceEx / WOW6432Node / Policies\Explorer\Run / 用户和公共"启动"文件夹）及其 `StartupApproved` 状态与幽灵记录；Winlogon 的 Shell / Userinit 与默认值对比；IFEO 的 Debugger 与 SilentProcessExit；AppInit_DLLs；exe/htm/bat/cmd 文件关联的打开命令；Active Setup；BootExecute；LSA 包；非默认打印监视器；Winsock 目录里的非微软提供程序；非微软计划任务（含"注册表里有、`Get-ScheduledTask` 看不到"的疑似隐藏任务、缺失目标文件的孤儿任务，以及与登录 Run 项重复自启的同一可执行文件）；WMI 事件订阅（过滤器、CommandLine / ActiveScript 消费者、绑定；查询失败与"没有"分开写）；非微软内核/筛选驱动（含签名）、目标程序/驱动文件已不存在的孤儿服务或驱动，以及近 7 天 SCM 开机/服务启动报错（Event ID `7000`/`7023`/`7026`）；Win11"重新启动应用"（RestartApps）；Edge 启动加速/后台运行策略；商店应用的 StartupTask（尽力而为）。
 
 判读：这些位置里的项**只报告**。IFEO、Winlogon、LSA、驱动类发现属于 🔴 HIGH，交给用户和安全软件判断，本技能不自动修改。
 

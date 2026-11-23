@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""windows-cleanup-optimize 自测脚本（v2.2）
+"""windows-cleanup-optimize 自测脚本（v2.2.1）
 
 覆盖项：
 1. SKILL.md frontmatter 合法、正文 < 500 行、description ≤ 1024 字符
 2. references 手册齐全，SKILL.md / README*.md 引用的本地相对路径都存在
-3. 25 个模板脚本齐全，scan-scripts.md 里的模板链接都能找到文件
-4. 文档里手写的"N 个模板"必须等于实际数量（防止数字漂移）
+3. 模板脚本齐全且编号连续，scan-scripts.md 里的模板链接都能找到文件
+4. 计数单一来源：模板、手册、避坑、特征库家族的数量从文件本身数出，README（中英）/SKILL/scan-scripts 里写的数字必须一致
+4b. 文档与脚本引用的 Verb-Wco* 函数都在公共模块里定义（脚本调用的还必须已导出），T 编号都有对应模板
 5. 所有 .ps1 / .psm1 必须带 UTF-8 BOM（Windows PowerShell 5.1 读中文必需）
 6. 内容级深度断言（防止误删关键知识点，校验 pitfalls 1..N 连续编号）
 7. data/volatile-paths.json 时效提醒（超期只警告，不失败）
 8. evals/*.json 结构合法
 9. AST 语法门禁：PowerShell Parser（没装 PowerShell 时跳过并标 SKIP）+ Python ast
-10. 负向夹具：坏结构、坏语法、无 BOM 脚本都必须被拦住
+10. 负向夹具：坏结构、坏语法、无 BOM 脚本、数字漂移、引用不存在的函数/模板都必须被拦住
 零依赖，仅 Python 标准库。
 """
 
@@ -46,7 +47,8 @@ REQUIRED_TEMPLATES = (
     "SilentProcessExit",     # 模板 24 扩展自启动
     "Get-WcoInstalledProgram",  # 模板 25 程序盘点
 )
-EXPECTED_TEMPLATE_COUNT = 25
+# 下限：防止模板被误删。实际数量以 scripts/templates 下的文件为准，文档里的数字由 check_counts 对齐。
+MIN_TEMPLATE_COUNT = 25
 
 # 必须存在且被 SKILL.md 引用的参考文件（v2.0：并入 pitfalls / migration-cases 后共 14 份）
 REQUIRED_REFS = (
@@ -102,8 +104,8 @@ def validate(root: Path) -> str:
     # 2. 模板脚本
     tdir = root / "scripts" / "templates"
     templates = sorted(tdir.glob("t[0-9][0-9]-*.ps1")) if tdir.is_dir() else []
-    if len(templates) != EXPECTED_TEMPLATE_COUNT:
-        return f"scripts/templates 应有 {EXPECTED_TEMPLATE_COUNT} 个模板，实际 {len(templates)}"
+    if len(templates) < MIN_TEMPLATE_COUNT:
+        return f"scripts/templates 至少应有 {MIN_TEMPLATE_COUNT} 个模板，实际 {len(templates)}"
     tpl_text = "\n".join(t.read_text(encoding="utf-8-sig") for t in templates)
     missing = [t for t in REQUIRED_TEMPLATES if t not in tpl_text]
     if missing:
@@ -126,12 +128,30 @@ def validate(root: Path) -> str:
                 rel = link.split("#", 1)[0].split("?", 1)[0]
                 if rel and not (root / rel).exists():
                     return f"{rdoc_name} 引用了不存在的本地路径: {raw_link}"
-    for doc in [root / "SKILL.md", root / "README.md", root / "README.en.md", scan]:
-        if doc.is_file():
-            for n in re.findall(r"(\d+) ?个模板|(\d+) templates", doc.read_text(encoding="utf-8")):
-                num = int(n[0] or n[1])
-                if num not in (EXPECTED_TEMPLATE_COUNT, EXPECTED_TEMPLATE_COUNT + 1):
-                    return f"{doc.name} 写的模板数 {num} 与实际 {EXPECTED_TEMPLATE_COUNT} 不一致"
+    # 2a. 版本号单一来源：manifest.json；README 徽章与 full_scan 头注释必须一致
+    ver = json.loads((root / "manifest.json").read_text(encoding="utf-8")).get("version", "") if (root / "manifest.json").is_file() else ""
+    if ver:
+        fs_head = (root / "scripts" / "full_scan.ps1").read_text(encoding="utf-8-sig")[:2000]
+        m = re.search(r"版本：v([\d.]+)", fs_head)
+        if m and m.group(1) != ver:
+            return f"full_scan.ps1 头注释版本 v{m.group(1)} 与 manifest.json 的 {ver} 不一致"
+        for rd in ("README.md", "README.en.md"):
+            if (root / rd).is_file():
+                b = re.search(r"Version-v([\d.]+)-", (root / rd).read_text(encoding="utf-8"))
+                if b and b.group(1) != ver:
+                    return f"{rd} 版本徽章 v{b.group(1)} 与 manifest.json 的 {ver} 不一致"
+        if f"## [{ver}]" not in (root / "CHANGELOG.md").read_text(encoding="utf-8"):
+            return f"CHANGELOG.md 缺 [{ver}] 条目"
+
+    # 2b'. 计数单一来源：模板数、手册数、避坑条数、特征库家族数都从文件本身数出来，
+    #      README（中英）、SKILL.md、scan-scripts.md 里手写的数字必须与之一致（v2.2.1）。
+    err = check_counts(root, len(templates))
+    if err:
+        return err
+    # 2b''. 文档和脚本引用的公共模块函数、模板编号都真实存在（v2.2.1）
+    err = check_references(root, len(templates))
+    if err:
+        return err
 
     # 2c. UTF-8 BOM
     for ps in list((root / "scripts").rglob("*.ps1")) + list((root / "scripts").rglob("*.psm1")) + list((root / "tests").glob("*.ps1")):
@@ -286,6 +306,76 @@ def validate(root: Path) -> str:
     return ""
 
 
+COUNT_PATTERNS = {
+    "templates": (r"(\d+) ?个(?:脚本)?模板", r"(\d+) (?:script )?templates"),
+    "references": (r"(\d+) ?份参考手册", r"(\d+) reference manuals"),
+    "pitfalls": (r"(\d+) ?条(?:实战|按主题归类的)?(?:避坑|踩坑)", r"(\d+) (?:real-world )?pitfalls"),
+    "families": (r"(\d+) ?个家族", r"(\d+) families"),
+}
+
+
+def actual_counts(root: Path, template_count: int) -> dict:
+    pit = (root / "references" / "pitfalls.md").read_text(encoding="utf-8")
+    nums = [int(n) for n in re.findall(r"(?m)^(\d+)\. \*\*", pit)]
+    cat = json.loads((root / "data" / "bloatware-catalog.json").read_text(encoding="utf-8"))
+    return {
+        "templates": template_count,
+        "references": len(list((root / "references").glob("*.md"))),
+        "pitfalls": max(nums) if nums else 0,
+        "families": len(cat.get("families", [])),
+    }
+
+
+def check_counts(root: Path, template_count: int) -> str:
+    try:
+        real = actual_counts(root, template_count)
+    except (OSError, ValueError) as e:
+        return f"计数校验读不到源文件：{e}"
+    docs = [root / "SKILL.md", root / "README.md", root / "README.en.md", root / "references" / "scan-scripts.md"]
+    for doc in docs:
+        if not doc.is_file():
+            continue
+        text = doc.read_text(encoding="utf-8")
+        for key, pats in COUNT_PATTERNS.items():
+            for pat in pats:
+                for m in re.finditer(pat, text):
+                    n = int(m.group(1))
+                    if n != real[key]:
+                        line = text.count("\n", 0, m.start()) + 1
+                        return f"{doc.name}:{line} 写的 {key} 数为 {n}，实际为 {real[key]}（计数以文件本身为准）"
+    tnums = sorted(int(p.name[1:3]) for p in (root / "scripts" / "templates").glob("t[0-9][0-9]-*.ps1"))
+    if tnums != list(range(1, len(tnums) + 1)):
+        return f"模板编号不连续：{tnums}"
+    return ""
+
+
+def check_references(root: Path, template_count: int) -> str:
+    mod = (root / "scripts" / "lib" / "Wco.Common.psm1").read_text(encoding="utf-8-sig")
+    defined = set(re.findall(r"(?m)^function ([A-Z][a-z]+-Wco[A-Za-z]+)", mod))
+    exp = re.search(r"Export-ModuleMember -Function (.*)", mod, re.S)
+    exported = set(re.findall(r"[A-Z][a-z]+-Wco[A-Za-z]+", exp.group(1))) if exp else set()
+    sources = [root / "SKILL.md", root / "README.md", root / "README.en.md", root / "scripts" / "full_scan.ps1"]
+    sources += sorted((root / "references").glob("*.md")) + sorted((root / "scripts" / "templates").glob("*.ps1"))
+    for src in sources:
+        text = src.read_text(encoding="utf-8-sig")
+        for fn in sorted(set(re.findall(r"\b([A-Z][a-z]+-Wco[A-Za-z]+)\b", text))):
+            if fn not in defined:
+                return f"{src.relative_to(root)} 引用了公共模块里不存在的函数 {fn}"
+            if src.suffix == ".ps1" and fn not in exported:
+                return f"{src.relative_to(root)} 调用了公共模块未导出的函数 {fn}"
+    # T 编号：T0 是 full_scan 的开机耗时段；T1..Tn 对应模板文件；T5C 这类后缀是 full_scan 的分段
+    for src in [root / "SKILL.md"] + sorted((root / "references").glob("*.md")):
+        text = src.read_text(encoding="utf-8")
+        for m in re.finditer(r"(?<![A-Za-z0-9_])T(\d{1,2})(?![0-9])", text):
+            n = int(m.group(1))
+            if n > template_count:
+                return f"{src.relative_to(root)} 引用了不存在的模板 T{n}（共 {template_count} 个）"
+        for link in re.findall(r"scripts/templates/(t\d\d-[\w.-]+\.ps1)", text):
+            if not (root / "scripts" / "templates" / link).is_file():
+                return f"{src.relative_to(root)} 引用了不存在的模板文件 {link}"
+    return ""
+
+
 def find_pwsh() -> str | None:
     return shutil.which("pwsh") or shutil.which("powershell")
 
@@ -354,6 +444,24 @@ def check_bad(tmp: Path) -> None:
     problem = validate(bad)
     if not problem:
         raise AssertionError("负向破坏夹具应 FAIL（引用缺失文件 + 缺关键模板），实际未拦住")
+
+    # 1b. 计数与引用破坏：拷一份真实技能，只改一处，必须被拦住（v2.2.1）
+    import shutil as _sh
+    for name, mutate in (
+        ("count-readme", lambda r: (r / "README.md").write_text(
+            (r / "README.md").read_text(encoding="utf-8") + "\n共 999 条实战避坑。\n", encoding="utf-8")),
+        ("count-en", lambda r: (r / "README.en.md").write_text(
+            (r / "README.en.md").read_text(encoding="utf-8") + "\n999 families\n", encoding="utf-8")),
+        ("ghost-function", lambda r: (r / "references" / "pitfalls.md").write_text(
+            (r / "references" / "pitfalls.md").read_text(encoding="utf-8") + "\n用 `Remove-WcoEverything` 清理。\n", encoding="utf-8")),
+        ("ghost-template", lambda r: (r / "SKILL.md").write_text(
+            (r / "SKILL.md").read_text(encoding="utf-8") + "\n再跑 T99。\n", encoding="utf-8")),
+    ):
+        copy = tmp / f"mut-{name}"
+        _sh.copytree(SKILL_ROOT, copy, ignore=_sh.ignore_patterns(".git", "dist", "__pycache__"))
+        mutate(copy)
+        if not validate(copy):
+            raise AssertionError(f"负向夹具 {name} 应 FAIL，实际未拦住")
 
     # 2. 负向 PowerShell 语法破坏（没装 PowerShell 时跳过）
     bad_ps1 = tmp / "bad_syntax.ps1"

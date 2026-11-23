@@ -8,7 +8,7 @@
       "path": "%USERPROFILE%\\xwechat_files 或 Documents\\xwechat_files",
       "official_move": "设置 › 账号和存储 › 存储位置",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-11-20"
+      "verified_at": "2026-11-23"
     },
     {
       "app": "微信 4.x",
@@ -30,9 +30,9 @@
       "app": "企业微信",
       "kind": "文件与缓存",
       "path": "Documents\\WXWork 与 %APPDATA%\\Tencent\\WXWork",
-      "official_move": "设置 › 文档/文件管理 › 更改文件存储位置",
+      "official_move": "头像 › 设置 › 存储管理 › 文件储存位置（官方帮助 doc_id=13352）",
       "doc": "references/chat-apps-migration.md",
-      "verified_at": "2026-11-20"
+      "verified_at": "2026-11-23"
     },
     {
       "app": "QQ NT",
@@ -72,7 +72,7 @@
       "path": "默认模型目录（以 Ollama 官方 FAQ 为准）",
       "official_move": "环境变量 OLLAMA_MODELS",
       "doc": "references/drive-migration-official.md",
-      "verified_at": "2026-11-20"
+      "verified_at": "2026-11-23"
     },
     {
       "app": "Hugging Face",
@@ -91,12 +91,12 @@
       "verified_at": "2026-11-20"
     },
     {
-      "app": "Windows 11 24H2 Recall",
-      "kind": "快照缓存（CoreAIPlatform.00 UKG）",
-      "path": "%LOCALAPPDATA%\\CoreAIPlatform.00\\UKG",
+      "app": "Windows 11 Recall（Copilot+ PC）",
+      "kind": "快照库（ukg.db、ImageStore 等，位于 UKP\\{GUID} 下）",
+      "path": "%LOCALAPPDATA%\\CoreAIPlatform.00\\UKP\\{GUID}（社区取证资料，微软未公开文档；2026-11-23 更正，旧版误写为 UKG）",
       "official_move": "设置 › 隐私和安全性 › Recall 和快照（或可选功能停用 Recall）",
       "doc": "references/system-cleanup.md",
-      "verified_at": "2026-11-20"
+      "verified_at": "2026-11-23"
     }
   ]
 }

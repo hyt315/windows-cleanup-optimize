@@ -50,7 +50,14 @@ Describe '注册表整键删除的保护清单' {
         Test-WcoProtectedRegistryKey -Key $Key | Should -BeNullOrEmpty
     }
     It 'Remove-WcoRegistryKey 遇到保护键直接 Blocked，不触碰注册表' {
-        (Remove-WcoRegistryKey -Path 'HKLM:\SOFTWARE\Microsoft' -Apply).Status | Should -Be 'Blocked'
+        Mock -ModuleName Wco.Common Test-WcoRegKey { $true }
+        Mock -ModuleName Wco.Common Test-WcoAdmin { $true }
+        Mock -ModuleName Wco.Common Export-WcoRegKey { $true }
+        Mock -ModuleName Wco.Common Remove-WcoRegKeyRaw { }
+        $r = Remove-WcoRegistryKey -Path 'HKLM:\SOFTWARE\Microsoft' -Apply
+        $r.Status | Should -Be 'Blocked'
+        $r.Reason | Should -Match '系统/微软组件'
+        Should -Invoke -ModuleName Wco.Common Remove-WcoRegKeyRaw -Times 0
     }
 }
 

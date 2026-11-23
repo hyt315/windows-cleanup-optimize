@@ -241,12 +241,18 @@ DNS over HTTPS 加密 DNS 查询——避免 ISP / 公共 WiFi 监听与域名�
 
 **Win10**：需改注册表或装第三方客户端。
 
-### 4.4 代理/VPN 退出后断网、虚拟网卡路由抢占与笔记本 Wi-Fi 电池节能排查（v2.2）
+### 4.4 代理/VPN 退出后断网、单连接二进制代理残留、多网关抢占与无线节能排查
 
-当用户反馈**"关掉 VPN/代理就打不开网页"、"有时点击网页很卡"**时，模板 23（`t23-audit-browser-hijack.ps1`）会自动核查以下 4 项常见根因：
+当用户反馈**"关掉 VPN/代理后浏览器打不开（重新打开代理软件但不连接反而恢复）"、"进入系统设置网络/拨号主页一直转圈"或"点击网页首包很慢"**时，模板 23（`t23-audit-browser-hijack.ps1`）会自动核查以下常见根因：
 
-1. **残留本地死代理（WinINet `ProxyEnable=1`）**：代理客户端异常退出后未关闭系统代理，浏览器仍指向无监听的 `127.0.0.1:<端口>`。恢复系统代理后应同步 P/Invoke 调用 `wininet.dll!InternetSetOption`（选项 39/37）与 `dnsapi.dll!DnsFlushResolverCache()` 通知系统句柄即时生效（仅改注册表会存在延迟）。
-2. **虚拟网卡默认网关 / 低跃点数抢占（🟡 MEDIUM）**：VMware NAT（`VMnet8`）或遗留 `TAP-Windows` / `QMTAP` 虚拟网卡如果配有默认网关（`0.0.0.0/0`）或低 `InterfaceMetric`，关闭代理后默认路由会被黑洞网关接管。正确处理：清除虚拟网卡上的默认网关并设高跃点数（如 `Set-NetIPInterface -InterfaceMetric 500`）；卸载已闲置的 `QMTAP`/`TAP-Windows` 幽灵设备（`pnputil /remove-device`）。
+1. **残留本地死代理与 `Connections` 单连接二进制标志位未复位**：
+   - 不少代理或 RAS 拨号加速插件不仅修改 `HKCU\...\Internet Settings\ProxyEnable`，还会调用 `wininet.dll!InternetSetOptionW`（`INTERNET_OPTION_PER_CONNECTION_OPTION = 75`）同时写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Connections` 下的 `DefaultConnectionSettings`、`SavedLegacySettings` 以及具体 PPPoE/VPN 拨号项。
+   - 当客户端异常退出或直接关机前未完成清理时，即便 `ProxyEnable` 已被改回 `0`，上述二进制值的第 8 字节（`dwFlags`）仍可能停留在 `0x02`/`0x03`（代理开启）或包含无效 PAC URL、`0x08`（WPAD 自动检测）及编码损坏的乱码连接名，导致浏览器与 PPPoE 拨号链路在次日开机后仍持续走死代理端口直至重新唤起客户端主程序。
+   - 修复思路：清理时需先备份 `Connections` 键，同步将 `ProxyEnable=0`、移除 `AutoConfigURL`，并按单连接通过 `InternetSetOptionW(75)`（`PROXY_TYPE_DIRECT = 1` + 递增版本号）复位所有拨号及默认连接项，再调用 `InternetSetOption(39/37)` 与 `DnsFlushResolverCache()`；若配置退出守护脚本，建议一并监听 `SessionEnding` / `WM_QUERYENDSESSION` 事件以防止未关代理直接关机导致次日断网。
+2. **虚拟网卡路由抢占、桥接光猫假网关与 TCP 静态排除端口残留（🟡 MEDIUM）**：
+   - **虚拟网卡抢占**：VMware NAT（`VMnet8`）或遗留 `TAP-Windows` / `QMTAP` 虚拟网卡如果配有默认网关（`0.0.0.0/0`）或低 `InterfaceMetric`，关闭代理后默认路由会被黑洞网关接管；多余物理网卡若绑定了不使用的桥接协议（如 `vmware_bridge`）也会拖慢建连探测。正确处理：清除虚拟网卡默认网关并设高跃点数（如 `Set-NetIPInterface -InterfaceMetric 500`），禁用闲置虚拟网卡或其桥接绑定，卸载不再使用的 `QMTAP`/`TAP-Windows` 幽灵设备（`pnputil /remove-device`）。
+   - **多物理网卡假网关（桥接光猫拨号常见）**：当主联网走 Wi-Fi，而有线网卡接入桥接光猫（需通过 PPPoE 宽带拨号联网）或无外网内网交换机时，有线网卡可能通过 DHCP 自动拿到不可路由外网的默认网关与 DNS（如 `192.168.1.1` 且跃点数较低），导致 Windows 11 设置主页（拨号联网模块）及部分应用优先向假网关发包、超时转圈 15–30 秒。处理前记录原 IP/DHCP 配置以便回退，确认不需要该网关时可移除其默认网关与 DNS 或调整接口跃点数，并保持 `NlaSvc` 正常工作。
+   - **管理员静态 TCP 排除端口**：卸载虚拟化或分布式集群工具后，`netsh int ipv4 show excludedportrange protocol=tcp` 中可能遗留带 `*` 标记的静态排除端口段（例如 `50000-50059`），占用本机开发调试端口，核实后可用 `netsh int ipv4 delete excludedportrange` 清除。
 3. **Edge `SleepingTabsTimeout` 策略过短（🟡 MEDIUM）**：若发现 `HKLM\SOFTWARE\Policies\Microsoft\Edge\SleepingTabsTimeout` 被设为极小值（如 `15` 秒），切换标签后页面迅速冻结导致点击恢复缓慢，可调整为 `900`（15 分钟）或交由默认管理（先备份策略值）。
 4. **笔记本电池模式无线网卡节能过深（🟢 LOW）**：部分 OEM 电源方案在电池（DC）模式下把无线适配器"节能模式"（GUID `12bbebe6-58d6-4636-95bb-3217ef867c1a`）设为 `2`（中等节能）或 `3`（最高节能），建议改为 `1`（低节能）以降低网页首包卡顿：
    ```cmd
@@ -261,12 +267,12 @@ DNS over HTTPS 加密 DNS 查询——避免 ISP / 公共 WiFi 监听与域名�
 
 ### 5.1 NTFS Last Access Time 戳
 
-**风险**：🟢 LOW（Win10 1803+ 已默认禁用）
+**风险**：🟢 LOW（Win10 1803 起默认「系统管理」）
 
 NTFS 默认记录每个文件的"最后访问时间"——每次读取都会更新元数据，**有性能开销**。
 
-**Win10 1803+**：系统已默认禁用，无需操作。
-**早期版本**：可用 `fsutil behavior set disablelastaccess 1` 启用。
+**Win10 1803 起**：默认是「系统管理」（`NtfsDisableLastAccessUpdate` 的第 1 位），系统按卷大小决定是否更新访问时间（社区资料称系统卷 ≤128 GB 时开启，微软未给出阈值数值）。先 `fsutil behavior query disablelastaccess` 看当前状态，一般不用改。
+**确实想关**：`fsutil behavior set disablelastaccess 1`（关闭访问时间更新）；改回系统管理用 `fsutil behavior set disablelastaccess 2`。依据：MS-FSA 规范与 fsutil behavior 文档（访问于 2026-11-23）。
 
 ### 5.2 NTFS 8.3 短文件名
 

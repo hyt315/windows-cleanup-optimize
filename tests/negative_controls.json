@@ -1,0 +1,278 @@
+{
+  "_说明": "每项关掉一条安全检查或检测。新增检查时在这里加一项，并确认 negative_controls.py 报告它被测试抓住。",
+  "mutants": [
+    {
+      "id": "recycle-no-bin",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if (-not $pol.HasRecycleBin) { $r.Status = 'Blocked'",
+      "replace": "if ($false) { $r.Status = 'Blocked'",
+      "why": "没有回收站的卷不再拒绝"
+    },
+    {
+      "id": "recycle-nuke",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($pol.NukeOnDelete) { $r.Status = 'Blocked'",
+      "replace": "if ($false) { $r.Status = 'Blocked'",
+      "why": "回收站设为直接删除时不再拒绝"
+    },
+    {
+      "id": "recycle-policy-override",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if (Get-WcoProp $pol 'PolicyOverride') { $r.Status = 'Blocked'",
+      "replace": "if ($false) { $r.Status = 'Blocked'",
+      "why": "组策略接管回收站时不再拒绝"
+    },
+    {
+      "id": "recycle-unknown",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "    if (-not $pol.Known) {\n        $r.Status = 'Blocked'",
+      "replace": "    if ($false) {\n        $r.Status = 'Blocked'",
+      "why": "回收站策略读不到时不再拒绝"
+    },
+    {
+      "id": "recycle-capacity",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($pol.MaxCapacityMB -and $r.SizeMB -gt $pol.MaxCapacityMB) {",
+      "replace": "if ($false) {",
+      "why": "超过回收站上限不再拒绝"
+    },
+    {
+      "id": "recycle-reparse",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {",
+      "replace": "if ($false) {",
+      "why": "junction 本身不再拒绝"
+    },
+    {
+      "id": "recycle-longpath",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($m.LongPath -gt 0) { $r.Status = 'LongPath'",
+      "replace": "if ($false) { $r.Status = 'LongPath'",
+      "why": "目录内有超长路径不再跳过"
+    },
+    {
+      "id": "recycle-dryrun",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if (-not $Apply) { $r.Status = 'DryRun'; return $r }\n    try {\n        Add-Type -AssemblyName Microsoft.VisualBasic",
+      "replace": "if ($false) { $r.Status = 'DryRun'; return $r }\n    try {\n        Add-Type -AssemblyName Microsoft.VisualBasic",
+      "why": "回收站不加 -Apply 也执行"
+    },
+    {
+      "id": "svc-protected",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($StartType -in @('disabled', 'demand') -and ($script:WcoProtectedServices -contains $Name)) {",
+      "replace": "if ($false) {",
+      "why": "受保护服务也允许停用"
+    },
+    {
+      "id": "svc-dryrun",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if (-not $Apply) { return [pscustomobject]@{ Name = $Name; Status = 'DryRun'; Before = $before; After = $StartType;",
+      "replace": "if ($false) { return [pscustomobject]@{ Name = $Name; Status = 'DryRun'; Before = $before; After = $StartType;",
+      "why": "服务启动类型不加 -Apply 也执行"
+    },
+    {
+      "id": "svc-delete-protected",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($script:WcoProtectedServices -contains $Name) { $r.Status = 'Blocked'; $r.Reason = '安全/更新/系统核心服务，禁止删除'; return $r }",
+      "replace": "",
+      "why": "受保护服务允许删除"
+    },
+    {
+      "id": "svc-delete-svchost",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($exe -and (Split-Path -Leaf $exe) -ieq 'svchost.exe') {",
+      "replace": "if ($false) {",
+      "why": "svchost 共享服务允许删除"
+    },
+    {
+      "id": "svc-delete-ms",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($sig.IsMicrosoft) { $r.Status = 'Blocked'",
+      "replace": "if ($false) { $r.Status = 'Blocked'",
+      "why": "微软签名服务允许删除"
+    },
+    {
+      "id": "svc-delete-running",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ((Get-WcoProp $svc 'State') -ne 'Stopped' -or (Get-WcoProp $svc 'StartMode') -ne 'Disabled') {",
+      "replace": "if ($false) {",
+      "why": "未停用的服务也允许删除"
+    },
+    {
+      "id": "reg-protected",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "    $why = Test-WcoProtectedRegistryKey -Key $Path\n    if ($why) {",
+      "replace": "    $why = Test-WcoProtectedRegistryKey -Key $Path\n    if ($false) {",
+      "why": "保护键也允许整键删除"
+    },
+    {
+      "id": "reg-vendor-root",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($vendor -in $shared -and $depth -eq 1) {",
+      "replace": "if ($false) {",
+      "why": "多产品共用的厂商根键允许整键删除"
+    },
+    {
+      "id": "reg-ms",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($vendor -like 'microsoft*') { return",
+      "replace": "if ($false) { return",
+      "why": "SOFTWARE\\Microsoft 下的键允许整键删除"
+    },
+    {
+      "id": "reg-backup-first",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if (-not (Export-WcoRegKey -Key $nk -File $bak)) { $r.Status = 'Error'; $r.Reason = 'reg export 失败，未删除'; return $r }",
+      "replace": "",
+      "why": "注册表键备份失败也继续删除"
+    },
+    {
+      "id": "regval-backup-first",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if (-not (Export-WcoRegKey -Key $nk -File $bak)) { return [pscustomobject]@{ Key = $nk; Name = $Name; Status = 'Error'; Reason = 'reg export 失败，未修改' } }",
+      "replace": "",
+      "why": "注册表值备份失败也继续修改"
+    },
+    {
+      "id": "task-ms-delete",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($tp -like '\\Microsoft\\*') { $r.Status = 'Blocked'",
+      "replace": "if ($false) { $r.Status = 'Blocked'",
+      "why": "\\Microsoft\\ 下的计划任务允许删除"
+    },
+    {
+      "id": "appx-protected",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "        $why = Test-WcoProtectedAppx -Package $p\n        if ($why) {",
+      "replace": "        $why = Test-WcoProtectedAppx -Package $p\n        if ($false) {",
+      "why": "必需商店组件允许移除"
+    },
+    {
+      "id": "appx-wildcard-wide",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($Name.Contains('*') -and $pkgs.Count -gt 5) {",
+      "replace": "if ($false) {",
+      "why": "通配符匹配过多包也允许移除"
+    },
+    {
+      "id": "uninst-url-trap",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($us -match '^\\s*\"?(https?:|www\\.)') {",
+      "replace": "if ($false) {",
+      "why": "UninstallString 指向网页也照常运行"
+    },
+    {
+      "id": "uninst-syscomp",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($p.SystemComponent) { $r.Status = 'Blocked'",
+      "replace": "if ($false) { $r.Status = 'Blocked'",
+      "why": "隐藏系统组件也允许卸载"
+    },
+    {
+      "id": "path-root-guard",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ($p -eq '\\' -or $p -match '^[A-Za-z]:\\\\$' -or $p -match '^\\\\\\\\[^\\\\]+\\\\[^\\\\]+\\\\$') { return $false }",
+      "replace": "",
+      "why": "盘符根当成安装目录"
+    },
+    {
+      "id": "name-short",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if ([math]::Min($a.Length, $b.Length) -le 4) { return 'None' }",
+      "replace": "",
+      "why": "短名做模糊匹配"
+    },
+    {
+      "id": "residual-short",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "                if ($k.Length -le 4) { continue }",
+      "replace": "",
+      "why": "残留判定里短名做子串匹配"
+    },
+    {
+      "id": "sa-bytes",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "{ $_ -in 3, 7 } {",
+      "replace": "{ $_ -in 2, 7 } {",
+      "why": "StartupApproved 启用/禁用字节解读写反"
+    },
+    {
+      "id": "ledger-array",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "ConvertTo-Json -InputObject @($s.Changes) -Depth 4",
+      "replace": "$s.Changes | ConvertTo-Json -Depth 4",
+      "why": "台账只有一条时写成对象而不是数组"
+    },
+    {
+      "id": "undo-order",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "    [array]::Reverse($arr)\n",
+      "replace": "\n",
+      "why": "undo 不再倒序"
+    },
+    {
+      "id": "ghost-source",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "        if (-not (Test-WcoStartupSource -Scope $entry.Scope -Name $entry.Name)) {",
+      "replace": "        if ($true) {",
+      "why": "幽灵检测把正常启动项也报出来"
+    },
+    {
+      "id": "recycle-ancestor",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "    if ($via) {\n        # 上级目录是 junction 时",
+      "replace": "    if ($false) {\n        # 上级目录是 junction 时",
+      "why": "路径经过 junction 时不再拒绝"
+    },
+    {
+      "id": "name-cjk-boundary",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "$t = $t -replace '(?<![\\d.])v?\\d+(\\.\\d+)+(?![\\d.]*\\d)', ' '",
+      "replace": "$t = $t -replace '\\bv?\\d+(\\.\\d+)+\\b', ' '",
+      "why": "版本号剥离退回 \\b（汉字后的版本号剥不掉）"
+    },
+    {
+      "id": "name-cjk-bits",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "|(?<!\\d)(64|32)[- ]?(bit|位)",
+      "replace": "",
+      "why": "不再剥离 64位 / 64-bit"
+    },
+    {
+      "id": "catalog-substring",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "        elseif ($Value -eq $pat) { return $pat }\n    }\n    return $null\n}",
+      "replace": "        elseif ($Value -like \"*$pat*\") { return $pat }\n    }\n    return $null\n}",
+      "why": "特征比对改成子串匹配（QQMusic 会命中 QQ）"
+    },
+    {
+      "id": "catalog-whitelist",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "if (-not $g.Name -or $g.Name -in $Whitelist) { continue }",
+      "replace": "if (-not $g.Name) { continue }",
+      "why": "白名单不再生效"
+    },
+    {
+      "id": "catalog-confidence",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "else { '疑似，需实机确认' }",
+      "replace": "else { '较确定' }",
+      "why": "低置信度命中不再标「疑似」"
+    },
+    {
+      "id": "undo-exitcode",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "'        if ($LASTEXITCODE -ne 0) { throw \"外部命令退出码 $LASTEXITCODE\" }',",
+      "replace": "",
+      "why": "undo 不再检查外部命令退出码"
+    },
+    {
+      "id": "undo-exit1",
+      "file": "scripts/lib/Wco.Common.psm1",
+      "find": "        '    exit 1',\n",
+      "replace": "",
+      "why": "undo 有失败步骤时仍以 0 退出"
+    }
+  ]
+}

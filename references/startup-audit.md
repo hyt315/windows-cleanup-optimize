@@ -80,11 +80,11 @@ foreach ($p in $pairs) {
 | 现象 | 来源 | 处理 |
 |------|------|------|
 | 开机后上次开着的应用（含 Edge）自己打开 | 设置 › 账户 › 登录选项 →"自动保存我的可重启应用，并在我重新登录时重启它们" | 关闭该开关（微软 Edge 支持页列出的方法：[Stop Microsoft Edge from starting automatically](https://support.microsoft.com/en-us/edge/stop-microsoft-edge-from-starting-automatically)） |
-| 设置里能看到但 Run 键里没有 | 商店/MSIX 应用的 StartupTask（新版 Teams、终端、手机连接等，具体机制 存疑） | 设置 › 应用 › 启动 关闭，或应用内设置 |
+| 设置里能看到但 Run 键里没有 | 商店/MSIX 应用的 StartupTask（清单里的 `uap5:StartupTask`，微软文档有说明；哪些应用在用以实机为准） | 设置 › 应用 › 启动 关闭，或应用内设置 |
 | OneDrive 开机启动 | HKCU Run 值 `OneDrive`（存疑，未取官方页） | OneDrive 设置 → 取消"登录 Windows 时自动启动" |
 | 小组件进程常驻 | 任务栏小组件（机制 存疑） | 设置 › 个性化 › 任务栏 → 关闭"小组件" |
 | Edge 后台常驻 / 开机弹窗 | Edge 启动提升、后台模式、`LaunchEdgeOnWindowsStartupEnabled` | 下一节 |
-| 重装系统后厂商助手又回来 | 厂商驱动包附带应用、WPBT（存疑） | 解释原因，按需卸载；不默认改固件相关设置 |
+| 重装系统后厂商助手又回来 | 厂商驱动包附带应用、WPBT（微软 WPBT 规范） | 解释原因，按需卸载；不默认改固件相关设置 |
 
 ---
 

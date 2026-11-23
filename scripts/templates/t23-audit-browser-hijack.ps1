@@ -1,6 +1,6 @@
-﻿# 模板 23：audit-browser-hijack（只读，v2.2）
+﻿# 模板 23：audit-browser-hijack（只读，v2.2.1）
 # 排查浏览器主页/搜索/新标签页/休眠标签被策略锁定、强制安装扩展、Native Messaging、快捷方式网址参数、
-# 代理（含死端口检测）、hosts、DNS、近期新增根证书、虚拟网卡路由抢占与无线网卡电池节能。
+# WinINet 代理（含死端口与 Connections 二进制单连接/拨号项标志）、hosts、DNS、近期新增根证书、多网关抢占、虚拟网卡、TCP 静态排除端口与无线网卡电池节能。
 # 全程只读：不修改注册表、文件、证书或网络设置。
 # 用法：powershell -ExecutionPolicy Bypass -File t23-audit-browser-hijack.ps1 [-OutFile report.txt]
 #   -OutFile 仅接受文件名，报告写入 %TEMP%\wco\ 下（唯一的写操作）。
@@ -271,6 +271,7 @@ $proxyKeys = @(
     @{ Name = 'WinINet 策略(HKLM)'; Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings' },
     @{ Name = 'WinINet 策略(HKCU)'; Path = 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings' }
 )
+$hkcuProxyEnable = ''
 foreach ($pk in $proxyKeys) {
     try {
         $o = Open-RegKey $pk.Path
@@ -285,7 +286,10 @@ foreach ($pk in $proxyKeys) {
             foreach ($v in @('ProxyEnable', 'ProxyServer', 'ProxyOverride', 'AutoConfigURL')) {
                 if ($names -contains $v) {
                     $val = Format-RegValue $o.Key.GetValue($v)
-                    if ($v -eq 'ProxyEnable') { $proxyEnableVal = $val }
+                    if ($v -eq 'ProxyEnable') {
+                        $proxyEnableVal = $val
+                        if ($pk.Name -eq 'WinINet(HKCU)') { $hkcuProxyEnable = $val }
+                    }
                     if ($v -eq 'ProxyServer') { $proxyServerVal = $val }
                     Write-Line ("    {0} = {1}" -f $v, $val)
                     $isOn = ($v -eq 'ProxyEnable' -and $val -eq '1') -or ($v -eq 'AutoConfigURL' -and $val)
@@ -316,6 +320,40 @@ foreach ($pk in $proxyKeys) {
     } catch {
         Write-Line ("  [{0}] 读取失败：{1}" -f $pk.Name, $_.Exception.Message) -Color Yellow
     }
+}
+try {
+    $connKey = Open-RegKey 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Connections'
+    if ($connKey.State -eq 'ok') {
+        try {
+            Write-Line "  [WinINet(HKCU) Connections 二进制状态]"
+            $cNames = @($connKey.Key.GetValueNames() | Sort-Object)
+            foreach ($cn in $cNames) {
+                $rawBytes = $connKey.Key.GetValue($cn)
+                $badName = $cn.Contains([char]0xFFFD)
+                if ($rawBytes -is [byte[]] -and $rawBytes.Length -ge 9) {
+                    $flags = [int]$rawBytes[8]
+                    $isDialup = ($cn -notin @('DefaultConnectionSettings', 'SavedLegacySettings'))
+                    $flagText = ('0x{0:X2}' -f $flags)
+                    Write-Line ("    {0}: Flags={1} (Len={2})" -f $cn, $flagText, $rawBytes.Length)
+                    if ($badName) {
+                        Add-Count $sec
+                        Add-Attention ("WinINet Connections 存在疑似编码损坏的项：{0}（Flags={1}）" -f $cn, $flagText)
+                    } elseif (($flags -band 0x06) -ne 0 -and $hkcuProxyEnable -ne '1') {
+                        Add-Count $sec
+                        Add-Attention ("WinINet Connections\{0} 二进制代理标志仍为 {1}，而 ProxyEnable={2}（单连接/RAS 代理未复位，次日开机或切直连易导致浏览器断网）" -f $cn, $flagText, $hkcuProxyEnable)
+                    } elseif ($isDialup -and (($flags -band 0x08) -ne 0)) {
+                        Add-Count $sec
+                        Add-Attention ("WinINet 拨号连接 Connections\{0} 开启了 WPAD 自动检测（Flags={1}），可能拖慢拨号或网页解析" -f $cn, $flagText)
+                    }
+                } elseif ($badName) {
+                    Add-Count $sec
+                    Add-Attention ("WinINet Connections 存在异常项：{0}" -f $cn)
+                }
+            }
+        } finally { $connKey.Key.Close() }
+    }
+} catch {
+    Write-Line ("  [Connections] 读取失败：{0}" -f $_.Exception.Message) -Color Yellow
 }
 try {
     if (Get-Command netsh.exe -ErrorAction SilentlyContinue) {
@@ -413,7 +451,10 @@ Add-Count $sec 0
 try {
     if (Get-Command Get-NetAdapter -ErrorAction SilentlyContinue) {
         $vPattern = 'VMware|VirtualBox|TAP|TUN|Wintun|Sangfor|QMTAP|Hyper-V|vEthernet'
-        $vAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceDescription -match $vPattern -or $_.Name -match $vPattern })
+        $allAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue)
+        $adapterMap = @{}
+        foreach ($ad in $allAdapters) { $adapterMap[$ad.ifIndex] = $ad }
+        $vAdapters = @($allAdapters | Where-Object { $_.InterfaceDescription -match $vPattern -or $_.Name -match $vPattern })
         $defRoutes = @()
         if (Get-Command Get-NetRoute -ErrorAction SilentlyContinue) {
             $defRoutes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue)
@@ -441,9 +482,45 @@ try {
             }
         }
         if ($vAdapters.Count -eq 0) { Write-Line "  （未发现常见虚拟机或 VPN 虚拟网卡）" }
+        $physRoutes = @()
+        foreach ($rt in $defRoutes) {
+            $ad = $adapterMap[$rt.InterfaceIndex]
+            if (-not $ad) { continue }
+            if ($ad.InterfaceDescription -match $vPattern -or $ad.Name -match $vPattern) { continue }
+            if ($ad.InterfaceDescription -match 'Loopback' -or $ad.Name -match 'Loopback') { continue }
+            $ifMet = if ($ipIfs[$rt.InterfaceIndex]) { [int]$ipIfs[$rt.InterfaceIndex].InterfaceMetric } else { 0 }
+            $effMet = [int]$rt.RouteMetric + $ifMet
+            $physRoutes += [pscustomobject]@{ Alias = $ad.Name; Status = $ad.Status; NextHop = $rt.NextHop; Metric = $effMet }
+        }
+        if ($physRoutes.Count -ge 2) {
+            $summary = (@($physRoutes | Sort-Object Metric | ForEach-Object { "{0}({1}, 网关={2}, 跃点={3})" -f $_.Alias, $_.Status, $_.NextHop, $_.Metric }) -join '; ')
+            Write-Line ("  [多默认网关] {0}" -f $summary) -Color Yellow
+            Add-Count $sec
+            Add-Attention ("检测到多网卡同时持有 IPv4 默认网关：{0}（若副网卡接入桥接光猫或无外网交换机，低跃点数网关会抢占流量并导致设置主页/网络请求超时转圈）" -f $summary)
+        }
     }
 } catch {
     Write-Line ("  虚拟网卡路由检查失败：{0}" -f $_.Exception.Message) -Color Yellow
+}
+
+try {
+    if (Get-Command netsh.exe -ErrorAction SilentlyContinue) {
+        $exOut = @(& netsh.exe int ipv4 show excludedportrange protocol=tcp 2>&1 | ForEach-Object { [string]$_ })
+        $adminExcluded = @()
+        foreach ($el in $exOut) {
+            if ($el -match '^\s*(\d+)\s+(\d+)\s+\*\s*$') {
+                $adminExcluded += ("{0}-{1}" -f $Matches[1], $Matches[2])
+            }
+        }
+        if ($adminExcluded.Count -gt 0) {
+            $joinedEx = $adminExcluded -join ', '
+            Write-Line ("  [TCP 静态排除端口] {0}（带 * 为管理员级排除段）" -f $joinedEx) -Color Yellow
+            Add-Count $sec
+            Add-Attention ("存在遗留的管理员级 TCP 静态排除端口段：{0}（常由已卸载的虚拟化或集群服务留下，可能导致本机端口绑定失败）" -f $joinedEx)
+        }
+    }
+} catch {
+    Write-Line ("  TCP 排除端口检查失败：{0}" -f $_.Exception.Message) -Color Yellow
 }
 
 try {

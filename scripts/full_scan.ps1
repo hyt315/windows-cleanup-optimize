@@ -18,7 +18,7 @@
 
 .NOTES
     作者：windows-cleanup-optimize 团队
-    版本：v2.2.0
+    版本：v2.2.1
     依赖：Windows 10/11 + PowerShell 5.1+ + 标准命令行工具（powercfg）
 #>
 
@@ -266,7 +266,7 @@ foreach ($pb in $progBases) {
 $sysDirs = @(
     @{N='Win Update Download';P='C:\Windows\SoftwareDistribution\Download'},
     @{N='Win Update DeliveryOpt';P='C:\Windows\SoftwareDistribution\DeliveryOptimization'},
-    @{N='Win11 Recall Snapshots (UKG)';P="$env:LOCALAPPDATA\CoreAIPlatform.00\UKG"},
+    @{N='Win11 Recall 快照库 (UKP)';P="$env:LOCALAPPDATA\CoreAIPlatform.00\UKP"},
     @{N='NVIDIA';P='C:\NVIDIA'},
     @{N='AMD';P='C:\AMD'},
     @{N='Intel';P='C:\Intel'}
@@ -322,7 +322,7 @@ if (Test-Path -LiteralPath $pkgDir) {
     Get-ChildItem -LiteralPath $pkgDir -Filter "*.vhdx" -Recurse -Force -EA SilentlyContinue | ForEach-Object {
         if ($_.Length -ge 100MB) {
             Log ("  [T5E-VHDX] {0,-8}  {1}" -f (GB $_.Length), $_.FullName)
-            Add-Finding 'T5E' 'AI与虚拟化缓存' '🟡' $_.FullName $_.Length $_.LastWriteTime.ToString('yyyy-MM-dd') 'WSL2/Docker虚拟磁盘，可通过wsl --manage --set-sparse true启用自动缩容或compact压缩'
+            Add-Finding 'T5E' 'AI与虚拟化缓存' '🟡' $_.FullName $_.Length $_.LastWriteTime.ToString('yyyy-MM-dd') 'WSL2/Docker 虚拟磁盘不会自动缩小：WSL 3.0.1+ 用 wsl --manage <发行版> --compact，旧版 wsl --shutdown 后 diskpart compact vdisk（稀疏 VHD 仍属实验功能，不默认推荐）'
         }
     }
 }
@@ -438,37 +438,22 @@ Log ""
 # ===== [T11] Bloatware 进程（完整 catalog）=====
 Enter-ScanSection 'T11'
 Log "=== [T11] Bloatware 进程 ==="
-$bloat = @(
-    "360safe","360sd","ZhuDongFangYu","360TSMain","QHWatchdog","360SafeClean",
-    "2345Safe","2345Guard","2345Live","2345Ime","2345Pinyin","2345Explorer","2345Pic","HaoZip",
-    "KSAVSvc","kxescore","kxetray","QQPCMgr","QQPCRtp","TQMCenter",
-    "LDSMain","LDSService","DriverGenius","DGService","DTLSoft","DrvLife",
-    "SogouService","SogouIM","SGMain","QQPinyinService",
-    "360Desktop","360DesktopLite","KingsoftDesktop","MojingWallpaper","HaoZhuoDao",
-    "360se","360chrome","QQBrowser","SogouExplorer","UCBrowser",
-    "FlashCenter","FlashHelperService","TodayHot","NewsPush","HotNews",
-    "KuaiZip","BaiduNetdisk","Meitu","edrAgent","Edrservice"
-)
-$catProcs = @()
+# v2.2.1：与 T11 共用 Get-WcoCatalogHit。旧版把全部家族压成一张进程名单、用 -contains 精确比对，
+# 丢了置信度（low 家族也显示成 ⚠️），内置名单还把百度网盘、美图这类常用软件直接算进去。
+$bloatWhitelist = @("DeskGo","DesktopMgr64","Steam","wallpaper32","WallpaperEngine","HuorongEs")
 try {
-    $cat = Get-WcoBloatwareCatalog
-    foreach ($fam in @($cat.families)) {
-        foreach ($pr in @($fam.processes)) {
-            if ($pr) { $catProcs += ([string]$pr -replace '(?i)\.exe$', '') }
+    $bcat = Get-WcoBloatwareCatalog
+    $bhits = @(Get-WcoCatalogHit -Catalog $bcat -Process @(Get-Process -EA SilentlyContinue) -Whitelist $bloatWhitelist)
+    if ($bhits.Count -gt 0) {
+        foreach ($h in ($bhits | Sort-Object Confidence, Family)) {
+            $mark = if ($h.Confidence -eq 'high') { '⚠️ ' } else { '🟡' }
+            Log ("  {0} [{1}x] {2,-25} {3} MB  {4}（{5}）" -f $mark, $h.Count, $h.Name, $h.MemoryMB, $h.Family, $h.Level)
         }
-    }
-    if ($catProcs.Count -gt 0) { $bloat = @($catProcs + $bloat | Select-Object -Unique) }
+        Log "  以上只是特征库命中；置信度不是「较确定」的，处置前先用 T25 看签名和发行商。"
+    } else { Log "  ✅ 未检测到特征库里的进程" }
 } catch {
-    Write-Verbose "加载 bloatware-catalog.json 失败，使用内置名单：$($_.Exception.Message)"
+    Log "  ⚠️ 特征库读取失败，本段未检查（不是「没有流氓软件」）：$($_.Exception.Message)"
 }
-$whitelist = @("DeskGo","DesktopMgr64","Steam","wallpaper32","WallpaperEngine","HuorongEs")
-$bhits = Get-Process -EA SilentlyContinue | Where-Object { $bloat -contains $_.ProcessName -and $_.ProcessName -notin $whitelist }
-if ($bhits) {
-    $bhits | Group-Object ProcessName | ForEach-Object {
-        $ws = [math]::Round((($_.Group | Measure-Object WorkingSet -Sum).Sum)/1MB,0)
-        Log ("  ⚠️  [$($_.Count)x] {0,-25} {1} MB" -f $_.Name, $ws)
-    }
-} else { Log "  ✅ 未检测到已知 bloatware 进程" }
 Log ""
 
 # ===== [T10] 自启动项 =====

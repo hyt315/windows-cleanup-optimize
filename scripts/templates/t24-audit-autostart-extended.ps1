@@ -1,8 +1,8 @@
-﻿# 模板 24：audit-autostart-extended（v2.2，纯只读）
+﻿# 模板 24：audit-autostart-extended（v2.2.1，纯只读）
 # 用法：
 #   .\t24-audit-autostart-extended.ps1                                   # 只在屏幕输出
 #   .\t24-audit-autostart-extended.ps1 -OutFile "$env:TEMP\wco\t24.txt"  # 另存报告（只允许写到 %TEMP%\wco 下）
-# 覆盖 16 类自启/持久化位置 + 孤儿任务/孤儿服务/StartupApproved 幽灵检测，详见 references/scan-scripts.md 第 24 节。
+# 覆盖 16 类自启/持久化位置 + 孤儿任务/孤儿服务/重复自启通道/StartupApproved 幽灵/SCM 启动报错关联检测，详见 references/scan-scripts.md 第 24 节。
 # 本模板不修改任何注册表、任务、驱动或文件；每段独立 try/catch，权限不足写"需管理员，未检查"，绝不写"干净"。
 # 判读：IFEO、Winlogon、LSA、驱动类发现属于 HIGH，只报告，交给用户和安全软件判断。
 param(
@@ -19,7 +19,6 @@ $script:Lines = New-Object System.Collections.Generic.List[string]
 $script:Findings = New-Object System.Collections.Generic.List[object]
 $script:SectionState = [ordered]@{}
 $script:IsAdmin = Test-WcoAdmin
-$script:SignerCache = @{}
 
 # ---------------------------------------------------------------- 输出与记录
 function Write-Report {
@@ -111,38 +110,6 @@ function ConvertTo-ValueText {
 }
 
 # ---------------------------------------------------------------- 路径与签名
-function Resolve-TargetPath {
-    <# 从命令行里取出可执行文件 / DLL / SYS 路径（去引号、去参数、展开环境变量、处理 \??\ 与 \SystemRoot\）。 #>
-    param([string]$CommandLine)
-    if (-not $CommandLine) { return $null }
-    $c = [Environment]::ExpandEnvironmentVariables($CommandLine.Trim())
-    $c = $c -replace '^\\\?\?\\', ''
-    $c = $c -replace '^(?i)\\SystemRoot\\', ($env:SystemRoot + '\')
-    $p = $null
-    if ($c.StartsWith('"')) {
-        $end = $c.IndexOf('"', 1)
-        if ($end -gt 1) { $p = $c.Substring(1, $end - 1) }
-    } else {
-        $m = [regex]::Match($c, '^(.+?\.(exe|dll|sys|com|cpl|ocx|scr|bat|cmd|vbs|js|ps1|lnk))(?=[\s,"]|$)', 'IgnoreCase')
-        if ($m.Success) { $p = $m.Groups[1].Value } else { $p = ($c -split '\s+')[0] }
-    }
-    if (-not $p) { return $null }
-    if ($p -match '^(?i)system32\\') { $p = Join-Path $env:SystemRoot $p }
-    if ($p -notmatch '\\' -and $p -match '\.') {
-        $sys = Join-Path (Join-Path $env:SystemRoot 'System32') $p
-        if (Test-Path -LiteralPath $sys -PathType Leaf) { $p = $sys }
-    }
-    return $p
-}
-
-function Get-SignerCached {
-    param([string]$Path)
-    if (-not $Path) { return (Get-WcoFileSigner -Path '') }
-    $k = $Path.ToLowerInvariant()
-    if (-not $script:SignerCache.ContainsKey($k)) { $script:SignerCache[$k] = Get-WcoFileSigner -Path $Path }
-    return $script:SignerCache[$k]
-}
-
 function Get-SignerText {
     param($Signer)
     if ($null -eq $Signer) { return '签名：未知' }
@@ -162,17 +129,18 @@ function Test-SignerSuspicious {
 function Get-CommandSigner {
     <# 对 rundll32 / regsvr32 / msiexec 等系统宿主，改为检查参数里的 DLL。 #>
     param([string]$CommandLine)
-    $exe = Resolve-TargetPath $CommandLine
+    $exe = Resolve-WcoExecutablePath $CommandLine
     $target = $exe
     if ($exe -and ($exe -match '(?i)\\(rundll32|regsvr32|cmd|wscript|cscript|mshta|powershell|msiexec)\.exe$')) {
         $m = [regex]::Match([Environment]::ExpandEnvironmentVariables($CommandLine), '(?i)("?)([a-z]:\\[^"]+?\.(dll|ocx|exe|vbs|js|ps1|hta))\1')
         if ($m.Success -and $m.Groups[2].Value -ne $exe) { $target = $m.Groups[2].Value }
     }
-    return [pscustomobject]@{ Path = $target; Signer = (Get-SignerCached $target) }
+    return [pscustomobject]@{ Path = $target; Signer = (Get-WcoFileSigner $target) }
 }
 
 # ================================================================ 1. 登录启动位置
 $sec = '1 登录启动位置'
+$script:EnabledRunExes = @{}
 Write-Report "=== $sec（Run / RunOnce / RunOnceEx / WOW6432Node / Policies / 启动文件夹 + StartupApproved）==="
 try {
     $probe = @(
@@ -214,7 +182,15 @@ try {
         if ($it.Approved -eq 'Disabled' -and $it.DisabledAt) { $stateText = "$stateText（$($it.DisabledAt.ToString('yyyy-MM-dd HH:mm'))）" }
         $cs = Get-CommandSigner $it.Command
         $level = '信息'
-        if ($it.Approved -ne 'Disabled' -and (Test-SignerSuspicious $cs.Signer)) { $level = '关注' }
+        if ($it.Approved -ne 'Disabled') {
+            if (Test-SignerSuspicious $cs.Signer) { $level = '关注' }
+            if ($cs.Path -and $cs.Path -match '^[A-Za-z]:\\') {
+                $exeKey = $cs.Path.ToLowerInvariant()
+                if (-not $script:EnabledRunExes.ContainsKey($exeKey)) {
+                    $script:EnabledRunExes[$exeKey] = "[$($it.Source)] $($it.Name)"
+                }
+            }
+        }
         if ($it.Source -like '*Policies*') { $level = '关注' }
         Add-Finding $sec $level "[$($it.Source)] $($it.Name)" "$stateText | $($it.Command) | $(Get-SignerText $cs.Signer)"
     }
@@ -460,7 +436,7 @@ try {
             foreach ($x in $vals) {
                 if ($x.ToLowerInvariant() -notin $known[$vn]) {
                     $dll = Join-Path (Join-Path $env:SystemRoot 'System32') ($x + '.dll')
-                    Add-Finding $sec '关注' "$vn 未知包：$x" "$(Get-SignerText (Get-SignerCached $dll))（$dll）"
+                    Add-Finding $sec '关注' "$vn 未知包：$x" "$(Get-SignerText (Get-WcoFileSigner $dll))（$dll）"
                 }
             }
         }
@@ -487,7 +463,7 @@ try {
             if ((Split-Path $drv -Leaf).ToLowerInvariant() -in $defaultMon) { continue }
             $path = $drv
             if ($drv -notmatch '\\') { $path = Join-Path (Join-Path $env:SystemRoot 'System32') $drv }
-            $sg = Get-SignerCached $path
+            $sg = Get-WcoFileSigner $path
             $lvl = '关注'
             if ($sg.IsMicrosoft) { $lvl = '信息' }
             Add-Finding $sec $lvl "$($s.PSChildName)" "Driver = $drv | $(Get-SignerText $sg)"
@@ -527,7 +503,7 @@ try {
         foreach ($raw in $paths.Keys) {
             $exp = [Environment]::ExpandEnvironmentVariables($raw)
             if ($exp.StartsWith($env:SystemRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
-            $sg = Get-SignerCached $exp
+            $sg = Get-WcoFileSigner $exp
             Add-Finding $sec '关注' "非系统目录提供程序：$($paths[$raw])" "$raw | $(Get-SignerText $sg)"
         }
         Write-Report "  提供程序路径共 $($paths.Count) 个（去重）"
@@ -553,13 +529,15 @@ try {
         } catch { $last = $null }
         $acts = @()
         $missingTargets = @()
+        $actionTargets = @()
         foreach ($a in @($t.Actions)) {
             if ($null -eq $a) { continue }
             $exe = [string](Get-WcoProp $a 'Execute')
             $arg = [string](Get-WcoProp $a 'Arguments')
             if ($exe) {
                 $acts += ("$exe " + $arg).Trim()
-                $exePath = Resolve-TargetPath $exe
+                $exePath = Resolve-WcoExecutablePath $exe
+                $effectiveTarget = $exePath
                 if ($exePath -and $exePath -match '^[A-Za-z]:\\' -and -not (Test-Path -LiteralPath $exePath)) {
                     $missingTargets += $exePath
                 }
@@ -567,8 +545,12 @@ try {
                     $mArg = [regex]::Match([Environment]::ExpandEnvironmentVariables($arg), '(?i)(?:-File\s+|^|\s)("?)([A-Za-z]:\\[^"]*?\.(?:ps1|vbs|bat|cmd|exe))\1')
                     if ($mArg.Success) {
                         $scriptTarget = $mArg.Groups[2].Value
+                        $effectiveTarget = $scriptTarget
                         if (-not (Test-Path -LiteralPath $scriptTarget)) { $missingTargets += $scriptTarget }
                     }
+                }
+                if ($effectiveTarget -and $effectiveTarget -match '^[A-Za-z]:\\') {
+                    $actionTargets += $effectiveTarget
                 }
             }
             else { $acts += "COM: $([string](Get-WcoProp $a 'ClassId'))" }
@@ -579,7 +561,7 @@ try {
             $cn = [string]$tr.CimClass.CimClassName
             $trs += ($cn -replace '^MSFT_Task', '' -replace 'Trigger$', '')
         }
-        $rows += [pscustomobject]@{ Task = $t; LastRun = $last; Actions = ($acts -join ' ; '); Triggers = (($trs | Select-Object -Unique) -join ','); MissingTargets = @($missingTargets | Select-Object -Unique) }
+        $rows += [pscustomobject]@{ Task = $t; LastRun = $last; Actions = ($acts -join ' ; '); Triggers = (($trs | Select-Object -Unique) -join ','); MissingTargets = @($missingTargets | Select-Object -Unique); ActionTargets = @($actionTargets | Select-Object -Unique) }
     }
     $rows = @($rows | Sort-Object -Property @{ Expression = { if ($_.LastRun) { $_.LastRun } else { [datetime]::MinValue } }; Descending = $true })
     foreach ($r in $rows) {
@@ -595,6 +577,14 @@ try {
             $detail += " | [目标文件已不存在，疑似卸载残留孤儿任务: $($r.MissingTargets -join ', ')]"
         }
         Add-Finding $sec $lvl "$($r.Task.TaskPath)$($r.Task.TaskName)" $detail
+        if ($r.Task.State -ne 'Disabled' -and $r.Triggers -match 'Logon') {
+            foreach ($at in $r.ActionTargets) {
+                $kAt = $at.ToLowerInvariant()
+                if ($script:EnabledRunExes.ContainsKey($kAt)) {
+                    Add-Finding $sec '信息' "重复自启通道：$at" "同时存在于登录 Run 项 $($script:EnabledRunExes[$kAt]) 与登录计划任务 [$($r.Task.TaskPath)$($r.Task.TaskName)]"
+                }
+            }
+        }
     }
     Write-Report "  非微软任务共 $($rows.Count) 个（登录/开机/空闲/会话切换触发且未禁用的标关注）"
 } catch {
@@ -675,8 +665,8 @@ try {
     $drivers = @($allDrivers | Where-Object { $_.State -eq 'Running' })
     $nonMs = 0
     foreach ($d in $drivers) {
-        $path = Resolve-TargetPath ([string]$d.PathName)
-        $sg = Get-SignerCached $path
+        $path = Resolve-WcoExecutablePath ([string]$d.PathName)
+        $sg = Get-WcoFileSigner $path
         if ($sg.IsMicrosoft) { continue }
         $nonMs++
         $lvl = '信息'
@@ -690,7 +680,7 @@ try {
         if (-not $svcObj.PathName) { continue }
         $rawPath = [string]$svcObj.PathName
         if ($rawPath -match '(?i)svchost\.exe|DriverData') { continue }
-        $targetExe = Resolve-TargetPath $rawPath
+        $targetExe = Resolve-WcoExecutablePath $rawPath
         if (-not $targetExe -or $targetExe -notmatch '^[A-Za-z]:\\') { continue }
         if ($svcObj.State -eq 'Running') { continue }
         if ($targetExe -match '^(?i)[A-Z]:\\Windows\\System32\\drivers\\' -and ([string]$svcObj.ServiceType -match 'Kernel|File System')) {
@@ -700,6 +690,25 @@ try {
         if (-not (Test-Path -LiteralPath $targetExe -PathType Leaf)) {
             $kindLabel = if ($svcObj.ServiceType -match 'Kernel|File System') { '驱动' } else { '服务' }
             Add-Finding $sec '关注' "疑似孤儿$kindLabel（文件不存在）：$($svcObj.Name)" "状态：$($svcObj.State)/$($svcObj.StartMode) | 缺失路径：$targetExe | 原始 PathName：$rawPath"
+        }
+    }
+    # 近期开机/服务启动失败事件（SCM Event ID 7000/7023/7026）
+    $scmEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Service Control Manager'; Id = @(7000, 7023, 7026); StartTime = (Get-Date).AddDays(-7) } -MaxEvents 30 -ErrorAction SilentlyContinue)
+    if ($scmEvents.Count -gt 0) {
+        $evGroups = [ordered]@{}
+        foreach ($ev in $scmEvents) {
+            $cleanMsg = if ($ev.Message) { ($ev.Message -replace '\s+', ' ').Trim() } else { "Event $($ev.Id)" }
+            if ($cleanMsg.Length -gt 140) { $cleanMsg = $cleanMsg.Substring(0, 140) + '…' }
+            $gk = "$($ev.Id)|$cleanMsg"
+            if (-not $evGroups.Contains($gk)) {
+                $evGroups[$gk] = [pscustomobject]@{ Id = $ev.Id; Text = $cleanMsg; Latest = $ev.TimeCreated; Count = 1 }
+            } else {
+                $evGroups[$gk].Count++
+                if ($ev.TimeCreated -gt $evGroups[$gk].Latest) { $evGroups[$gk].Latest = $ev.TimeCreated }
+            }
+        }
+        foreach ($g in $evGroups.Values) {
+            Add-Finding $sec '关注' "近期开机/服务启动报错 (Event $($g.Id) x$($g.Count))" "最近 $($g.Latest.ToString('yyyy-MM-dd HH:mm')) | $($g.Text)"
         }
     }
 } catch {

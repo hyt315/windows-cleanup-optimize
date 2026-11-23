@@ -31,32 +31,12 @@ function Write-Line {
     if ($Color) { Write-Host $Text -ForegroundColor $Color } else { Write-Host $Text }
 }
 
-function Get-ListProp {
-    param($Obj, [string]$Name)
-    if ($null -eq $Obj) { return @() }
-    $p = $Obj.PSObject.Properties[$Name]
-    if (-not $p -or $null -eq $p.Value) { return @() }
-    return @($p.Value | Where-Object { $_ } | ForEach-Object { [string]$_ })
-}
-
 function Get-StrProp {
     param($Obj, [string]$Name)
     if ($null -eq $Obj) { return '' }
     $p = $Obj.PSObject.Properties[$Name]
     if (-not $p -or $null -eq $p.Value) { return '' }
     return [string]$p.Value
-}
-
-function Test-IdMatch {
-    # 标识可含通配符 * ?；不含时按完全相等（不区分大小写）
-    param([string]$Value, [string[]]$Patterns)
-    if (-not $Value) { return $null }
-    foreach ($pat in $Patterns) {
-        if (-not $pat) { continue }
-        if ($pat.Contains('*') -or $pat.Contains('?')) { if ($Value -like $pat) { return $pat } }
-        elseif ($Value -eq $pat) { return $pat }
-    }
-    return $null
 }
 
 function Test-OrgMatch {
@@ -82,42 +62,11 @@ function Get-ExeBaseName {
     return ($leaf -replace '(?i)\.(exe|sys|dll)$', '')
 }
 
-function Get-ExeFromCommandLine {
-    # 从 PathName / Execute 里取出可执行文件路径（只做字符串解析，不执行）
-    param([string]$CommandLine)
-    if (-not $CommandLine) { return '' }
-    $c = [Environment]::ExpandEnvironmentVariables($CommandLine.Trim())
-    $c = $c -replace '^\\\?\?\\', ''
-    if ($c.StartsWith('"')) {
-        $end = $c.IndexOf('"', 1)
-        if ($end -gt 1) { return $c.Substring(1, $end - 1) }
-        return ''
-    }
-    $m = [regex]::Match($c, '^(.+?\.(exe|sys|dll))(?=[\s,]|$)', 'IgnoreCase')
-    if ($m.Success) {
-        $p = $m.Groups[1].Value
-        if ($p -match '^(?i)\\SystemRoot\\') { $p = $p -replace '^(?i)\\SystemRoot', $env:SystemRoot }
-        return $p
-    }
-    return ($c -split '\s+')[0]
-}
-
-function Test-UnderPath {
-    param([string]$Child, [string]$Parent)
-    if (-not $Child -or -not $Parent) { return $false }
-    $c = $Child.Replace('/', '\').TrimEnd('\') + '\'
-    $p = $Parent.Replace('/', '\').Trim('"').TrimEnd('\') + '\'
-    if ($p.Length -le 4) { return $false }   # 不把 C:\ 这类根目录当作安装目录
-    return $c.StartsWith($p, [StringComparison]::OrdinalIgnoreCase)
-}
-
-$script:SigCache = @{}
 function Get-CachedSigner {
+    # -NoSignature 时不读签名；缓存由公共模块 Get-WcoFileSigner 负责
     param([string]$Path)
     if ($NoSignature -or -not $Path) { return $null }
-    $k = $Path.ToLowerInvariant()
-    if (-not $script:SigCache.ContainsKey($k)) { $script:SigCache[$k] = Get-WcoFileSigner -Path $Path }
-    return $script:SigCache[$k]
+    return Get-WcoFileSigner -Path $Path
 }
 
 function ConvertTo-PsQuoted {
@@ -141,7 +90,7 @@ foreach ($f in @($cat.families)) {
     if ($null -eq $f) { continue }
     $nameTargets = @()
     foreach ($part in ((Get-StrProp $f 'name') -split '\s*/\s*')) { if ($part.Trim()) { $nameTargets += $part.Trim() } }
-    foreach ($d in (Get-ListProp $f 'dirs')) {
+    foreach ($d in (Get-WcoListProp $f 'dirs')) {
         $leaf = ($d -split '[\\/]')[-1]
         if ($leaf -and $leaf -notmatch '%' -and $leaf -notin $genericLeaf) { $nameTargets += $leaf }
     }
@@ -151,12 +100,12 @@ foreach ($f in @($cat.families)) {
         Risk        = Get-StrProp $f 'risk'
         Confidence  = Get-StrProp $f 'confidence'
         Notes       = Get-StrProp $f 'uninstall_notes'
-        Orgs        = @(@(Get-ListProp $f 'publishers') + @(Get-ListProp $f 'signers') | Select-Object -Unique)
-        Processes   = @(Get-ListProp $f 'processes' | ForEach-Object { $_ -replace '(?i)\.exe$', '' })
-        Services    = @(Get-ListProp $f 'services')
-        Tasks       = @(Get-ListProp $f 'tasks')
-        Drivers     = @(Get-ListProp $f 'drivers' | ForEach-Object { $_ -replace '(?i)\.sys$', '' })
-        Appx        = @(Get-ListProp $f 'appx')
+        Orgs        = @(@(Get-WcoListProp $f 'publishers') + @(Get-WcoListProp $f 'signers') | Select-Object -Unique)
+        Processes   = @(Get-WcoListProp $f 'processes' | ForEach-Object { $_ -replace '(?i)\.exe$', '' })
+        Services    = @(Get-WcoListProp $f 'services')
+        Tasks       = @(Get-WcoListProp $f 'tasks')
+        Drivers     = @(Get-WcoListProp $f 'drivers' | ForEach-Object { $_ -replace '(?i)\.sys$', '' })
+        Appx        = @(Get-WcoListProp $f 'appx')
         NameTargets = @($nameTargets | Select-Object -Unique)
     }
 }
@@ -217,7 +166,7 @@ function Find-OwnerProgram {
     param([string]$Path)
     if (-not $Path) { return $null }
     foreach ($pg in $programs) {
-        if ($pg.InstallLocation -and (Test-UnderPath $Path $pg.InstallLocation)) { return $pg }
+        if ($pg.InstallLocation -and (Test-WcoPathUnder $Path $pg.InstallLocation)) { return $pg }
     }
     return $null
 }
@@ -246,7 +195,7 @@ foreach ($pg in $programs) {
             if ($m) { Add-Evidence -Fam $fam -Key $key -Level '高' -Text "发行主体 = $($pg.Publisher)" -Program $pg }
         }
         if ($pg.MainExe -and $fam.Processes.Count -gt 0) {
-            $m = Test-IdMatch (Get-ExeBaseName $pg.MainExe) $fam.Processes
+            $m = Test-WcoIdMatch (Get-ExeBaseName $pg.MainExe) $fam.Processes
             if ($m) { Add-Evidence -Fam $fam -Key $key -Level '中' -Text "主程序 = $($pg.MainExe)" -Program $pg }
         }
         foreach ($t in $fam.NameTargets) {
@@ -265,7 +214,7 @@ foreach ($pk in $appx) {
     $pkName = Get-StrProp $pk 'Name'
     foreach ($fam in $families) {
         if ($fam.Appx.Count -eq 0) { continue }
-        $m = Test-IdMatch $pkName $fam.Appx
+        $m = Test-WcoIdMatch $pkName $fam.Appx
         if ($m) { Add-Evidence -Fam $fam -Key "$($fam.Id)|appx:$(Get-StrProp $pk 'PackageFullName')" -Level '中' -Text "商店应用 = $pkName" -Package $pk }
     }
 }
@@ -274,7 +223,7 @@ foreach ($pk in $appx) {
 foreach ($pr in $procs) {
     foreach ($fam in $families) {
         if ($fam.Processes.Count -eq 0) { continue }
-        if (-not (Test-IdMatch $pr.Name $fam.Processes)) { continue }
+        if (-not (Test-WcoIdMatch $pr.Name $fam.Processes)) { continue }
         $sig = Get-CachedSigner $pr.Path
         if ($sig -and $sig.IsMicrosoft) { continue }   # 与系统文件同名的微软签名进程：不是它
         $level = '中'
@@ -286,11 +235,11 @@ foreach ($pr in $procs) {
 
 # 4) 服务
 foreach ($sv in $services) {
-    $exe = Get-ExeFromCommandLine ([string]$sv.PathName)
+    $exe = Resolve-WcoExecutablePath ([string]$sv.PathName)
     $base = Get-ExeBaseName $exe
     foreach ($fam in $families) {
-        $byName = ($fam.Services.Count -gt 0) -and (Test-IdMatch ([string]$sv.Name) $fam.Services)
-        $byExe = ($fam.Processes.Count -gt 0) -and $base -and (Test-IdMatch $base $fam.Processes)
+        $byName = ($fam.Services.Count -gt 0) -and (Test-WcoIdMatch ([string]$sv.Name) $fam.Services)
+        $byExe = ($fam.Processes.Count -gt 0) -and $base -and (Test-WcoIdMatch $base $fam.Processes)
         if (-not $byName -and -not $byExe) { continue }
         $sig = Get-CachedSigner $exe
         if ($sig -and $sig.IsMicrosoft) { continue }
@@ -305,11 +254,11 @@ foreach ($sv in $services) {
 foreach ($tk in $tasks) {
     $full = "$($tk.TaskPath)$($tk.TaskName)"
     $execs = @()
-    foreach ($a in @($tk.Actions)) { $e = Get-StrProp $a 'Execute'; if ($e) { $execs += (Get-ExeFromCommandLine $e) } }
+    foreach ($a in @($tk.Actions)) { $e = Get-StrProp $a 'Execute'; if ($e) { $execs += (Resolve-WcoExecutablePath $e) } }
     foreach ($fam in $families) {
-        $byName = ($fam.Tasks.Count -gt 0) -and ((Test-IdMatch ([string]$tk.TaskName) $fam.Tasks) -or (Test-IdMatch $full $fam.Tasks))
+        $byName = ($fam.Tasks.Count -gt 0) -and ((Test-WcoIdMatch ([string]$tk.TaskName) $fam.Tasks) -or (Test-WcoIdMatch $full $fam.Tasks))
         $exeHit = $null
-        if ($fam.Processes.Count -gt 0) { foreach ($e in $execs) { if (Test-IdMatch (Get-ExeBaseName $e) $fam.Processes) { $exeHit = $e; break } } }
+        if ($fam.Processes.Count -gt 0) { foreach ($e in $execs) { if (Test-WcoIdMatch (Get-ExeBaseName $e) $fam.Processes) { $exeHit = $e; break } } }
         if (-not $byName -and -not $exeHit) { continue }
         $exe = if ($exeHit) { $exeHit } elseif ($execs.Count -gt 0) { $execs[0] } else { '' }
         Add-RuntimeEvidence -Fam $fam -ExePath $exe -Level '中' -Text "计划任务 $full（$($tk.State)）动作: $($execs -join '; ')"
@@ -318,11 +267,11 @@ foreach ($tk in $tasks) {
 
 # 6) 内核驱动
 foreach ($dv in $drivers) {
-    $file = Get-ExeFromCommandLine ([string]$dv.PathName)
+    $file = Resolve-WcoExecutablePath ([string]$dv.PathName)
     $fileBase = Get-ExeBaseName $file
     foreach ($fam in $families) {
         if ($fam.Drivers.Count -eq 0) { continue }
-        if (-not ((Test-IdMatch ([string]$dv.Name) $fam.Drivers) -or ($fileBase -and (Test-IdMatch $fileBase $fam.Drivers)))) { continue }
+        if (-not ((Test-WcoIdMatch ([string]$dv.Name) $fam.Drivers) -or ($fileBase -and (Test-WcoIdMatch $fileBase $fam.Drivers)))) { continue }
         Add-RuntimeEvidence -Fam $fam -ExePath $file -Level '中' -Text "驱动 $($dv.Name)（$($dv.State)）文件: $file"
     }
 }

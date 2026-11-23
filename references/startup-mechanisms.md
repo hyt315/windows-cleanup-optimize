@@ -93,9 +93,9 @@
 | **更新后重启的应用** | 应用调用 `RegisterApplicationRestart`，Windows 更新重启后重新打开 | 同上开关；或在应用内关闭 | 🟢 Win32 API（机制）；与上一行的关系 存疑 |
 | **Edge 启动提升 / 后台模式 / 开机打开窗口** | Edge 自身开关 + `MicrosoftEdgeAutoLaunch_*` Run 值 | 见 `startup-audit.md` 浏览器专项 | 🟢 Edge 策略文档 |
 | **OneDrive** | HKCU Run 值 `OneDrive` | OneDrive 设置 → 常规 → 取消"登录 Windows 时自动启动"；或设置 › 应用 › 启动 | 社区普遍一致，存疑（未取官方页） |
-| **新版 Teams、终端、手机连接（Phone Link）** | 商店/MSIX 应用的 StartupTask | 设置 › 应用 › 启动；或应用内设置 | 存疑：具体机制未在今日官方页核实 |
+| **新版 Teams、终端、手机连接（Phone Link）** | 商店/MSIX 应用的 StartupTask | 设置 › 应用 › 启动；或应用内设置 | 🟢 机制有微软文档（`uap5:StartupTask`）；具体哪些应用在用 存疑，以实机为准 |
 | **小组件（Widgets）** | 任务栏小组件按钮与后台进程 | 设置 › 个性化 › 任务栏 → 关闭"小组件"；Pro/企业版可用策略 `AllowNewsAndInterests`（见 `services-optimization.md`） | 机制 存疑 |
-| **WPBT（固件执行厂商程序）** | 厂商通过 ACPI WPBT 在启动时投放程序，解释"重装系统后厂商助手自己回来" | 只读说明，不默认禁用 | 社区资料，存疑 |
+| **WPBT（固件执行厂商程序）** | 厂商通过 ACPI WPBT 在启动时投放程序，解释"重装系统后厂商助手自己回来" | 只读说明，不默认禁用 | 🟢 微软 WPBT 规范（访问于 2026-11-23）；实机可查是否存在 `System32\wpbbin.exe` |
 
 ---
 

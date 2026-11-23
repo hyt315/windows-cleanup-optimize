@@ -5,6 +5,57 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+## [2.2.1] - 2026-11-23
+
+这一版重点把「不误删、不误判、改错了能撤回」从文档承诺变成有测试证明的行为，并补强网络代理二进制状态、多网卡假网关与启动报错排查能力。依据：对 v2.2.0 做负对照（逐条关掉安全检查，看测试能不能抓住），31 处检查里 18 处关掉后测试照样全绿；读代码发现的误判与重复实现；Windows（PowerShell 5.1 + 7）测试运行反馈与通用疑难场景；联网核实的时效事实（访问于 2026-11-23）。
+
+### 判断与优先级
+- **重设计**：①特征库比对收拢到公共模块 `Get-WcoCatalogHit`（T11 与 full_scan 原来各写一套，full_scan 那套丢了置信度）；②命令行解析、通配比对、签名缓存收拢到公共模块（T18、T24、T25 各有一份近似实现）；③`undo.ps1` 改为逐步执行、逐步检查。
+- **小修与增强**：名称规范化的中英混排边界、回收站对「途经 junction」的路径、服务名带空格时的 undo 命令、`t23` 单连接二进制代理标志/多默认网关抢占/TCP 排除端口只读审计、`t24` 重复自启通道与 SCM 启动失败事件关联、时效事实更正、计数与引用的自动校验。
+- **维持现状**：安全底线与分档规则（第二节决定）；`pitfalls.md` 与 SKILL 安全底线的部分重复（SKILL 给结论，pitfalls 给原因和细节，读者不同，合并后任一方都会变得不完整）；selftest 里锁关键词的内容断言（守的是关键安全知识不被误删，放宽属于降标准）；Uninstall、Appx 不可自动回退（设计如此，undo 写明重装方式）。
+
+### 新增与增强
+- **网络、单连接代理与启动故障排查深化**（`t23-audit-browser-hijack.ps1`、`t24-audit-autostart-extended.ps1`、`references/performance-tuning.md`、`references/pitfalls.md`）：
+  - `t23` 第 5 节新增 `Internet Settings\Connections` 二进制单连接标志（`byte[8]`）与异常编码连接项只读审计，捕捉 `ProxyEnable=0` 但 `DefaultConnectionSettings`/`SavedLegacySettings`/PPPoE 拨号项仍残留 `0x02`/`0x04`/`0x08` 代理标志导致的次日/切直连断网根因；
+  - `t23` 第 9 节新增多物理网卡竞争默认网关（如主走无线、有线接入桥接光猫误领不可路由 DHCP 网关导致设置主页/网络请求超时转圈）与管理员静态 TCP 排除端口段（`netsh int ipv4 show excludedportrange` 带 `*` 标记）只读审计；
+  - `t24` 第 11 节新增已启用 `Run` 键与 `Logon` 计划任务指向同一可执行文件的重复自启通道提醒；第 13 节关联近 7 天 `System` 日志中 SCM 事件 `7000`/`7023`/`7026`，定位开机慢或残留驱动/服务加载失败；
+  - `references/pitfalls.md` 扩充至 84 条（新增第 83–84 条），`references/performance-tuning.md` §4.4 与 `references/scan-scripts.md` 同步补全原理与处置说明。
+
+### 修复
+- **残留与程序比对的中英混排边界**：`Get-WcoNameKey` 用 `\b` 剥版本号和位数，但 .NET 把汉字算作单词字符，`微信4.1.0.34` 只剥成 `微信4`、`微信64位` 原样保留、`QQ9.9.15` 变成 `qq9`。结果是已安装的微信、钉钉、带版本号的中文软件对应的目录被判成「疑似残留」。改为只按 ASCII 字母数字判断边界。改前 `微信4.1.0.34 → 微信4`，改后 `→ 微信`；`x264vfw`、`WPS Office 2024` 等名字里本来的数字不受影响（有测试）。
+- **全量扫描的流氓软件段（[T11]）**：旧版把 64 个家族的进程名压成一张表、用 `-contains` 精确比对，丢了置信度——低置信度家族（搜狗输入法、各类壁纸等）和内置后备名单里的百度网盘、美图都显示 ⚠️。现在与 T11 共用 `Get-WcoCatalogHit`：只有 high 置信度标 ⚠️，其余标 🟡 并写明「疑似，需实机确认」；内置名单只在特征库读不到时使用；特征库读取失败时明确报「本段未检查」，不再显示成干净。
+- **回收站**：路径的上级目录是 junction/符号链接时拒绝（`Get-WcoReparseAncestor`）。旧版只检查路径本身，`C:\…\AppData\X\cache` 而 `X` 是指向 D 盘的 junction 时，会按 C 盘的回收站策略放行，实际删的是 D 盘上的文件。
+- **undo.ps1**：旧版在 `$ErrorActionPreference = 'Continue'` 下把各条命令依次排开，`reg import` 失败、`sc.exe` 返回非零都不会被发现，脚本「跑完了」但没还原。现在每步包在 `Invoke-WcoUndoStep` 里，cmdlet 异常和外部命令退出码都算失败，一步失败不影响其余步骤，结尾列出失败项并以退出码 1 结束；开头提示非管理员窗口。脚本可重复运行。
+- `Set-WcoServiceStartType` 生成的 undo 命令给服务名加引号（含空格的服务名旧版会被拆成两个参数）。
+- **测试在 Windows PowerShell 5.1 与实机环境下的兼容修复**：
+  - `tests/Wco.Common.V21.Tests.ps1` 的 `Remove-WcoRegistryKey` 保护键测试补充 Mock，避免 Windows 非管理员环境下 `reg-protected` 负对照被权限检查掩盖导致存活，同时防止管理员跑变异测试时误触真实 `HKLM\SOFTWARE\Microsoft`；
+  - `tests/Wco.Guards.Tests.ps1` 与 `tests/Wco.Common.Tests.ps1` 修复 `-Skip` 依赖 `$IsWindows`（PowerShell 5.1 中为 `$null`）导致 2 条 junction 测试被意外跳过的问题，改为同时判断 `$env:OS -eq 'Windows_NT'`。
+- **时效更正**（来源与日期见各手册）：Recall 快照库在 `%LOCALAPPDATA%\CoreAIPlatform.00\UKP\{GUID}`（`ukg.db` 是其中的文件；路径来自社区取证资料，微软未公开），旧版写成 `…\UKG`，full_scan 扫的是不存在的目录；full_scan 对 WSL 虚拟磁盘的建议从「`--set-sparse true`」改为 `--compact` / `compact vdisk`（与手册里稀疏 VHD 不默认推荐的结论一致）；`performance-tuning.md` 的 NTFS 访问时间改为「1803 起默认系统管理」并修正「启用」误写；WSL `--compact` 自稳定版 3.0.1 起可用、`--set-sparse` 3.0.2 起不再要求 `--allow-unsafe`（仍不默认推荐）；Win11 版本建议改为「仍在服务期的版本（2026-11 为 25H2、26H2）」；Ollama FAQ 链接换为 docs.ollama.com/faq（旧链接 404）。
+- **去掉已有官方出处的「存疑」**：微信 4.x 进程名 `Weixin.exe`（华为官方支持页）、企业微信存储位置与清理入口（企业微信官方帮助）、WPBT（微软 WPBT 规范）、商店应用 `uap5:StartupTask` 机制（微软清单文档）。QQ NT 与钉钉菜单路径、IFEO 是否展开 `%SystemRoot%`、Chrome `--install-dir` 仍找不到官方出处，保留「存疑」。
+
+### 重构（行为不变或更严格）
+- 公共模块新增并导出 `Resolve-WcoExecutablePath`（合并 T24 的较完整实现：`\??\`、`\SystemRoot\`、脚本类扩展名、System32 补全）、`Get-WcoListProp`、`Test-WcoIdMatch`、`Get-WcoCatalogHit`、`Get-WcoReparseAncestor`；`Get-WcoFileSigner` 按「路径 + 修改时间」缓存。删除 T18 的 `Resolve-ServiceExePath`、T24 的 `Resolve-TargetPath` / `Get-SignerCached`、T25 的 `Get-ListProp` / `Test-IdMatch` / `Get-ExeFromCommandLine` / `Test-UnderPath`、T11 的 `Get-ListProp` / `Test-IdMatch`。T25 的路径包含判断因此用上了公共模块的根目录与 UNC 根保护。
+
+### 测试与 CI
+- 新增 `tests/Wco.Guards.Tests.ps1`（44 个用例）：每条拒绝条件一个「只让这一项不满足」的用例，加一个「全部安全时通过」的对照用例；旧用例里「无回收站」的 Mock 同时把 Known 设成了 false，即使去掉无回收站检查也会被下一道检查拦住，测不到它。
+- 新增负对照 `tests/negative_controls.py` + `negative_controls.json`（39 处检查）。v2.2.0 基线：31 处里 13 处被抓住、18 处存活；本版 39 处全部被抓住。清单里的 `find` 文本必须恰好出现一次，否则报「清单过期」，防止变异悄悄失效。
+- 新增 `tests/Wco.Reversibility.Windows.Tests.ps1`：注册表值（含新建多级子键）、IFEO（HKLM）、注册表整键删除、服务启动类型（手动、延迟启动）、服务删除、计划任务停用与删除、启动项开关，逐一「演练不改动 → 执行 → 用 Windows PowerShell 5.1 运行 undo → 与原状逐字对比」，另测 undo 重复运行、备份文件丢失时的部分还原、回收站策略不确定时拒绝。只在 `WCO_CI_APPLY=1` 且为管理员的 Windows 上运行，开发者本机跑 Pester 会自动跳过；CI 作业若发现这些用例被跳过则判失败。放在只读证明步骤之后。
+- CI Windows 作业新增 Windows PowerShell 5.1 下的 Pester。
+- selftest：模板数、手册数、避坑条数、特征库家族数从文件本身数出，README（中英）、SKILL、scan-scripts 里写的数字必须一致（取消旧版对模板数「±1 都算对」的容差）；SKILL、手册、README、脚本里出现的 `Verb-Wco*` 函数必须在模块里定义（脚本调用的还须已导出），T 编号与模板文件名必须存在；README 徽章、full_scan 头注释与 manifest 版本一致，CHANGELOG 有对应条目；模板编号连续。每项都有负向夹具。
+- 编辑过的 `.ps1/.psm1` 保持 CRLF + UTF-8 BOM（与 `.gitattributes` 一致）。
+
+### 已决
+- **undo 失败以退出码 1 结束，而不是遇错即停**：还原阶段每一步彼此独立，停在第一处会让后面本可还原的改动也留着；放弃了「出错立即停」的简单做法。
+- **回收站对途经 junction 的路径直接拒绝，而不是解析真实卷再判断**：Windows PowerShell 5.1 没有现成的链接解析 API，自己解析 junction 链容易出错；拒绝后用户可以对链接目标的真实路径操作，代价只是多一步。
+- **full_scan 的 [T11] 只看进程，服务和任务留给 T11/T24**：全量扫描要快；服务和任务的比对已在 T11 和 T24 里做，重复枚举不增加信息。
+- **Windows 闭环测试用环境变量门控，而不是 Pester 标签**：标签需要调用方记得排除，环境变量默认就是「不执行」，误在用户机器上运行的风险更低。
+- **不把卸载、Appx 移除纳入闭环**：两者按设计不可自动回退（undo 只写重装方式）；在 runner 上卸载真实软件也无法稳定复现。迁移和 mklink 没有写操作函数（只有 T06 只读预检），无可闭环对象。
+
+### 未验证 / 没做完
+- **HKLM / 服务 / 计划任务管理员闭环用例（`WCO_CI_APPLY=1`）由 Windows CI runner 执行**：Windows PowerShell 5.1 与 PowerShell 7 下的 `selftest`、`PSScriptAnalyzer`、Pester 全套单元测试、39/39 负对照、`full_scan.ps1 -Quick`、改动模板（`t11`/`t18`/`t23`/`t24`/`t25`）及 HKCU 闭环已验证通过；涉及修改服务、计划任务与 HKLM IFEO 的管理员级闭环用例留在一次性 CI runner 中执行。
+- **没有做多用户画像的场景对照**：尚需在不同用户画像（重度游戏/企业域环境等）环境下进一步对比旧版与新版全量扫描输出。
+- QQ NT、钉钉菜单路径，IFEO 是否展开 `%SystemRoot%`，Chrome `--install-dir`，哪些应用使用 StartupTask，仍无官方出处。
+
 ## [2.2.0] - 2026-11-20
 
 实机优化深度融合版：补齐代理/VPN 退出断网、虚拟网卡路由抢占、浏览器休眠阈值与无线电池节能诊断，新增 `StartupApproved` 幽灵与孤儿任务/服务/驱动检出，扩充 2025–2026 AI IDE/Agent 与 Win11 24H2 Recall 覆盖，并用 Win32 原生枚举大幅加速目录测量与全量扫描。

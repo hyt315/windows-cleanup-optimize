@@ -6,9 +6,9 @@
 
 <div align="center">
 
-**A Windows cleanup skill that runs a read-only diagnosis first, then proposes a tiered plan. It ships 14 reference manuals, 25 script templates, and 82 real-world pitfalls. Every change is previewed first, applied only after you confirm, logged, and reversible through a generated undo script.**
+**A Windows cleanup skill that runs a read-only diagnosis first, then proposes a tiered plan. It ships 14 reference manuals, 25 script templates, and 84 real-world pitfalls. Every change is previewed first, applied only after you confirm, logged, and reversible through a generated undo script.**
 
-[![Version](https://img.shields.io/badge/Version-v2.2.0-10b981)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-v2.2.1-10b981)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/hyt315/windows-cleanup-optimize?sort=semver)](CHANGELOG.md)
 [![CI](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/hyt315/windows-cleanup-optimize/actions/workflows/ci.yml)
@@ -33,14 +33,21 @@ It avoids "one-click cleanup" and follows these principles:
 - **Use official migration paths first.**
 - **Give every change a risk tier.** Preview it first, apply it only after you confirm, and keep an undo script.
 
-## 🆕 Latest release v2.2.0 (2026-11-20)
+## 🆕 Latest release v2.2.1 (2026-11-23)
 
-- **Native Win32 fast directory sizing**: `Measure-WcoDirectory` now uses compiled Win32 `FindFirstFileExW` (with `\\?\` long-path support, skipping `ReparsePoint` & OneDrive cloud placeholders, and bottom-up cache reuse) while retaining the cross-platform PowerShell fallback for Linux CI.
-- **Proxy dead-port, virtual NIC routing & Wi-Fi power audits**: T23 now detects dead local proxy listeners (`127.0.0.1:<port>` left behind when a VPN/proxy exits abnormally), overly short Edge `SleepingTabsTimeout` policies (`< 300s`), virtual NIC (`VMnet8`/`TAP`/`QMTAP`) default-gateway hijacks / disconnected adapters, and aggressive battery Wi-Fi power-saving indices (`DC >= 2`).
-- **Orphaned autostart, service/driver & `StartupApproved` ghost detection**: `Wco.Common.psm1` exports `Get-WcoStartupApprovedGhost`; T10/T24 and `full_scan.ps1` now surface orphaned `StartupApproved` toggles as well as scheduled tasks, services, and drivers pointing to missing binaries (catalog expanded to 64 families including `edrAgent`, `WeGameProcService`, and `npggsvc`).
-- **2025–2026 AI IDEs/Agents & Win11 24H2 Recall**: T17/T5C now detect Cursor, Windsurf, Antigravity, Claude Code, WorkBuddy, CatPaw, DoubaoWork, CodeArts, MiniMax, LM Studio, and Recall (`CoreAIPlatform.00\UKG`) snapshot caches; `full_scan.ps1` fixes `[T16]` via `Get-WcoShellExtension`, filters `\Microsoft\*` tasks in `[T10]`, and captures `[EXT]` summaries cleanly into reports. See [CHANGELOG.md](CHANGELOG.md).
+This release backs "never lose data, never misjudge, always undoable" with automated and real-Windows verification, while expanding read-only diagnostics for binary proxy flags, competing gateways, and boot errors.
 
-Highlights of v2.1.0–v2.1.2:
+- **undo now reports whether it actually restored**: `undo.ps1` runs each step separately and checks it; a failed step (e.g. not run as admin) does not stop the rest, and the script ends with the failed steps listed and exit code 1. It is safe to run again.
+- **Windows verification & CI write → undo → compare loop**: verified across Windows PowerShell 5.1 and PowerShell 7 (including HKCU closed-loop tests and 39/39 negative controls); on the CI Windows runner, registry values, IFEO, registry key deletion, service start type/deletion, scheduled task disable/delete, and startup toggles are applied, undone, and compared byte-for-byte.
+- **Deeper network, proxy & boot-error diagnostics (T23 / T24 / pitfalls 83–84)**: T23 now inspects binary `Connections` per-connection and dial-up `byte[8]` flags (`PROXY`/`PAC`/`WPAD`) and corrupted entries, competing multi-NIC IPv4 default gateways (e.g. bridged-modem DHCP gateways stalling Settings Home), and leftover administered TCP port exclusion ranges; T24 detects duplicate `Run` + `Logon` scheduled-task autostart channels and correlates the past 7 days of SCM boot/service errors (Event IDs `7000`/`7023`/`7026`).
+- **False-positive fixes**: name normalization no longer relies on `\b` (which does not work next to CJK characters), so names like `微信4.1.0.34`, `钉钉v7.6.5` and `QQ9.9.15` match their installed programs; the full scan's bloatware section now uses the catalog's own matching rules and shows confidence instead of flagging every family (and popular apps such as Baidu Netdisk) with ⚠️.
+- **One more recycle-bin guard**: paths that pass through a junction are refused, because the real volume (and its recycle-bin policy) may differ from the drive letter.
+- **Negative controls**: 39 safety checks are each switched off in turn and a test fails every time; template, manual, pitfall and family counts and referenced function names are checked automatically.
+- **Freshness fixes (verified 2026-11-23)**: Recall's snapshot store is `CoreAIPlatform.00\UKP\{GUID}`; WSL `--compact` is available from stable 3.0.1; NTFS last-access defaults to "system managed"; Windows 11 26H2 is out; WeCom and `Weixin.exe` now cite official sources. See [CHANGELOG.md](CHANGELOG.md).
+
+Highlights of v2.2.0 and earlier:
+
+- **Native Win32 fast sizing, dead-proxy and virtual NIC audits, orphaned autostart/service/driver and `StartupApproved` ghost detection, 2025–2026 AI tool caches** (v2.2.0).
 
 - **Bloatware & reversible uninstall**: `data/bloatware-catalog.json` + T25 inventory + `Invoke-WcoUninstall` / `Remove-WcoAppxPackage` / `Find-WcoLeftover` (services, tasks, and registry keys are exported before removal and restorable via `undo.ps1`; name-only leftover matches stay 🟡 suspected).
 - **Autoruns-grade autostart & browser-hijack audits**: T24 covers 16 persistence categories (RunOnceEx, Winlogon, IFEO/SilentProcessExit, AppInit, LSA, Winsock, hidden tasks, WMI, non-Microsoft drivers, Win11 `RestartApps`, etc.); T23 audits browser policies, forced extensions, hosts, DNS, and root certificates.
@@ -55,11 +62,11 @@ Highlights of v2.1.0–v2.1.2:
 | **🛡️ Reversible by design** | Write operations dry-run by default and apply only with `-Apply`. Changes are logged to `changes.json`, and an `undo.ps1` is generated. Services are restored to their original start type | Every step is visible and can be undone |
 | **🗑️ Truly recoverable deletes** | Deletes go to the Recycle Bin only. Deletion is refused on volumes without a bin (USB, network), when the bin is set to delete immediately, or when exceeding bin capacity; long paths report `LongPath` | Nothing is "sent to the bin" and silently gone for good |
 | **🔍 One scan entry point** | `full_scan.ps1` runs every read-only check with native Win32 sizing (incl. `[EXT]` T23–T25 summaries and `[CHK]` section health), infers the user profile, checks admin rights, and measures boot time | No questionnaire first; the health card comes straight from the scan |
-| **🧹 Bloatware & orphan detection** | 64-family catalog matched by publisher / signer / process / service / task / driver; browser policy & dead-proxy audit; `StartupApproved` ghost & missing-binary task/service/driver checks; IFEO pop-up silencing | Every uninstall is checked by a rescan, and leftover cleanup is reversible |
+| **🧹 Bloatware & orphan detection** | 64-family catalog matched by publisher / signer / process / service / task / driver; browser policy, `Connections` binary proxy, multi-gateway & TCP exclusion audits; `StartupApproved` ghosts, duplicate autostart & SCM boot errors; IFEO pop-up silencing | Every uninstall is checked by a rescan, and leftover cleanup is reversible |
 | **🤖 2026 Dev & AI environment tuning** | Dev Drive for package caches + npm/pnpm/uv/pip/NuGet/Go/Docker official CLI purge matrix; 2025–2026 AI IDE/Agent caches & Ollama/HF/AVD/LM Studio env vars; WSL2 compaction (`wsl --manage --compact`) | Tens of GB freed without turning off Defender |
-| **⚡ Win11 24H2 modern tuning** | 50+ services tuned by profile, Widgets tuning, Copilot / Recall (`UKG` snapshots), vNIC route/metric & battery Wi-Fi power-saving checks, Balanced power plan, SSD TRIM | Each item cites its official source and cost; anything unsourced is marked "unverified" |
+| **⚡ Win11 24H2+ modern tuning** | 50+ services tuned by profile, Widgets tuning, Copilot / Recall (snapshot store), vNIC route/metric, multi-NIC gateway & battery Wi-Fi power-saving checks, Balanced power plan, SSD TRIM | Each item cites its official source and cost; anything unsourced is marked "unverified" |
 | **🔄 Official data migration** | Windows Cleanup recommendations and Storage Sense first. WeChat 4.x / WeCom / QQ NT / DingTalk move through in-app settings. `mklink` is a last resort | App updates keep working |
-| **📋 14 reference manuals** | Disk cleanup, Windows.old, uninstalling, services, startup mechanisms, chat-app migration, 82 pitfalls grouped by topic | The agent reads only the manual the problem needs |
+| **📋 14 reference manuals** | Disk cleanup, Windows.old, uninstalling, services, startup mechanisms, chat-app migration, 84 pitfalls grouped by topic | The agent reads only the manual the problem needs |
 
 ---
 
@@ -121,6 +128,7 @@ gh skill install hyt315/windows-cleanup-optimize windows-cleanup-optimize --agen
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\full_scan.ps1   # read-only, report in %TEMP%\wco
 python scripts/selftest.py                                                    # structure / counts / BOM / syntax
 Invoke-Pester ./tests                                                         # module unit tests (Pester 5+)
+python tests/negative_controls.py                                             # negative controls: switch off each guard, a test must fail
 ```
 
 ---
@@ -161,7 +169,7 @@ Invoke-Pester ./tests                                                         # 
 | Reference Guide | Core Focus | When to Read | Estimated Time |
 |---|---|---|---|
 | 📑 [**Scan Scripts Index (`scan-scripts.md`)**](references/scan-scripts.md) | What each of the 25 templates does and when to use it; code lives in `scripts/templates/` | When running scans & cleanup | 2 mins |
-| 🛡️ [**Pitfalls (`pitfalls.md`)**](references/pitfalls.md) | 82 pitfalls grouped by topic (safety baseline, deletion and permissions, false positives, startup, uninstall, migration, performance & proxy/vNIC) | Before making a plan | 5 mins |
+| 🛡️ [**Pitfalls (`pitfalls.md`)**](references/pitfalls.md) | 84 pitfalls grouped by topic (safety baseline, deletion and permissions, false positives, startup, uninstall, migration, performance & proxy/vNIC) | Before making a plan | 5 mins |
 | 🚀 [**Startup Audit (`startup-audit.md`)**](references/startup-audit.md) | Startup & `StartupApproved` ghost audit; Edge / Chrome policies; `wscript.exe //B` windowless background tasks | Slow boot | 3 mins |
 | 🧩 [**Startup Mechanisms (`startup-mechanisms.md`)**](references/startup-mechanisms.md) | Startup points mapped to every Autoruns category, the template that checks each, and how to turn it off reversibly | Stubborn autostarts | 3 mins |
 | 🧹 [**Bloatware Catalog (`bloatware-catalog.md`)**](references/bloatware-catalog.md) | Signatures for 360 / 2345 / Sogou / Baidu suites & standalone security leftovers, IFEO pop-up silencing | Pop-up adware | 3 mins |
@@ -169,7 +177,7 @@ Invoke-Pester ./tests                                                         # 
 | 💾 [**System Cleanup (`system-cleanup.md`)**](references/system-cleanup.md) | Windows Cleanup recommendations, Windows.old, cleanmgr, DISM, driver store, Win11 24H2 Recall & CLI cache purge matrix | Reclaiming C drive | 4 mins |
 | ⚙️ [**Services (`services-optimization.md`)**](references/services-optimization.md) | 50+ services by profile, Copilot / Recall switches, rollback to original values | Reducing background load | 4 mins |
 | 🧠 [**Memory (`memory-optimization.md`)**](references/memory-optimization.md) | Real leak detection, memory compression, working-set analysis | High RAM usage | 3 mins |
-| ⚡ [**Performance (`performance-tuning.md`)**](references/performance-tuning.md) | Power plans, visual effects, TRIM, Dev Drive, plus VPN-exit proxy recovery, vNIC metrics & battery Wi-Fi tuning | Responsiveness | 3 mins |
+| ⚡ [**Performance (`performance-tuning.md`)**](references/performance-tuning.md) | Power plans, visual effects, TRIM, Dev Drive, plus binary `Connections` proxy recovery, multi-gateway/TCP exclusion & battery Wi-Fi tuning | Responsiveness | 3 mins |
 | 📂 [**Official Migration (`drive-migration-official.md`)**](references/drive-migration-official.md) | Migration decision tree, Dev Drive package caches, Ollama/HF & 2025–2026 AI IDE/Agent directories | Moving dev & model folders | 4 mins |
 | 💬 [**Chat Apps (`chat-apps-migration.md`)**](references/chat-apps-migration.md) | Official migration and cache cleanup for WeChat 4.x / WeCom / QQ NT / DingTalk | Huge chat-app folders | 3 mins |
 | 🔗 [**Junction Fallback (`mklink-migration.md`)**](references/mklink-migration.md) | `mklink /J` limits, preflight checks, failure cases | When only a junction will do | 3 mins |
@@ -201,8 +209,8 @@ windows-cleanup-optimize/
 ├── data/volatile-paths.json          # Fast-changing app paths with review dates
 ├── data/bloatware-catalog.json       # Bloatware & security-leftover catalog (64 families)
 ├── evals/                            # Trigger and behavior evals
-├── tests/                            # Pester unit tests
-└── references/                       # 14 reference manuals (incl. 82 pitfalls)
+├── tests/                            # Pester unit tests, Windows closed-loop tests, negative controls
+└── references/                       # 14 reference manuals (incl. 84 pitfalls)
 ```
 
 ---

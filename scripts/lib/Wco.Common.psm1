@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    windows-cleanup-optimize 公共模块（v2.2）：权限检测、原生高速体积统计、回收站预检、变更留痕与一键回退、
+    windows-cleanup-optimize 公共模块（v2.2.1）：权限检测、原生高速体积统计、回收站预检、变更留痕与一键回退、
     启动项开关与孤儿记录检测、计划任务/服务/注册表键删除、已安装程序清单、卸载、商店应用移除、残留评分。
 .DESCRIPTION
     所有写操作函数默认只演练（返回 Status=DryRun 与将要执行的 Plan），传 -Apply 才真正执行。
@@ -14,6 +14,7 @@ Set-StrictMode -Version 2
 
 $script:WcoSession = $null
 $script:IsWin = ($env:OS -eq 'Windows_NT')
+$script:WcoSignerCache = @{}
 
 # 不允许停用 / 删除的服务（安全、更新、系统核心）。Set-WcoServiceStartType 不会把它们改成 disabled/demand，
 # Remove-WcoService 一律拒绝。
@@ -157,6 +158,10 @@ function Get-WcoFileSigner {
     $r = [pscustomobject]@{ Path = $Path; Status = 'Unavailable'; Subject = $null; Organization = $null; IsMicrosoft = $false }
     if (-not $Path -or -not (Get-Command Get-AuthenticodeSignature -ErrorAction SilentlyContinue)) { return $r }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { $r.Status = 'FileNotFound'; return $r }
+    # 同一次扫描里同一个文件常被查多次（服务、任务、Run 值指向同一个 exe），按路径缓存；文件改动后缓存自然失效
+    $ck = $Path.ToLowerInvariant() + '|' + (Get-Item -LiteralPath $Path -Force).LastWriteTimeUtc.Ticks
+    if ($script:WcoSignerCache.ContainsKey($ck)) { return $script:WcoSignerCache[$ck] }
+    $script:WcoSignerCache[$ck] = $r
     try {
         $sig = Get-AuthenticodeSignature -LiteralPath $Path -ErrorAction Stop
         $r.Status = [string]$sig.Status
@@ -174,24 +179,54 @@ function Get-WcoFileSigner {
 }
 
 function Resolve-WcoExecutablePath {
-    <# 从 ImagePath / DisplayIcon / 命令行里取出 exe 路径（去引号、去参数、展开环境变量、去掉 ",0"）。 #>
+    <#
+    从 ImagePath / DisplayIcon / Run 值 / 计划任务动作里取出可执行文件路径：去引号、去参数、展开环境变量、
+    处理 \??\ 与 \SystemRoot\ 前缀、去掉 ",0" 图标序号；只有文件名时，若 System32 下有同名文件就补全。
+    只做字符串解析，不执行任何东西。T18、T24、T25 与公共模块共用这一份（v2.2.1 起）。
+    #>
     param([string]$CommandLine)
     if (-not $CommandLine) { return $null }
     $c = [Environment]::ExpandEnvironmentVariables($CommandLine.Trim())
     $c = $c -replace '^\\\?\?\\', ''
+    if ($env:SystemRoot) { $c = $c -replace '^(?i)\\SystemRoot\\', ($env:SystemRoot + '\') }
+    $p = $null
     if ($c.StartsWith('"')) {
         $end = $c.IndexOf('"', 1)
-        if ($end -gt 1) { return $c.Substring(1, $end - 1) }
-        return $null
+        if ($end -gt 1) { $p = $c.Substring(1, $end - 1) }
+    } else {
+        $m = [regex]::Match($c, '^(.+?\.(exe|dll|sys|com|cpl|ocx|scr|bat|cmd|vbs|js|ps1|lnk))(?=[\s,"]|$)', 'IgnoreCase')
+        if ($m.Success) { $p = $m.Groups[1].Value } else { $p = (($c -replace ',\s*-?\d+$', '') -split '\s+')[0] }
     }
-    $m = [regex]::Match($c, '^(.+?\.(exe|dll|sys|com|cpl|ocx))(?=[\s,]|$)', 'IgnoreCase')
-    if ($m.Success) {
-        $p = $m.Groups[1].Value
-        if ($p -match '^\\SystemRoot\\') { $p = $p -replace '^\\SystemRoot', $env:SystemRoot }
-        if ($p -match '^(?i)system32\\') { $p = Join-Path $env:SystemRoot $p }
-        return $p
+    if (-not $p) { return $null }
+    if ($env:SystemRoot -and $p -match '^(?i)system32\\') { $p = Join-Path $env:SystemRoot $p }
+    if ($env:SystemRoot -and $p -notmatch '[\\/]' -and $p -match '\.') {
+        $sys = Join-Path (Join-Path $env:SystemRoot 'System32') $p
+        if (Test-Path -LiteralPath $sys -PathType Leaf) { $p = $sys }
     }
-    return ($c -replace ',\s*-?\d+$', '')
+    return $p
+}
+
+function Get-WcoListProp {
+    <# 安全读数组属性：返回非空字符串数组（特征库字段缺失时返回空数组）。 #>
+    param($Object, [string]$Name)
+    $v = Get-WcoProp $Object $Name
+    if ($null -eq $v) { return @() }
+    return @(@($v) | Where-Object { $_ } | ForEach-Object { [string]$_ })
+}
+
+function Test-WcoIdMatch {
+    <#
+    特征库标识比对（进程名、服务名、任务名等）：标识含 * 或 ? 时按通配符，否则按完全相等（不区分大小写）。
+    返回命中的标识；不命中返回 $null。不做子串匹配：QQ 不会命中 QQMusic，除非特征库自己写 QQ*。
+    #>
+    param([string]$Value, [string[]]$Patterns)
+    if (-not $Value) { return $null }
+    foreach ($pat in @($Patterns)) {
+        if (-not $pat) { continue }
+        if ($pat.Contains('*') -or $pat.Contains('?')) { if ($Value -like $pat) { return $pat } }
+        elseif ($Value -eq $pat) { return $pat }
+    }
+    return $null
 }
 
 function Split-WcoCommandLine {
@@ -277,24 +312,64 @@ function Add-WcoChange {
 }
 
 function Export-WcoUndo {
-    <# 按与执行相反的顺序生成 undo.ps1。回收站、卸载类变更只写说明（无法脚本化精确还原）。 #>
+    <#
+    按与执行相反的顺序生成 undo.ps1。回收站、卸载类变更只写说明（无法脚本化精确还原）。
+    每一步单独执行并检查结果（cmdlet 异常和外部命令退出码都算失败），一步失败不影响后面的步骤；
+    结束时列出失败的步骤并以退出码 1 结束，避免「看着跑完了，其实没还原」。重复运行是安全的：
+    reg import、sc config、Enable-ScheduledTask、写回原字节都是幂等的。
+    #>
     $s = Get-WcoSession
     $path = Join-Path $s.Dir 'undo.ps1'
     $lines = @(
         '# windows-cleanup-optimize 自动生成的回退脚本',
         "# 会话：$($s.Dir)",
-        '# 请以管理员身份运行；运行前先通读一遍。',
-        '$ErrorActionPreference = ''Continue''',
+        '# 请以管理员身份运行；运行前先通读一遍。可以重复运行。',
+        '$script:WcoUndoFailed = New-Object System.Collections.ArrayList',
+        '$script:WcoUndoDone = 0',
+        'function Invoke-WcoUndoStep {',
+        '    param([string]$Label, [scriptblock]$Step)',
+        '    $ErrorActionPreference = ''Stop''',
+        '    $global:LASTEXITCODE = 0',
+        '    try {',
+        '        & $Step | Out-Null',
+        '        if ($LASTEXITCODE -ne 0) { throw "外部命令退出码 $LASTEXITCODE" }',
+        '        $script:WcoUndoDone++',
+        '        Write-Host "已还原  $Label"',
+        '    } catch {',
+        '        [void]$script:WcoUndoFailed.Add("$Label：$($_.Exception.Message)")',
+        '        Write-Host "还原失败 $Label：$($_.Exception.Message)" -ForegroundColor Red',
+        '    }',
+        '}',
+        'if ($env:OS -eq ''Windows_NT'') {',
+        '    $wcoId = [Security.Principal.WindowsIdentity]::GetCurrent()',
+        '    if (-not ([Security.Principal.WindowsPrincipal]$wcoId).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {',
+        '        Write-Host ''提示：当前不是管理员窗口，HKLM、服务、计划任务的还原会失败。'' -ForegroundColor Yellow',
+        '    }',
+        '}',
         ''
     )
     $arr = @($s.Changes)
     [array]::Reverse($arr)
     foreach ($c in $arr) {
-        $lines += "# [$($c.Kind)] $($c.Target)  ($($c.Time))"
-        if ($c.Undo) { $lines += $c.Undo } else { $lines += "# 无法自动回退：$($c.Note)" }
-        if ($c.Undo -and $c.Note) { $lines += "# 说明：$($c.Note)" }
+        $label = "[$($c.Kind)] $($c.Target)"
+        $lines += "# $label  ($($c.Time))"
+        if ($c.Undo) {
+            if ($c.Note) { $lines += "# 说明：$($c.Note)" }
+            $lines += "Invoke-WcoUndoStep $(ConvertTo-WcoPsLiteral $label) {"
+            $lines += "    $($c.Undo)"
+            $lines += '}'
+        } else {
+            $lines += "# 无法自动回退：$($c.Note)"
+        }
         $lines += ''
     }
+    $lines += @(
+        'Write-Host ("回退完成：成功 {0} 步，失败 {1} 步。" -f $script:WcoUndoDone, $script:WcoUndoFailed.Count)',
+        'if ($script:WcoUndoFailed.Count -gt 0) {',
+        '    $script:WcoUndoFailed | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }',
+        '    exit 1',
+        '}'
+    )
     # 带 BOM，保证 Windows PowerShell 5.1 正确读取中文注释
     [IO.File]::WriteAllText($path, ($lines -join "`r`n"), (New-Object Text.UTF8Encoding($true)))
     return $path
@@ -566,6 +641,19 @@ function Get-WcoRecycleBinPolicy {
     return $result
 }
 
+function Get-WcoReparseAncestor {
+    <# 只读：返回路径上第一个是 junction/符号链接的上级目录；没有时返回 $null。不检查路径本身。 #>
+    param([Parameter(Mandatory)][string]$Path)
+    try { $d = (New-Object IO.DirectoryInfo([IO.Path]::GetFullPath($Path))).Parent } catch { return $null }
+    while ($d) {
+        try {
+            if ($d.Exists -and ($d.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $d.FullName }
+        } catch { return $null }
+        $d = $d.Parent
+    }
+    return $null
+}
+
 function Invoke-WcoRecycle {
     <#
     .SYNOPSIS
@@ -587,6 +675,11 @@ function Invoke-WcoRecycle {
     $item = Get-Item -LiteralPath $Path -Force
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
         $r.Status = 'Blocked'; $r.Reason = '是 junction/符号链接，先按模板 6 处理，避免删到链接目标'; return $r
+    }
+    $via = Get-WcoReparseAncestor -Path $item.FullName
+    if ($via) {
+        # 上级目录是 junction 时，文件实际在链接目标所在的卷上，按盘符读到的回收站策略不可信
+        $r.Status = 'Blocked'; $r.Reason = "路径经过 junction/符号链接 $via，实际所在卷可能与盘符不同，无法确认会进回收站；请对链接目标的真实路径操作"; return $r
     }
     $r.SizeMB = Get-WcoItemSizeMB -Path $Path
     $pol = Get-WcoRecycleBinPolicy -Path $Path
@@ -676,7 +769,7 @@ function Set-WcoServiceStartType {
     & sc.exe config $Name start= $StartType | Out-Null
     if ($LASTEXITCODE -eq 5) { return [pscustomobject]@{ Name = $Name; Status = 'Protected'; Before = $before; Reason = '拒绝访问：受系统保护的服务（sc.exe 返回 5）' } }
     if ($LASTEXITCODE -ne 0) { return [pscustomobject]@{ Name = $Name; Status = 'Error'; Before = $before; Reason = "sc.exe 返回 $LASTEXITCODE" } }
-    [void](Add-WcoChange -Kind service -Target $Name -Before $before -After $StartType -Undo "sc.exe config $Name start= $before" -Risk $Risk)
+    [void](Add-WcoChange -Kind service -Target $Name -Before $before -After $StartType -Undo "sc.exe config $(ConvertTo-WcoPsLiteral $Name) start= $before" -Risk $Risk)
     return [pscustomobject]@{ Name = $Name; Status = 'Changed'; Before = $before; After = $StartType }
 }
 
@@ -1330,9 +1423,11 @@ function Get-WcoNameKey {
     if ($script:WcoNameKeyCache.ContainsKey($Text)) { return $script:WcoNameKeyCache[$Text] }
     $t = $Text.ToLower()
     $t = $t -replace '\(.*?\)|（.*?）|\[.*?\]', ' '
-    $t = $t -replace '\b(x64|x86|amd64|arm64|64-bit|32-bit|64位|32位)\b', ' '
-    $t = $t -replace '\bv?\d+(\.\d+)+\b', ' '
-    $t = $t -replace '\b(co\.?,?\s*ltd\.?|inc\.?|llc|corporation|corp\.?|gmbh|limited|ltd\.?)\b', ' '
+    # 不用 \b：.NET 把汉字算作单词字符，"微信64位""钉钉v7.6.5""QQ9.9.15" 里汉字/字母与数字之间没有 \b，
+    # 旧写法剥不掉版本号和位数，同一个软件会被当成两个名字。这里只按 ASCII 字母数字判断边界。
+    $t = $t -replace '(?<![a-z0-9])(x64|x86|amd64|arm64)(?![a-z0-9])|(?<!\d)(64|32)[- ]?(bit|位)', ' '
+    $t = $t -replace '(?<![\d.])v?\d+(\.\d+)+(?![\d.]*\d)', ' '
+    $t = $t -replace '(?<![a-z])(co\.?,?\s*ltd\.?|inc\.?|llc|corporation|corp\.?|gmbh|limited|ltd\.?)(?![a-z])', ' '
     $t = $t -replace '(有限公司|股份有限公司|有限责任公司)', ''
     $t = $t -replace '[^\p{L}\p{Nd}]', ''
     $script:WcoNameKeyCache[$Text] = $t
@@ -1777,6 +1872,71 @@ function Get-WcoShellExtension {
     return $out
 }
 
+function Get-WcoCatalogHit {
+    <#
+    .SYNOPSIS
+        只读：用流氓软件特征库比对进程、服务、计划任务，返回命中项与证据。T11 与 full_scan 共用（v2.2.1 起）。
+    .DESCRIPTION
+        输入是已采集好的对象（便于测试和复用，本函数自己不枚举系统）：
+          -Process  带 ProcessName/Name、Path、WorkingSet64 的对象（Get-Process 的输出即可）
+          -Service  带 Name、DisplayName、State、StartMode、PathName 的对象
+          -Task     带 TaskPath、TaskName、State、Actions 的对象
+        比对规则见 Test-WcoIdMatch：完全相等或特征库自己写的通配符，不做子串匹配。
+        每个命中都带上家族置信度：low 只算「疑似，需实机确认」，不能据此直接处置。
+        -Whitelist 里的名称（进程名、服务名、任务名）一律跳过，用于用户主动保留的软件。
+    #>
+    param(
+        [Parameter(Mandatory)]$Catalog,
+        [object[]]$Process = @(),
+        [object[]]$Service = @(),
+        [object[]]$Task = @(),
+        [string[]]$Whitelist = @()
+    )
+    $hits = New-Object System.Collections.ArrayList
+    foreach ($f in @(Get-WcoProp $Catalog 'families')) {
+        if ($null -eq $f) { continue }
+        $conf = [string](Get-WcoProp $f 'confidence')
+        $level = if ($conf -eq 'high') { '较确定' } elseif ($conf -eq 'medium') { '可能' } else { '疑似，需实机确认' }
+        $base = @{ FamilyId = [string](Get-WcoProp $f 'id'); Family = [string](Get-WcoProp $f 'name'); Confidence = $conf; Level = $level }
+        $procPat = @(Get-WcoListProp $f 'processes' | ForEach-Object { $_ -replace '(?i)\.exe$', '' })
+        if ($procPat.Count -gt 0) {
+            foreach ($g in @($Process | Where-Object { $_ } | Group-Object { [string]$(if (Get-WcoProp $_ 'ProcessName') { Get-WcoProp $_ 'ProcessName' } else { Get-WcoProp $_ 'Name' }) })) {
+                if (-not $g.Name -or $g.Name -in $Whitelist) { continue }
+                $pat = Test-WcoIdMatch $g.Name $procPat
+                if (-not $pat) { continue }
+                $first = $g.Group | Select-Object -First 1
+                $ws = ($g.Group | ForEach-Object { [double](Get-WcoProp $_ 'WorkingSet64') } | Measure-Object -Sum).Sum
+                [void]$hits.Add([pscustomobject](@{ Kind = '进程'; Name = $g.Name; Pattern = $pat; Count = $g.Count; Path = [string](Get-WcoProp $first 'Path'); MemoryMB = [math]::Round($ws / 1MB, 0); Detail = '' } + $base))
+            }
+        }
+        $svcPat = @(Get-WcoListProp $f 'services')
+        if ($svcPat.Count -gt 0) {
+            foreach ($s in @($Service | Where-Object { $_ })) {
+                $n = [string](Get-WcoProp $s 'Name')
+                if (-not $n -or $n -in $Whitelist) { continue }
+                $pat = Test-WcoIdMatch $n $svcPat
+                if (-not $pat) { continue }
+                [void]$hits.Add([pscustomobject](@{ Kind = '服务'; Name = $n; Pattern = $pat; Count = 1; Path = [string](Get-WcoProp $s 'PathName'); MemoryMB = $null
+                            Detail = "$(Get-WcoProp $s 'DisplayName')；状态 $(Get-WcoProp $s 'State')；启动类型 $(Get-WcoProp $s 'StartMode')" } + $base))
+            }
+        }
+        $taskPat = @(Get-WcoListProp $f 'tasks')
+        if ($taskPat.Count -gt 0) {
+            foreach ($t in @($Task | Where-Object { $_ })) {
+                $tn = [string](Get-WcoProp $t 'TaskName')
+                if (-not $tn -or $tn -in $Whitelist) { continue }
+                $full = "$(Get-WcoProp $t 'TaskPath')$tn"
+                $pat = Test-WcoIdMatch $tn $taskPat
+                if (-not $pat) { $pat = Test-WcoIdMatch $full $taskPat }
+                if (-not $pat) { continue }
+                $exec = @(@(Get-WcoProp $t 'Actions') | Where-Object { $_ } | ForEach-Object { $e = Get-WcoProp $_ 'Execute'; if ($e) { "$e $(Get-WcoProp $_ 'Arguments')".Trim() } }) -join '; '
+                [void]$hits.Add([pscustomobject](@{ Kind = '计划任务'; Name = $full; Pattern = $pat; Count = 1; Path = $exec; MemoryMB = $null; Detail = "状态 $(Get-WcoProp $t 'State')" } + $base))
+            }
+        }
+    }
+    return @($hits)
+}
+
 function Get-WcoBloatwareCatalog {
     <# 读取 data/bloatware-catalog.json（默认按模块位置找）。 #>
     param([string]$Path = (Join-Path $PSScriptRoot '..\..\data\bloatware-catalog.json'))
@@ -1792,4 +1952,5 @@ Export-ModuleMember -Function Get-WcoProp, Test-WcoAdmin, Start-WcoSession, Get-
     Disable-WcoScheduledTask, Remove-WcoScheduledTask,
     Get-WcoInstalledProgram, Invoke-WcoUninstall, Remove-WcoAppxPackage, Find-WcoLeftover, Get-WcoNameMatch,
     Test-WcoPathUnder, Get-WcoInstalledIndex, Get-WcoResidualStatus,
-    Get-WcoFileSigner, Get-WcoWmiSubscription, Get-WcoShortcutArgument, Get-WcoShellExtension, Get-WcoBloatwareCatalog
+    Get-WcoFileSigner, Get-WcoWmiSubscription, Get-WcoShortcutArgument, Get-WcoShellExtension, Get-WcoBloatwareCatalog,
+    Resolve-WcoExecutablePath, Get-WcoListProp, Test-WcoIdMatch, Get-WcoReparseAncestor, Get-WcoCatalogHit

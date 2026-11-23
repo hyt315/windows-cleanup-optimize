@@ -29,6 +29,8 @@ jobs:
           $c.Run.Exit = $true
           $c.Output.Verbosity = 'Detailed'
           Invoke-Pester -Configuration $c
+      - name: Negative controls (every guard must be caught by a test)
+        run: python tests/negative_controls.py
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -93,3 +95,26 @@ jobs:
             if (-not $text.Contains($marker)) { Write-Host "::error::report missing $marker"; exit 1 }
           }
           Write-Host "OK: read-only, report $($report.Length) bytes"
+      - name: Pester (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          Install-Module Pester -RequiredVersion 5.9.1 -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -RequiredVersion 5.9.1
+          $c = New-PesterConfiguration
+          $c.Run.Path = './tests'
+          $c.Run.Exit = $true
+          Invoke-Pester -Configuration $c
+      # 放在只读证明之后：下面这步会真的改注册表、服务、计划任务（只动 wco-ci- 前缀的测试对象，结束时清理）。
+      - name: Write -> undo -> compare closed loop (disposable runner only)
+        shell: pwsh
+        env:
+          WCO_CI_APPLY: '1'
+        run: |
+          Import-Module Pester -RequiredVersion 5.9.1
+          $c = New-PesterConfiguration
+          $c.Run.Path = './tests/Wco.Reversibility.Windows.Tests.ps1'
+          $c.Run.PassThru = $true
+          $c.Output.Verbosity = 'Detailed'
+          $r = Invoke-Pester -Configuration $c
+          if ($r.FailedCount -gt 0 -or $r.Result -ne 'Passed') { exit 1 }
+          if ($r.SkippedCount -gt 0 -or $r.PassedCount -eq 0) { Write-Host "::error::closed-loop tests were skipped on the Windows runner"; exit 1 }
