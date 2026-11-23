@@ -82,9 +82,15 @@ Describe '注册表整键删除闭环' -Skip:(-not $script:canApply) {
 
 Describe '服务闭环' -Skip:(-not $script:canApply) {
     BeforeAll {
-        # 复制一个可执行文件到临时目录当服务程序：不在 Windows 目录、也没有微软签名，才能走到删除流程。服务从不启动。
+        # 编译一个无微软签名的极简可执行文件到临时目录当服务程序（复制 System32/*.exe 会保留内嵌微软签名而被安全守卫拦截）。服务从不启动。
         $script:svcExe = Join-Path $script:root 'wco ci svc.exe'
-        Copy-Item "$env:SystemRoot\System32\sort.exe" $script:svcExe
+        $csc = @("$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe", "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (-not $csc) { throw '未找到 .NET csc.exe，无法构建无签名测试服务可执行文件' }
+        $cs = Join-Path $script:root 'wco-ci-svc.cs'
+        Set-Content -LiteralPath $cs -Value 'public class WcoCiSvc { public static void Main() {} }' -Encoding ASCII
+        & $csc /nologo "/out:$script:svcExe" $cs | Out-Null
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $script:svcExe)) { throw "csc.exe 编译测试服务失败（退出码 $LASTEXITCODE）" }
+        Remove-Item -LiteralPath $cs -Force -ErrorAction SilentlyContinue
     }
     It '<Start> → disabled → undo 后恢复成 <Start>（含延迟启动）' -ForEach @(@{ Start = 'demand' }, @{ Start = 'delayed-auto' }) {
         & sc.exe delete wco-ci-svc 2>&1 | Out-Null
